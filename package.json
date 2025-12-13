@@ -1,0 +1,37 @@
+{
+  "name": "signcraft",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "tsx server.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\""
+  },
+  "dependencies": {
+    "@google/genai": "^1.32.0",
+    "express": "^5.2.1",
+    "konva": "^10.0.12",
+    "lucide-react": "^0.556.0",
+    "multer": "^2.0.2",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-konva": "^19.2.1",
+    "react-router-dom": "^7.10.1",
+    "uuid": "^9.0.1",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^22.14.0",
+    "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^8.2.2",
+    "tsx": "^4.7.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
