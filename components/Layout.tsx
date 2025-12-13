@@ -11,7 +11,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Hide header/footer on editor page for maximizing space
   const isEditor = location.pathname === '/editor';
-  const isAuthPage = location.pathname === '/login';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/auth';
 
   const navLinks = [
     { label: 'Home', path: '/', icon: Home },

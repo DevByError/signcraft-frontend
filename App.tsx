@@ -11,6 +11,7 @@ import Creative from './pages/Creative';
 import Playlist from './pages/Playlist';
 import Screen from './pages/Screen';
 import Auth from './pages/Auth';
+import Login from './pages/login';
 import Legal from './pages/Legal';
 import NotFound from './pages/NotFound';
 
@@ -38,7 +39,8 @@ const App: React.FC = () => {
             <Route path="/screen" element={<Screen />} />
 
             {/* Authentication */}
-            <Route path="/login" element={<Auth />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/auth" element={<Auth />} />
 
             {/* Fallback Routes */}
             <Route path="/404" element={<NotFound />} />
