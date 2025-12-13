@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -11,25 +11,50 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize with a default user to bypass login
-  const [user, setUser] = useState<User | null>({
-    id: 'guest-user-123',
-    name: 'Guest Designer',
-    email: 'guest@signcraft.com'
+  // Initialize with localStorage data if available
+  const [user, setUser] = useState<User | null>(() => {
+    const stored = localStorage.getItem('signcraft_user');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return {
+          id: 'guest-user-123',
+          name: 'Guest Designer',
+          email: 'guest@signcraft.com'
+        };
+      }
+    }
+    return {
+      id: 'guest-user-123',
+      name: 'Guest Designer',
+      email: 'guest@signcraft.com'
+    };
   });
 
+  // Persist user to localStorage
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('signcraft_user', JSON.stringify(user));
+    }
+  }, [user]);
+
   const login = (email: string, name: string) => {
-    setUser({
+    const newUser = {
       id: Math.random().toString(36).substr(2, 9),
       email,
       name,
-    });
+    };
+    setUser(newUser);
   };
 
   const logout = () => {
-    // Optional: Reset to guest or null. 
-    // For this use case, we might just want to keep them as guest or actually log out.
-    setUser(null);
+    setUser({
+      id: 'guest-user-123',
+      name: 'Guest Designer',
+      email: 'guest@signcraft.com'
+    });
+    localStorage.removeItem('signcraft_user');
   };
 
   return (

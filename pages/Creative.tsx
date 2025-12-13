@@ -56,11 +56,11 @@ const ScheduleCreative: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/schedule')}
+            onClick={() => navigate('/dashboard')}
             className="flex items-center gap-2 text-primary hover:text-primaryLight mb-4 transition-colors font-semibold"
           >
             <ArrowLeft size={20} />
-            Back to Schedule
+            Back to Dashboard
           </button>
           
           <div className="flex items-center justify-between">
