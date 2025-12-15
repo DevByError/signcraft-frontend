@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Type, ImageIcon, Square, Video, Clock, CloudSun,
   ChevronRight, ChevronDown, Search, ArrowLeft,
@@ -10,6 +10,10 @@ import {
   Layers, Palette, Settings, Grid3x3, Layout, Maximize2,
   RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar
 } from 'lucide-react';
+import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
+import { useDesignSave } from '../hooks/useDesignSave';
+import { downloadDesignAsJSON } from '../services/canvasExportService';
+import { getDesignById, updateDesignInFirestore } from '../services/designService';
 
 enum ElementType {
   TEXT = 'text',
@@ -21,6 +25,13 @@ enum ElementType {
   HEART = 'heart',
   LINE = 'line',
   VIDEO = 'video',
+  PENTAGON = 'pentagon',
+  HEXAGON = 'hexagon',
+  OCTAGON = 'octagon',
+  DIAMOND = 'diamond',
+  TRAPEZOID = 'trapezoid',
+  CRESCENT = 'crescent',
+  CROSS = 'cross',
 }
 
 interface CanvasElement {
@@ -41,13 +52,16 @@ interface CanvasElement {
   strokeColor?: string;
   strokeWidth?: number;
   borderRadius?: number;
-  locked?: boolean;
+  locked: boolean;
+  visible: boolean;
   textStyle?: {
-    bold?: boolean;
-    italic?: boolean;
-    underline?: boolean;
-    textAlign?: 'left' | 'center' | 'right';
-    fontFamily?: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    textAlign: 'left' | 'center' | 'right';
+    fontFamily: string;
+    letterSpacing: number;
+    lineHeight: number;
   };
 }
 
@@ -78,8 +92,14 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.RECT, label: 'Rectangle', icon: <Square size={18} /> },
       { type: ElementType.CIRCLE, label: 'Circle', icon: <Circle size={18} /> },
       { type: ElementType.TRIANGLE, label: 'Triangle', icon: <Triangle size={18} /> },
+      { type: ElementType.DIAMOND, label: 'Diamond', icon: <Square size={18} style={{ transform: 'rotate(45deg)' }} /> },
+      { type: ElementType.PENTAGON, label: 'Pentagon', icon: <Star size={18} /> },
+      { type: ElementType.HEXAGON, label: 'Hexagon', icon: <Shapes size={18} /> },
+      { type: ElementType.OCTAGON, label: 'Octagon', icon: <Shapes size={18} /> },
       { type: ElementType.STAR, label: 'Star', icon: <Star size={18} /> },
       { type: ElementType.HEART, label: 'Heart', icon: <Heart size={18} /> },
+      { type: ElementType.CRESCENT, label: 'Crescent', icon: <CloudSun size={18} /> },
+      { type: ElementType.CROSS, label: 'Cross', icon: <Plus size={18} /> },
       { type: ElementType.LINE, label: 'Line', icon: <Minus size={18} /> },
     ] 
   },
@@ -112,6 +132,7 @@ const GRADIENTS = [
 
 const Editor: React.FC = () => {
   const navigate = useNavigate();
+  const { designId } = useParams<{ designId?: string }>();
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
@@ -130,6 +151,11 @@ const Editor: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 1280, height: 720 });
   const [canvasColor, setCanvasColor] = useState('#FDFBF7');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [designTitle, setDesignTitle] = useState('My Design');
+  
+  // Design save hook
+  const { saveDesign: saveDesignToFirebase, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_text: true,
@@ -144,6 +170,8 @@ const Editor: React.FC = () => {
     initialX: number; 
     initialY: number 
   } | null>(null);
+  
+  const [draggingFromSidebar, setDraggingFromSidebar] = useState(false);
   
   const [resizing, setResizing] = useState<{ 
     id: string; 
@@ -197,10 +225,12 @@ const Editor: React.FC = () => {
     e.dataTransfer.setData('widgetType', type);
     if (fontSize) e.dataTransfer.setData('fontSize', fontSize.toString());
     e.dataTransfer.effectAllowed = 'copy';
+    setDraggingFromSidebar(true);
   };
 
   const handleDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
+    setDraggingFromSidebar(false);
 
     // Handle local file drop
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -254,7 +284,7 @@ const Editor: React.FC = () => {
   };
 
   const addElement = (type: ElementType, x: number = 100, y: number = 100, customFontSize?: number, customContent?: string) => {
-    const isShape = [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(type);
+    const isShape = [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(type);
     
     // Define dimensions first to calculate boundary checks
     const width = type === ElementType.TEXT ? 300 : type === ElementType.LINE ? 200 : 150;
@@ -280,10 +310,17 @@ const Editor: React.FC = () => {
       opacity: 1,
       rotation: 0,
       zIndex: elements.length + 1,
+      visible: true,
       locked: false,
-      textStyle: {
-        textAlign: 'center'
-      }
+      textStyle: type === ElementType.TEXT ? {
+        textAlign: 'center',
+        bold: false,
+        italic: false,
+        underline: false,
+        fontFamily: 'Inter, sans-serif',
+        letterSpacing: 0,
+        lineHeight: 1.2,
+      } : undefined
     };
     const newElements = [...elements, newElement];
     setElements(newElements);
@@ -319,6 +356,36 @@ const Editor: React.FC = () => {
             <polygon points="50,10 90,85 10,85" {...svgStrokeProps} />
           </svg>
         );
+      case ElementType.DIAMOND:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 90,50 50,90 10,50" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.PENTAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 90,35 75,85 25,85 10,35" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.HEXAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 85,30 85,70 50,90 15,70 15,30" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.OCTAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.TRAPEZOID:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="25,20 75,20 85,80 15,80" {...svgStrokeProps} />
+          </svg>
+        );
       case ElementType.STAR:
         return (
           <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -329,6 +396,19 @@ const Editor: React.FC = () => {
         return (
           <svg viewBox="0 0 100 100" className="w-full h-full">
             <path d="M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.CRESCENT:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <path d="M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.CROSS:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <rect x="40" y="10" width="20" height="80" {...svgStrokeProps} />
+            <rect x="10" y="40" width="80" height="20" {...svgStrokeProps} />
           </svg>
         );
       case ElementType.LINE:
@@ -570,58 +650,388 @@ const Editor: React.FC = () => {
     }
   };
 
+  // Save design - opens modal for metadata entry
   const saveDesign = () => {
-    const designData = {
-      name: 'My Design',
-      elements: elements,
-      canvasSize: canvasSize,
-      timestamp: new Date().toISOString(),
+    setShowSaveModal(true);
+  };
+
+  // Handle saving design with metadata
+  const handleSaveDesign = async (data: SaveDesignModalData) => {
+    try {
+      // Ensure all elements have required fields with proper defaults
+      const elementsWithDefaults = elements.map(el => {
+        const defaultTextStyle = {
+          bold: false,
+          italic: false,
+          underline: false,
+          textAlign: 'left' as const,
+          fontFamily: 'Arial',
+          letterSpacing: 0,
+          lineHeight: 1.2,
+        };
+
+        return {
+          ...el,
+          content: el.content || '',
+          visible: el.visible !== undefined ? el.visible : true,
+          textStyle: el.textStyle || defaultTextStyle,
+        };
+      });
+
+      const exportedDesign = {
+        metadata: {
+          title: data.title,
+          description: data.description,
+          canvasWidth: canvasSize.width,
+          canvasHeight: canvasSize.height,
+          canvasColor: canvasColor,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: 'current-user',
+          tags: data.tags,
+          version: 1,
+        },
+        designJSON: {
+          elements: elementsWithDefaults,
+          totalElements: elementsWithDefaults.length,
+          version: '1.0.0',
+        },
+      };
+
+      let result;
+
+      if (designId) {
+        // Update existing design
+        console.log('Updating design:', designId);
+        result = await updateDesignInFirestore(designId, exportedDesign);
+      } else {
+        // Create new design
+        console.log('Creating new design');
+        result = await saveDesignToFirebase(
+          elementsWithDefaults,
+          {
+            title: data.title,
+            description: data.description,
+            canvasWidth: canvasSize.width,
+            canvasHeight: canvasSize.height,
+            canvasColor: canvasColor,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: 'current-user',
+            tags: data.tags,
+            version: 1,
+          },
+          {
+            isPublic: data.isPublic,
+            tags: data.tags,
+            description: data.description,
+          }
+        );
+      }
+
+      if (result.success) {
+        setDesignTitle(data.title);
+        console.log(designId ? 'Design updated successfully' : 'Design saved successfully');
+        // Close modal after successful save
+        setTimeout(() => {
+          setShowSaveModal(false);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error saving design:', error);
+    }
+  };
+
+  // Export design as local JSON file
+  const exportDesignAsJSON = () => {
+    // Ensure all elements have required fields with proper defaults
+    const elementsWithDefaults = elements.map(el => {
+      const defaultTextStyle = {
+        bold: false,
+        italic: false,
+        underline: false,
+        textAlign: 'left' as const,
+        fontFamily: 'Arial',
+        letterSpacing: 0,
+        lineHeight: 1.2,
+      };
+
+      return {
+        ...el,
+        content: el.content || '',
+        visible: el.visible !== undefined ? el.visible : true,
+        textStyle: el.textStyle || defaultTextStyle,
+      };
+    });
+
+    const exportData = {
+      metadata: {
+        title: designTitle,
+        description: '',
+        canvasWidth: canvasSize.width,
+        canvasHeight: canvasSize.height,
+        canvasColor: canvasColor,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'current-user',
+        tags: [],
+        version: 1,
+      },
+      designJSON: {
+        elements: elementsWithDefaults,
+        totalElements: elementsWithDefaults.length,
+        version: '1.0',
+      },
     };
-    const blob = new Blob([JSON.stringify(designData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `design-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadDesignAsJSON(exportData, `${designTitle}-${Date.now()}.json`);
   };
 
   const exportAsImage = async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasSize.width;
-    canvas.height = canvasSize.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    try {
+      // Store current user state
+      const previousZoom = zoom;
+      const previousSelectedId = selectedId;
 
-    ctx.fillStyle = canvasColor; 
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+      // High-resolution export: 2x pixel ratio for billboard/print quality
+      const pixelRatio = 2;
+      const exportWidth = canvasSize.width * pixelRatio;
+      const exportHeight = canvasSize.height * pixelRatio;
 
-    elements
-      .sort((a, b) => a.zIndex - b.zIndex)
-      .forEach(el => {
-      ctx.save();
-      ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
-      ctx.rotate((el.rotation * Math.PI) / 180);
-      ctx.globalAlpha = el.opacity;
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = exportWidth;
+      canvas.height = exportHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-      if (el.type === ElementType.TEXT) {
-        ctx.fillStyle = el.color || '#000000';
-        ctx.font = `${el.textStyle?.bold ? 'bold ' : ''}${el.textStyle?.italic ? 'italic ' : ''}${el.fontSize}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(el.content, 0, 0);
-      } else if (el.type === ElementType.RECT) {
-        ctx.fillStyle = el.fillColor || '#4ECDC4';
-        ctx.fillRect(-el.width/2, -el.height/2, el.width, el.height);
+      // Scale for high DPI
+      ctx.scale(pixelRatio, pixelRatio);
+
+      // Fill background
+      ctx.fillStyle = canvasColor;
+      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+      // Preload ALL images first before drawing anything
+      const imageMap = new Map<string, HTMLImageElement>();
+      const imageSrcs = new Set<string>();
+
+      // Collect all unique image sources
+      for (const el of elements) {
+        if (el.type === ElementType.IMAGE) {
+          imageSrcs.add(el.content);
+        }
       }
 
-      ctx.restore();
-    });
+      // Load all images in parallel
+      const imageLoadPromises = Array.from(imageSrcs).map(src => 
+        new Promise<[string, HTMLImageElement]>(resolve => {
+          const img = document.createElement('img');
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve([src, img as HTMLImageElement]);
+          img.onerror = () => {
+            console.warn('Failed to load image:', src);
+            resolve([src, img as HTMLImageElement]);
+          };
+          img.src = src;
+        })
+      );
 
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `design-${Date.now()}.png`;
-    link.click();
+      // Wait for ALL images to load
+      const loadedImages = await Promise.all(imageLoadPromises);
+      loadedImages.forEach(([src, img]) => {
+        imageMap.set(src, img);
+      });
+
+      // Preload all SVG shapes as images
+      const shapeImageMap = new Map<string, HTMLImageElement>();
+      
+      for (const el of elements) {
+        if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+          const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
+          
+          if (!shapeImageMap.has(shapeKey)) {
+            const svgNS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('viewBox', '0 0 100 100');
+            svg.setAttribute('width', '200');
+            svg.setAttribute('height', '200');
+
+            const svgFill = el.fillColor || '#0F172A';
+            const svgStroke = el.strokeWidth && el.strokeWidth > 0 ? el.strokeColor || '#000000' : 'none';
+
+            let shapeElement: SVGElement | null = null;
+
+            switch (el.type) {
+              case ElementType.TRIANGLE:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '50,10 90,85 10,85');
+                break;
+              case ElementType.DIAMOND:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '50,10 90,50 50,90 10,50');
+                break;
+              case ElementType.PENTAGON:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '50,10 90,35 75,85 25,85 10,35');
+                break;
+              case ElementType.HEXAGON:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '50,10 85,30 85,70 50,90 15,70 15,30');
+                break;
+              case ElementType.OCTAGON:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30');
+                break;
+              case ElementType.TRAPEZOID:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '25,20 75,20 85,80 15,80');
+                break;
+              case ElementType.STAR:
+                shapeElement = document.createElementNS(svgNS, 'polygon');
+                shapeElement.setAttribute('points', '50,10 61,40 91,40 67,60 78,90 50,70 22,90 33,60 9,40 39,40');
+                break;
+              case ElementType.HEART:
+                shapeElement = document.createElementNS(svgNS, 'path');
+                shapeElement.setAttribute('d', 'M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z');
+                break;
+              case ElementType.CRESCENT:
+                shapeElement = document.createElementNS(svgNS, 'path');
+                shapeElement.setAttribute('d', 'M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z');
+                break;
+              case ElementType.CROSS:
+                const g = document.createElementNS(svgNS, 'g');
+                const rect1 = document.createElementNS(svgNS, 'rect');
+                rect1.setAttribute('x', '40');
+                rect1.setAttribute('y', '10');
+                rect1.setAttribute('width', '20');
+                rect1.setAttribute('height', '80');
+                const rect2 = document.createElementNS(svgNS, 'rect');
+                rect2.setAttribute('x', '10');
+                rect2.setAttribute('y', '40');
+                rect2.setAttribute('width', '80');
+                rect2.setAttribute('height', '20');
+                g.appendChild(rect1);
+                g.appendChild(rect2);
+                shapeElement = g;
+                break;
+              case ElementType.LINE:
+                shapeElement = document.createElementNS(svgNS, 'line');
+                shapeElement.setAttribute('x1', '0');
+                shapeElement.setAttribute('y1', '50');
+                shapeElement.setAttribute('x2', '100');
+                shapeElement.setAttribute('y2', '50');
+                shapeElement.setAttribute('stroke', svgFill);
+                shapeElement.setAttribute('stroke-width', '4');
+                svg.appendChild(shapeElement);
+                break;
+            }
+
+            if (shapeElement && el.type !== ElementType.LINE) {
+              if (shapeElement instanceof SVGGElement) {
+                Array.from(shapeElement.children).forEach(child => {
+                  (child as SVGElement).setAttribute('fill', svgFill);
+                  (child as SVGElement).setAttribute('stroke', svgStroke);
+                  if (el.strokeWidth) (child as SVGElement).setAttribute('stroke-width', el.strokeWidth.toString());
+                });
+              } else {
+                shapeElement.setAttribute('fill', svgFill);
+                shapeElement.setAttribute('stroke', svgStroke);
+                if (el.strokeWidth) shapeElement.setAttribute('stroke-width', el.strokeWidth.toString());
+              }
+              svg.appendChild(shapeElement);
+            }
+
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const shapeImg = document.createElement('img');
+            shapeImg.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+            
+            await new Promise<void>(resolve => {
+              shapeImg.onload = () => {
+                shapeImageMap.set(shapeKey, shapeImg as HTMLImageElement);
+                resolve();
+              };
+              shapeImg.onerror = () => {
+                console.warn('Failed to render shape');
+                resolve();
+              };
+            });
+          }
+        }
+      }
+
+      // Now that ALL images and shapes are loaded, draw everything
+      for (const el of elements.sort((a, b) => a.zIndex - b.zIndex)) {
+        ctx.save();
+        ctx.globalAlpha = el.opacity;
+
+        // Apply transformations
+        ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
+        ctx.rotate((el.rotation * Math.PI) / 180);
+
+        if (el.type === ElementType.TEXT) {
+          // Draw text
+          ctx.fillStyle = el.color || '#000000';
+          const fontWeight = el.textStyle?.bold ? 'bold' : 'normal';
+          const fontStyle = el.textStyle?.italic ? 'italic' : 'normal';
+          ctx.font = `${fontWeight} ${fontStyle} ${el.fontSize}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(el.content, 0, 0);
+
+        } else if (el.type === ElementType.IMAGE) {
+          // Draw preloaded image
+          const img = imageMap.get(el.content);
+          if (img && img.width > 0) {
+            ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
+          }
+
+        } else if (el.type === ElementType.RECT) {
+          // Draw rectangle
+          ctx.fillStyle = el.fillColor || '#4ECDC4';
+          ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+          if (el.strokeWidth && el.strokeWidth > 0) {
+            ctx.strokeStyle = el.strokeColor || '#000000';
+            ctx.lineWidth = el.strokeWidth;
+            ctx.strokeRect(-el.width / 2, -el.height / 2, el.width, el.height);
+          }
+
+        } else if (el.type === ElementType.CIRCLE) {
+          // Draw circle
+          ctx.fillStyle = el.fillColor || '#4ECDC4';
+          ctx.beginPath();
+          ctx.arc(0, 0, el.width / 2, 0, Math.PI * 2);
+          ctx.fill();
+          if (el.strokeWidth && el.strokeWidth > 0) {
+            ctx.strokeStyle = el.strokeColor || '#000000';
+            ctx.lineWidth = el.strokeWidth;
+            ctx.stroke();
+          }
+
+        } else if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+          // Draw preloaded shape image
+          const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
+          const shapeImg = shapeImageMap.get(shapeKey);
+          if (shapeImg && shapeImg.width > 0) {
+            ctx.drawImage(shapeImg, -el.width / 2, -el.height / 2, el.width, el.height);
+          }
+        }
+
+        ctx.restore();
+      }
+
+      // Download the final image
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.download = `design-${Date.now()}-${canvasSize.width}x${canvasSize.height}.png`;
+      link.click();
+
+      // Restore user state
+      setZoom(previousZoom);
+      setSelectedId(previousSelectedId);
+
+    } catch (error) {
+      console.error('Export failed:', error);
+    }
   };
 
   const applyTemplate = (template: typeof TEMPLATES[0]) => {
@@ -662,6 +1072,51 @@ const Editor: React.FC = () => {
   };
 
   const selectedElement = elements.find(el => el.id === selectedId);
+
+  // Load design from Firebase if designId is provided
+  useEffect(() => {
+    if (designId) {
+      const loadDesign = async () => {
+        try {
+          console.log('Loading design:', designId);
+          const design = await getDesignById(designId);
+          if (design) {
+            console.log('Design loaded:', design);
+            setDesignTitle(design.metadata.title);
+            setCanvasSize({ width: design.metadata.canvasWidth, height: design.metadata.canvasHeight });
+            setCanvasColor(design.metadata.canvasColor);
+            
+            // Map the design elements to CanvasElement format
+            const loadedElements = design.designJSON.elements.map(el => ({
+              id: el.id,
+              type: el.type as ElementType,
+              content: el.content,
+              x: el.x,
+              y: el.y,
+              width: el.width,
+              height: el.height,
+              fontSize: el.fontSize,
+              color: el.color,
+              backgroundColor: el.backgroundColor,
+              fillColor: el.fillColor,
+              opacity: el.opacity,
+              rotation: el.rotation,
+              zIndex: el.zIndex,
+              locked: el.locked,
+              visible: el.visible,
+            } as CanvasElement));
+            
+            setElements(loadedElements);
+            setHistory([loadedElements]);
+            setHistoryIndex(0);
+          }
+        } catch (error) {
+          console.error('Failed to load design:', error);
+        }
+      };
+      loadDesign();
+    }
+  }, [designId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -952,10 +1407,11 @@ const Editor: React.FC = () => {
                                     addElement(item.type, 100, 100, (item as any).fontSize);
                                   }
                                 }}
-                                className="flex flex-col items-center gap-2 p-4 rounded-xl cursor-pointer bg-gradient-to-br from-gray-50 to-white hover:from-slate-50 hover:to-gray-50 hover:shadow-md border-2 border-gray-100 hover:border-slate-200 transition-all group"
+                                className="flex flex-col items-center gap-2 p-4 rounded-xl cursor-move bg-gradient-to-br from-gray-50 to-white hover:from-slate-50 hover:to-gray-50 hover:shadow-md border-2 border-gray-100 hover:border-slate-200 transition-all group active:scale-95 active:shadow-inner"
                               >
                                 <div className="text-gray-600 group-hover:text-slate-900 group-hover:scale-110 transition-all">{item.icon}</div>
                                 <span className="text-xs text-gray-600 group-hover:text-slate-900 font-medium text-center">{item.label}</span>
+                                <span className="text-xs text-gray-400 group-hover:text-gray-500 font-light">drag to canvas</span>
                               </div>
                             ))}
                           </div>
@@ -996,9 +1452,17 @@ const Editor: React.FC = () => {
         {/* Canvas Area */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
           <div 
-            className="flex-1 overflow-auto p-12 flex items-center justify-center"
+            className={`flex-1 overflow-auto p-12 flex items-center justify-center transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''}`}
             onClick={() => setSelectedId(null)}
-            onDragOver={(e) => e.preventDefault()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDraggingFromSidebar(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.target === e.currentTarget) {
+                setDraggingFromSidebar(false);
+              }
+            }}
             onDrop={handleDropOnCanvas}
           >
             <div 
@@ -1033,20 +1497,23 @@ const Editor: React.FC = () => {
                 .map(el => (
                   <div
                     key={el.id}
-                    className={`absolute group select-none ${
+                    className={`absolute group select-none transition-all ${
                       selectedId === el.id 
                         ? 'ring-2 ring-slate-900 shadow-lg' 
                         : 'hover:ring-2 hover:ring-slate-300'
-                    } ${el.locked ? 'cursor-not-allowed' : ''}`}
+                    } ${el.locked ? 'cursor-not-allowed' : ''} ${
+                      dragInfo?.id === el.id ? 'opacity-75 ring-2 ring-blue-500 shadow-xl' : ''
+                    }`}
                     style={{
                       left: el.x,
                       top: el.y,
                       width: el.width,
                       height: el.height,
-                      opacity: el.opacity,
-                      zIndex: el.zIndex,
-                      transform: `rotate(${el.rotation || 0}deg)`,
+                      opacity: dragInfo?.id === el.id ? 0.75 : el.opacity,
+                      zIndex: dragInfo?.id === el.id ? 1000 : el.zIndex,
+                      transform: `rotate(${el.rotation || 0}deg) ${dragInfo?.id === el.id ? 'scale(1.05)' : ''}`,
                       cursor: el.locked ? 'not-allowed' : (dragInfo?.id === el.id ? 'grabbing' : 'grab'),
+                      transition: dragInfo?.id === el.id ? 'none' : 'all 0.2s ease',
                     }}
                     onMouseDown={(e) => handleMouseDown(e, el.id)}
                     onClick={(e) => e.stopPropagation()} 
@@ -1059,6 +1526,7 @@ const Editor: React.FC = () => {
                         onChange={(e) => setEditingText(e.target.value)}
                         onBlur={finishEditingText}
                         onKeyDown={(e) => {
+                          e.stopPropagation();
                           if (e.key === 'Enter' && !e.shiftKey) {
                              e.preventDefault();
                              finishEditingText();
@@ -1098,7 +1566,7 @@ const Editor: React.FC = () => {
                         className="w-full h-full object-cover pointer-events-none" 
                         style={{ borderRadius: el.borderRadius }} 
                       />
-                    ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(el.type) ? (
+                    ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type) ? (
                       <div style={{ borderRadius: el.borderRadius, width: '100%', height: '100%' }}>
                         {renderShape(el.type, el.fillColor || '#0F172A', el.strokeColor, el.strokeWidth)}
                       </div>
@@ -1711,6 +2179,17 @@ const Editor: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Save Design Modal */}
+        <SaveDesignModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          onSave={handleSaveDesign}
+          isLoading={isSavingDesign}
+          error={saveError}
+          successMessage={successMessage}
+          defaultTitle={designTitle}
+        />
       </div>
     </div>
   );

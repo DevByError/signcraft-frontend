@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, PlayCircle, AlertCircle, Copy } from 'lucide-react';
+import { getAllDesigns } from '../services/designService';
 
 interface PlaylistItem {
   id: string;
@@ -16,33 +17,55 @@ const SchedulePlaylist: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const [playlists, setPlaylists] = useState<PlaylistItem[]>([
-    {
-      id: '1',
-      name: 'Morning Rotation',
-      itemCount: 5,
-      totalDuration: 300,
-      lastModified: '2025-12-10',
-      description: 'Daily morning broadcast schedule',
-    },
-    {
-      id: '2',
-      name: 'Lunch Time Special',
-      itemCount: 3,
-      totalDuration: 180,
-      lastModified: '2025-12-09',
-      description: 'Promotional content for lunch hours',
-    },
-    {
-      id: '3',
-      name: 'Evening News',
-      itemCount: 7,
-      totalDuration: 420,
-      lastModified: '2025-12-08',
-      description: 'Evening broadcast with news and updates',
-    },
-  ]);
+  const [playlists, setPlaylists] = useState<PlaylistItem[]>([]);
+
+  // Fetch designs from Firebase
+  useEffect(() => {
+    const fetchDesigns = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching all designs from Firebase...');
+        
+        const designs = await getAllDesigns(50);
+        console.log('Fetched designs:', designs);
+        
+        if (!designs || designs.length === 0) {
+          console.log('No designs found');
+          setPlaylists([]);
+          setLoading(false);
+          return;
+        }
+        
+        // Convert designs to playlist format
+        const playlistsFromDesigns: PlaylistItem[] = designs.map(design => {
+          console.log('Processing design:', design.metadata.title);
+          return {
+            id: design.id,
+            name: design.metadata.title,
+            itemCount: design.designJSON.elements.length,
+            totalDuration: design.designJSON.elements.length * 5, // Default 5 seconds per element
+            lastModified: design.metadata.updatedAt,
+            description: design.metadata.description || 'No description',
+          };
+        });
+        
+        console.log('Converted playlists:', playlistsFromDesigns);
+        setPlaylists(playlistsFromDesigns);
+      } catch (err) {
+        console.error('Error fetching designs:', err);
+        setError(`Failed to load designs from Firebase: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setPlaylists([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDesigns();
+  }, []);
 
   const filteredPlaylists = playlists.filter(playlist =>
     playlist.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -156,17 +179,43 @@ const SchedulePlaylist: React.FC = () => {
         </div>
 
         {/* Playlists Display */}
-        {filteredPlaylists.length === 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Loading Designs</h3>
+            <p className="text-gray-600">Fetching your designs from Firebase...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-white rounded-xl shadow-lg p-16 text-center border-2 border-red-200">
+            <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Error Loading Designs</h3>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredPlaylists.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-16 text-center">
             <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-2xl font-semibold text-gray-900 mb-2">
-              {playlists.length === 0 ? 'No Playlists Yet' : 'No Match Found'}
+              {playlists.length === 0 ? 'No Designs Yet' : 'No Match Found'}
             </h3>
             <p className="text-gray-600 mb-6">
               {playlists.length === 0
-                ? 'Create your first playlist to organize your content'
+                ? 'Create your first design to organize your content'
                 : 'Try a different search term'}
             </p>
+            {playlists.length === 0 && (
+              <button
+                onClick={() => navigate('/editor')}
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+              >
+                Create First Design
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -192,12 +241,23 @@ const SchedulePlaylist: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold">
+                    <button 
+                      onClick={() => navigate(`/preview/${playlist.id}`)}
+                      className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold"
+                    >
                       Open
                     </button>
                     <button
+                      onClick={() => navigate(`/modify/${playlist.id}`)}
+                      className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+                      title="Modify Design"
+                    >
+                      <Edit2 size={18} />
+                      <span className="text-xs font-semibold hidden sm:inline">Modify</span>
+                    </button>
+                    <button
                       onClick={() => handleDuplicate(playlist)}
-                      className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                      className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors"
                       title="Duplicate"
                     >
                       <Copy size={18} />

@@ -1,24 +1,46 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-
-const mockDesigns = [
-    { id: '1', name: 'Main Lobby Screen', lastModified: '2 hours ago', thumbnail: 'https://picsum.photos/300/200?random=20' },
-    { id: '2', name: 'Cafeteria Menu', lastModified: '1 day ago', thumbnail: 'https://picsum.photos/300/200?random=21' },
-    { id: '3', name: 'Welcome Sign', lastModified: '3 days ago', thumbnail: 'https://picsum.photos/300/200?random=22' },
-];
+import { getAllDesigns } from '../services/designService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [designs, setDesigns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching designs for dashboard...');
+
+        const designsData = await getAllDesigns(6); // Show last 6 designs
+        setDesigns(designsData);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleNewDesign = () => {
     navigate('/editor');
   };
 
-  const handleEditDesign = () => {
-    navigate('/editor');
+  const handleEditDesign = (designId: string) => {
+    navigate(`/modify/${designId}`);
+  };
+
+  const handlePreviewDesign = (creativeId: string) => {
+    navigate(`/preview/${creativeId}`);
   };
 
   return (
@@ -41,13 +63,25 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="mb-12 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+            <div>
+              <p className="text-red-800 font-medium">Error loading dashboard</p>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Total Designs</p>
-                <p className="text-3xl font-bold text-primary mt-2">3</p>
+                <p className="text-3xl font-bold text-primary mt-2">
+                  {loading ? '-' : designs.length}
+                </p>
               </div>
               <Folder className="text-primary opacity-30" size={32} />
             </div>
@@ -96,41 +130,77 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {mockDesigns.map((design) => (
-              <div 
-                key={design.id} 
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden animate-pulse">
+                  <div className="h-40 bg-gray-200" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : designs.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+              <Folder className="mx-auto text-gray-400 mb-4" size={48} />
+              <p className="text-gray-600 font-medium mb-4">No designs yet</p>
+              <button
+                onClick={handleNewDesign}
+                className="inline-flex items-center gap-2 bg-primary text-white px-6 py-2 rounded-lg hover:bg-primaryLight transition-colors font-medium"
               >
+                <Plus size={18} />
+                Create Your First Design
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {designs.map((design) => (
                 <div 
-                  className="h-40 bg-gray-200 relative overflow-hidden"
-                  onClick={handleEditDesign}
+                  key={design.id} 
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all group"
                 >
-                  <img 
-                    src={design.thumbnail} 
-                    alt={design.name} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                  />
-                  <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/30 transition-all flex items-center justify-center">
-                    <Edit className="text-white drop-shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" size={36} />
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-medium text-primary truncate text-lg">{design.name}</h3>
-                  <div className="flex items-center gap-2 text-gray-500 text-sm mt-2">
-                    <Clock size={14} />
-                    <span>Edited {design.lastModified}</span>
-                  </div>
-                  <button
-                    onClick={handleEditDesign}
-                    className="w-full mt-3 px-4 py-2 bg-primary text-white rounded hover:bg-primaryLight transition-colors text-sm font-medium"
+                  <div 
+                    className="h-40 bg-gray-200 relative overflow-hidden cursor-pointer"
+                    onClick={() => handleEditDesign(design.id)}
                   >
-                    Edit Design
-                  </button>
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primaryLight/20">
+                      <Layers className="text-primary/50" size={40} />
+                    </div>
+                    <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/30 transition-all flex items-center justify-center">
+                      <Edit className="text-white drop-shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" size={36} />
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-medium text-primary truncate text-lg">{design.metadata.title}</h3>
+                    {design.metadata.description && (
+                      <p className="text-gray-600 text-sm line-clamp-2 mt-1">{design.metadata.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 text-gray-500 text-sm mt-3">
+                      <Clock size={14} />
+                      <span>Updated {new Date(design.metadata.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => handleEditDesign(design.id)}
+                        className="flex-1 px-4 py-2 bg-primary text-white rounded hover:bg-primaryLight transition-colors text-sm font-medium"
+                        title="Modify Design"
+                      >
+                        Modify
+                      </button>
+                      <button
+                        onClick={() => handlePreviewDesign(design.id)}
+                        className="flex-1 px-4 py-2 bg-gray-100 text-primary rounded hover:bg-gray-200 transition-colors text-sm font-medium"
+                      >
+                        Preview
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Schedule Management Section */}

@@ -6,6 +6,8 @@ import Home from './pages/Home';
 import Info from './pages/Info';
 import Templates from './pages/Templates';
 import Editor from './pages/Editor';
+import ModifyEditor from './pages/ModifyEditor';
+import Preview from './pages/Preview';
 import Dashboard from './pages/Dashboard';
 import Creative from './pages/Creative';
 import Playlist from './pages/Playlist';
@@ -31,6 +33,13 @@ const App: React.FC = () => {
 
             {/* Editor */}
             <Route path="/editor" element={<Editor />} />
+            <Route path="/editor/:designId" element={<Editor />} />
+
+            {/* Modify Editor - Dedicated page for modifying designs */}
+            <Route path="/modify/:designId" element={<ModifyEditor />} />
+
+            {/* Preview */}
+            <Route path="/preview/:designId" element={<Preview />} />
 
             {/* Dashboard - includes Schedule Management */}
             <Route path="/dashboard" element={<Dashboard />} />
