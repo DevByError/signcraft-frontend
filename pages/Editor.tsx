@@ -153,6 +153,7 @@ const Editor: React.FC = () => {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [designTitle, setDesignTitle] = useState('My Design');
+  const [newElementIds, setNewElementIds] = useState<Set<string>>(new Set());
   
   // Design save hook
   const { saveDesign: saveDesignToFirebase, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
@@ -326,6 +327,15 @@ const Editor: React.FC = () => {
     setElements(newElements);
     updateHistory(newElements);
     setSelectedId(newElement.id);
+    setNewElementIds(prev => new Set([...prev, newElement.id]));
+    // Remove from new elements set after animation completes
+    setTimeout(() => {
+      setNewElementIds(prev => {
+        const next = new Set(prev);
+        next.delete(newElement.id);
+        return next;
+      });
+    }, 400);
     setRightSidebarOpen(true);
   };
 
@@ -1178,7 +1188,7 @@ const Editor: React.FC = () => {
           
           <button 
             onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-            className={`p-2 rounded-lg transition-all ${leftSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`p-2 rounded-lg transition-all button-hover-scale ${leftSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
             title="Toggle sidebar"
           >
             <Menu size={20} />
@@ -1190,7 +1200,7 @@ const Editor: React.FC = () => {
             <button 
               onClick={undo} 
               disabled={historyIndex === 0} 
-              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all button-hover-scale" 
               title="Undo (Ctrl+Z)"
             >
               <Undo size={18} />
@@ -1198,7 +1208,7 @@ const Editor: React.FC = () => {
             <button 
               onClick={redo} 
               disabled={historyIndex >= history.length - 1} 
-              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all button-hover-scale" 
               title="Redo (Ctrl+Y)"
             >
               <Redo size={18} />
@@ -1209,7 +1219,7 @@ const Editor: React.FC = () => {
 
           <button 
             onClick={() => setShowGrid(!showGrid)} 
-            className={`p-2 rounded-lg transition-all ${showGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
+            className={`p-2 rounded-lg transition-all button-hover-scale ${showGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
             title="Toggle Grid"
           >
             {showGrid ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -1217,7 +1227,7 @@ const Editor: React.FC = () => {
 
           <button 
             onClick={() => setSnapToGrid(!snapToGrid)} 
-            className={`p-2 rounded-lg transition-all ${snapToGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
+            className={`p-2 rounded-lg transition-all button-hover-scale ${snapToGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
             title="Snap to Grid"
           >
             <Grid3x3 size={18} />
@@ -1228,7 +1238,7 @@ const Editor: React.FC = () => {
           <button 
             onClick={duplicateSelected} 
             disabled={!selectedId} 
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all button-hover-scale" 
             title="Duplicate (Ctrl+D)"
           >
             <Copy size={18} />
@@ -1237,7 +1247,7 @@ const Editor: React.FC = () => {
           <button 
             onClick={deleteSelected} 
             disabled={!selectedId} 
-            className="p-2 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+            className="p-2 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all button-hover-scale" 
             title="Delete"
           >
             <Trash2 size={18} />
@@ -1247,7 +1257,7 @@ const Editor: React.FC = () => {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-            className={`p-2 rounded-lg transition-all ${rightSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`p-2 rounded-lg transition-all button-hover-scale ${rightSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
             title="Toggle Right Sidebar"
           >
             <Sidebar size={20} className="transform rotate-180" />
@@ -1255,7 +1265,7 @@ const Editor: React.FC = () => {
 
           <button 
             onClick={() => setShowTemplateModal(true)}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center gap-2"
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center gap-2 button-hover-scale"
           >
             <Layout size={18} />
             Templates
@@ -1263,7 +1273,7 @@ const Editor: React.FC = () => {
           
           <button 
             onClick={exportAsImage}
-            className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-500/30"
+            className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-500/30 button-hover-scale"
           >
             <Download size={18} />
             Export
@@ -1271,7 +1281,7 @@ const Editor: React.FC = () => {
 
           <button 
             onClick={saveDesign}
-            className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-900/30"
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-900/30 button-hover-scale"
           >
             <Save size={18} />
             Save
@@ -1281,8 +1291,8 @@ const Editor: React.FC = () => {
 
       {/* Template Modal */}
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-2xl w-full mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm modal-backdrop">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-2xl w-full mx-4 modal-content">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">Choose a Template</h3>
               <button 
@@ -1297,7 +1307,7 @@ const Editor: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => applyTemplate(template)}
-                  className="p-6 border-2 border-gray-200 rounded-xl hover:border-slate-500 hover:bg-slate-50 transition-all group text-left"
+                  className="p-6 border-2 border-gray-200 rounded-xl hover:border-slate-500 hover:bg-slate-50 transition-all group text-left stagger-item button-hover-scale"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className="p-2 bg-slate-100 rounded-lg text-slate-900 group-hover:bg-slate-900 group-hover:text-white transition-colors">
@@ -1324,7 +1334,7 @@ const Editor: React.FC = () => {
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Sidebar */}
         {leftSidebarOpen && (
-          <div className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-lg z-20">
+          <div className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-lg z-20 sidebar-open">
             {/* Tabs */}
             <div className="flex border-b border-gray-200 bg-gray-50">
               <button 
@@ -1394,7 +1404,7 @@ const Editor: React.FC = () => {
                         </button>
                         
                         {openSections[`widgets_${category.id}`] && (
-                          <div className="p-4 pt-0 grid grid-cols-2 gap-3">
+                          <div className="p-4 pt-0 grid grid-cols-2 gap-3 animate-fade-in">
                             {filteredItems.map((item, idx) => (
                               <div 
                                 key={idx}
@@ -1407,7 +1417,8 @@ const Editor: React.FC = () => {
                                     addElement(item.type, 100, 100, (item as any).fontSize);
                                   }
                                 }}
-                                className="flex flex-col items-center gap-2 p-4 rounded-xl cursor-move bg-gradient-to-br from-gray-50 to-white hover:from-slate-50 hover:to-gray-50 hover:shadow-md border-2 border-gray-100 hover:border-slate-200 transition-all group active:scale-95 active:shadow-inner"
+                                className="stagger-item flex flex-col items-center gap-2 p-4 rounded-xl cursor-move bg-gradient-to-br from-gray-50 to-white hover:from-slate-50 hover:to-gray-50 hover:shadow-md border-2 border-gray-100 hover:border-slate-200 transition-all group active:scale-95 active:shadow-inner"
+                                style={{ animationDelay: `${idx * 0.05}s` }}
                               >
                                 <div className="text-gray-600 group-hover:text-slate-900 group-hover:scale-110 transition-all">{item.icon}</div>
                                 <span className="text-xs text-gray-600 group-hover:text-slate-900 font-medium text-center">{item.label}</span>
@@ -1430,7 +1441,8 @@ const Editor: React.FC = () => {
                     <button
                       key={idx}
                       onClick={() => applyTemplate(template)}
-                      className="p-4 border-2 border-gray-200 rounded-xl hover:border-slate-500 hover:bg-slate-50 transition-all group text-left"
+                      className="stagger-item p-4 border-2 border-gray-200 rounded-xl hover:border-slate-500 hover:bg-slate-50 transition-all group text-left active:scale-95 hover:shadow-md"
+                      style={{ animationDelay: `${idx * 0.08}s` }}
                     >
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-slate-100 rounded-lg text-slate-900 group-hover:bg-slate-900 group-hover:text-white transition-colors">
@@ -1498,11 +1510,13 @@ const Editor: React.FC = () => {
                   <div
                     key={el.id}
                     className={`absolute group select-none transition-all ${
+                      newElementIds.has(el.id) ? 'animate-scale-in' : ''
+                    } ${
                       selectedId === el.id 
-                        ? 'ring-2 ring-slate-900 shadow-lg' 
-                        : 'hover:ring-2 hover:ring-slate-300'
+                        ? 'ring-2 ring-slate-900 shadow-lg animate-glow' 
+                        : 'hover:ring-2 hover:ring-slate-300 hover:shadow-md'
                     } ${el.locked ? 'cursor-not-allowed' : ''} ${
-                      dragInfo?.id === el.id ? 'opacity-75 ring-2 ring-blue-500 shadow-xl' : ''
+                      dragInfo?.id === el.id ? 'opacity-75 ring-2 ring-blue-500 shadow-xl animate-pulse' : ''
                     }`}
                     style={{
                       left: el.x,
@@ -1626,7 +1640,7 @@ const Editor: React.FC = () => {
 
         {/* Right Sidebar */}
         {rightSidebarOpen && (
-          <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden shadow-lg z-20">
+          <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden shadow-lg z-20 sidebar-right-open">
             <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-gray-50">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-800">
@@ -1908,21 +1922,21 @@ const Editor: React.FC = () => {
                           )}
                           
                           {/* Color Palette */}
-                          <div>
+                          <div className="animate-fade-in">
                             <div className="flex items-center justify-between mb-2">
                               <label className="text-xs text-gray-600 font-medium">Palette</label>
                               <select 
                                 value={selectedPalette}
                                 onChange={(e) => setSelectedPalette(e.target.value as keyof typeof COLOR_PALETTES)}
-                                className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-500 transition-colors-smooth hover:border-slate-400 cursor-pointer"
                               >
                                 {Object.keys(COLOR_PALETTES).map(key => (
                                   <option key={key} value={key}>{key}</option>
                                 ))}
                               </select>
                             </div>
-                            <div className="flex gap-2 flex-wrap">
-                              {COLOR_PALETTES[selectedPalette].map(color => (
+                            <div className="flex gap-2 flex-wrap animate-fade-in">
+                              {COLOR_PALETTES[selectedPalette].map((color, idx) => (
                                 <button 
                                   key={color} 
                                   onClick={() => {
@@ -1933,10 +1947,11 @@ const Editor: React.FC = () => {
                                     }
                                     updateHistory(elements);
                                   }}
-                                  className="w-8 h-8 rounded-lg border-2 hover:scale-110 transition-transform shadow-sm" 
+                                  className="stagger-item w-8 h-8 rounded-lg border-2 hover:scale-125 transition-transform shadow-sm active:scale-95" 
                                   style={{
-                                    backgroundColor: color, 
-                                    borderColor: (selectedElement.type === ElementType.TEXT ? selectedElement.color : selectedElement.fillColor) === color ? '#0F172A' : '#E5E7EB'
+                                    backgroundColor: color,
+                                    borderColor: (selectedElement.type === ElementType.TEXT ? selectedElement.color : selectedElement.fillColor) === color ? '#0F172A' : '#E5E7EB',
+                                    animationDelay: `${idx * 0.05}s`
                                   }}
                                 />
                               ))}

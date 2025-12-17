@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Monitor, LogOut, Home } from 'lucide-react';
+import { Menu, X, LogOut, Home } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,7 +33,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="flex justify-between h-16">
               <div className="flex items-center">
                 <Link to="/" className="flex-shrink-0 flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <Monitor className="h-8 w-8 text-vanilla" />
+                  <img src="/sc.png" alt="SignCraft" className="h-8 w-8" />
                   <span className="font-bold text-xl text-white tracking-tight">SignCraft</span>
                 </Link>
                 <div className="hidden md:ml-10 md:flex md:space-x-1">
@@ -191,7 +191,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div className="col-span-1 md:col-span-1">
                 <div className="flex items-center gap-2 mb-4">
-                   <Monitor className="h-6 w-6 text-vanilla" />
+                   <img src="/sc.png" alt="SignCraft" className="h-6 w-6" />
                    <span className="font-bold text-xl">SignCraft</span>
                 </div>
                 <p className="text-gray-400 text-sm">

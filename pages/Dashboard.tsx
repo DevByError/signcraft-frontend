@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllDesigns } from '../services/designService';
+import { getUserDesigns } from '../services/designService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -16,9 +16,9 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Fetching designs for dashboard...');
+        console.log('Fetching user designs for dashboard...');
 
-        const designsData = await getAllDesigns(6); // Show last 6 designs
+        const designsData = await getUserDesigns(6); // Show last 6 designs for current user
         setDesigns(designsData);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);

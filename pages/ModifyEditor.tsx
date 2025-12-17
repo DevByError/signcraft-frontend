@@ -695,9 +695,12 @@ const Editor: React.FC = () => {
         };
       });
 
+      // Use Firebase design name when modifying, fallback to provided title for new designs
+      const designTitle = designData?.metadata?.title || data.title || 'Untitled';
+
       const exportedDesign = {
         metadata: {
-          title: data.title || 'Untitled',
+          title: designTitle,
           description: data.description || '',
           canvasWidth: canvasSize.width || 1280,
           canvasHeight: canvasSize.height || 720,
@@ -2200,6 +2203,7 @@ const Editor: React.FC = () => {
           error={saveError}
           successMessage={successMessage}
           defaultTitle={designTitle}
+          isModifying={true}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle } from 'lucide-react';
+import { getUserDesigns, deleteDesignFromFirestore } from '../services/designService';
 
 interface Creative {
   id: string;
@@ -15,39 +16,63 @@ const ScheduleCreative: React.FC = () => {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
-  const [creatives, setCreatives] = useState<Creative[]>([
-    {
-      id: '1',
-      name: 'Holiday Campaign 2025',
-      thumbnail: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23FF6B6B" width="400" height="300"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="white" font-weight="bold"%3EHoliday%3C/text%3E%3C/svg%3E',
-      createdDate: '2025-12-01',
-      duration: 10,
-      size: '1920x1080',
-    },
-    {
-      id: '2',
-      name: 'Product Launch Promo',
-      thumbnail: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%234ECDC4" width="400" height="300"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="white" font-weight="bold"%3ELaunch%3C/text%3E%3C/svg%3E',
-      createdDate: '2025-12-05',
-      duration: 8,
-      size: '1920x1080',
-    },
-    {
-      id: '3',
-      name: 'Spring Sale Announcement',
-      thumbnail: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%2395E1D3" width="400" height="300"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="40" fill="white" font-weight="bold"%3ESale%3C/text%3E%3C/svg%3E',
-      createdDate: '2025-12-08',
-      duration: 12,
-      size: '1920x1080',
-    },
-  ]);
+  const [creatives, setCreatives] = useState<Creative[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch designs from Firebase
+  useEffect(() => {
+    const fetchCreatives = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching creatives from Firebase...');
+        
+        const designs = await getUserDesigns(50);
+        console.log('Fetched designs:', designs);
+        
+        // Convert Firebase designs to Creative format
+        const convertedCreatives: Creative[] = designs.map(design => ({
+          id: design.id,
+          name: design.metadata.title,
+          thumbnail: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%234ECDC4" width="400" height="300"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="white" font-weight="bold"%3E' + encodeURIComponent(design.metadata.title) + '%3C/text%3E%3C/svg%3E',
+          createdDate: design.metadata.createdAt,
+          duration: design.designJSON.elements.length * 5, // Default 5 seconds per element
+          size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
+        }));
+        
+        setCreatives(convertedCreatives);
+      } catch (err) {
+        console.error('Error fetching creatives:', err);
+        setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setCreatives([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCreatives();
+  }, []);
 
   const filteredCreatives = creatives.filter(creative =>
     creative.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDelete = (id: string) => {
-    setCreatives(prev => prev.filter(c => c.id !== id));
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this creative?')) {
+      try {
+        await deleteDesignFromFirestore(id);
+        setCreatives(prev => prev.filter(c => c.id !== id));
+        console.log('✅ Creative deleted successfully');
+      } catch (err) {
+        console.error('Error deleting creative:', err);
+        setError(`Failed to delete creative: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+  };
+
+  const handleEdit = (id: string) => {
+    navigate(`/modify/${id}`);
   };
 
   return (
@@ -116,8 +141,29 @@ const ScheduleCreative: React.FC = () => {
           </div>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-800 font-medium">Error loading creatives</p>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-gray-600">Loading creatives from Firebase...</p>
+          </div>
+        )}
+
         {/* Creatives Display */}
-        {filteredCreatives.length === 0 ? (
+        {!loading && filteredCreatives.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-16 text-center">
             <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-2xl font-semibold text-gray-900 mb-2">
@@ -160,7 +206,9 @@ const ScheduleCreative: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold flex items-center justify-center gap-2">
+                    <button 
+                      onClick={() => handleEdit(creative.id)}
+                      className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold flex items-center justify-center gap-2">
                       <Edit2 size={16} />
                       Edit
                     </button>
@@ -206,7 +254,9 @@ const ScheduleCreative: React.FC = () => {
                       {new Date(creative.createdDate).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right flex gap-2 justify-end">
-                      <button className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primaryLight transition-colors flex items-center gap-2">
+                      <button 
+                        onClick={() => handleEdit(creative.id)}
+                        className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primaryLight transition-colors flex items-center gap-2">
                         <Edit2 size={16} />
                         Edit
                       </button>
