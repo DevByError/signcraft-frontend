@@ -4,12 +4,29 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
+// 1. NEW: Import Socket.IO and HTTP modules
+import { Server as SocketIOServer } from 'socket.io';
+import http from 'http';
+
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+const SOCKET_PORT = 3001;
+
+
+// 1. NEW: Create HTTP Server and Socket.IO Server
+const httpServer = http.createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"], // Adjust for your React frontend URL
+    methods: ["GET", "POST"]
+  }
+});
 
 // Middleware
 app.use(express.json());
-app.use(express.static('uploads'));
+app.use(express.static(path.join(__dirname, '../uploads')));
+// app.use(express.static('uploads'));
 
 // Storage configuration for multer
 const storage = multer.diskStorage({
@@ -43,6 +60,72 @@ const upload: Multer = multer({
 const designs = new Map();
 const collaborativeSessions = new Map();
 const userUploads = new Map();
+
+
+// --- NEW MOCK DATA & HELPER ---
+
+// MOCK: In a real app, this would query your Firebase/DB
+// It returns a direct media URL for the screen to play
+function getFirstMediaFromPlaylist(playlistId: string): { url: string; mediaType: string } | null {
+  // Simple mock: Playlist 1 deploys a video, any other playlist deploys an image
+  if (playlistId === 'test-playlist-video') {
+    return {
+      url: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+      mediaType: 'video'
+    };
+  }
+  if (playlistId === 'test-playlist-image') {
+    return {
+      url: 'https://picsum.photos/1920/1080',
+      mediaType: 'image'
+    };
+  }
+  // Fallback to a default image URL
+  return {
+    url: 'https://cdn.pixabay.com/photo/2023/10/26/15/41/forest-8342784_1280.jpg',
+    mediaType: 'image'
+  };
+}
+
+
+// --- SOCKET.IO REAL-TIME LOGIC ---
+const SCREEN_ROOM_PREFIX = 'screen-';
+
+io.on('connection', (socket) => {
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+
+  // Android screen clients will join a room based on their Screen ID (e.g., scr01)
+  socket.on('join_screen_room', (screenId: string) => {
+    socket.join(SCREEN_ROOM_PREFIX + screenId);
+    console.log(`[Socket.IO] Client ${socket.id} joined room: ${SCREEN_ROOM_PREFIX + screenId}`);
+  });
+
+  // 👈 NEW: Deployment Trigger from the React Admin Panel
+  socket.on('deployment_request', (data: { screenId: string, playlistId: string }) => {
+    console.log(`[DEPLOYMENT] Received request for Screen ${data.screenId} with Playlist ${data.playlistId}`);
+
+    const media = getFirstMediaFromPlaylist(data.playlistId);
+
+    if (media) {
+      const targetRoom = SCREEN_ROOM_PREFIX + data.screenId;
+
+      // Broadcast the media update to the specific screen's room
+      io.to(targetRoom).emit('media_update', {
+        url: media.url,
+        mediaType: media.mediaType,
+        playlistId: data.playlistId,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`[DEPLOYMENT] Broadcasted ${media.mediaType} to room ${targetRoom}. URL: ${media.url}`);
+    } else {
+      console.warn(`[DEPLOYMENT] No media found for playlist ${data.playlistId}`);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
+  });
+});
 
 // Routes
 
@@ -213,6 +296,10 @@ app.use((err: any, req: Request, res: Response, next: Function) => {
     error: 'Internal server error',
     message: err.message,
   });
+});
+
+httpServer.listen(SOCKET_PORT, () => {
+  console.log(`Socket.IO Server listening on *:${SOCKET_PORT}`);
 });
 
 // Start server

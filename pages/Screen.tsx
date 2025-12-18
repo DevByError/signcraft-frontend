@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, AlertCircle, Wifi, WifiOff, MapPin, X, Monitor, Zap } from 'lucide-react';
-import { 
-  getUserScreens, 
-  createScreen, 
+import {
+  getUserScreens,
+  createScreen,
   deleteScreen,
   assignPlaylistToScreen,
   updateScreenStatus,
-  ScreenDocument 
+  ScreenDocument
 } from '../services/screenService';
 import { getUserPlaylists, PlaylistDocument } from '../services/playlistService';
 import websocketService, { WebSocketMessage } from '../services/websocketService';
@@ -34,10 +34,10 @@ const ScheduleScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [realtimeUpdates, setRealtimeUpdates] = useState<string[]>([]);
-  
+
   const [screens, setScreens] = useState<Screen[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistDocument[]>([]);
-  
+
   // Create form state
   const [newScreenName, setNewScreenName] = useState('');
   const [newScreenLocation, setNewScreenLocation] = useState('');
@@ -52,17 +52,17 @@ const ScheduleScreen: React.FC = () => {
         setLoading(true);
         setError(null);
         console.log('📺 [SCREEN] Fetching screens and playlists from Firebase...');
-        
+
         // Fetch screens
         const screensData = await getUserScreens(100);
         console.log(`✅ [SCREEN] Fetched ${screensData.length} screens`);
-        
+
         // Fetch playlists for selection
         const playlistsData = await getUserPlaylists(100);
         console.log(`✅ [SCREEN] Fetched ${playlistsData.length} playlists`);
-        
+
         setPlaylists(playlistsData);
-        
+
         // Convert to UI format
         const screenItems: Screen[] = screensData.map(screen => ({
           id: screen.id,
@@ -76,7 +76,7 @@ const ScheduleScreen: React.FC = () => {
           playlistId: screen.playlistId,
           playlistName: screen.playlistName,
         }));
-        
+
         setScreens(screenItems);
       } catch (err) {
         console.error('❌ [SCREEN] Error fetching data:', err);
@@ -93,29 +93,29 @@ const ScheduleScreen: React.FC = () => {
   // WebSocket connection and real-time updates
   useEffect(() => {
     console.log('🔌 [SCREEN] Setting up WebSocket...');
-    
+
     // Subscribe to WebSocket messages
     const unsubscribe = websocketService.subscribe((message: WebSocketMessage) => {
       console.log('📨 [SCREEN] WebSocket message:', message);
-      
+
       // Update connection status
       if (message.type === 'heartbeat') {
         setWsConnected(true);
       }
-      
+
       // Handle screen status updates
       if (message.type === 'screen_status_update' && message.screenId) {
-        setScreens(prevScreens => 
+        setScreens(prevScreens =>
           prevScreens.map(screen => {
             if (screen.screenId === message.screenId || screen.id === message.screenId) {
               const newStatus = message.data?.status || screen.status;
-              
+
               // Add to realtime updates feed
               setRealtimeUpdates(prev => [
                 `${screen.name} is now ${newStatus}`,
                 ...prev.slice(0, 4) // Keep last 5 updates
               ]);
-              
+
               return {
                 ...screen,
                 status: newStatus,
@@ -125,13 +125,13 @@ const ScheduleScreen: React.FC = () => {
             return screen;
           })
         );
-        
+
         // Update Firebase
         if (message.screenId && message.data?.status) {
           updateScreenStatus(message.screenId, message.data.status);
         }
       }
-      
+
       // Handle screen connected
       if (message.type === 'screen_connected' && message.screenCustomId) {
         setRealtimeUpdates(prev => [
@@ -139,7 +139,7 @@ const ScheduleScreen: React.FC = () => {
           ...prev.slice(0, 4)
         ]);
       }
-      
+
       // Handle screen disconnected
       if (message.type === 'screen_disconnected' && message.screenCustomId) {
         setRealtimeUpdates(prev => [
@@ -147,7 +147,7 @@ const ScheduleScreen: React.FC = () => {
           ...prev.slice(0, 4)
         ]);
       }
-      
+
       // Handle playlist assigned
       if (message.type === 'playlist_assigned' && message.screenId) {
         setScreens(prevScreens =>
@@ -157,7 +157,7 @@ const ScheduleScreen: React.FC = () => {
                 `Playlist "${message.data?.playlistName}" assigned to ${screen.name}`,
                 ...prev.slice(0, 4)
               ]);
-              
+
               return {
                 ...screen,
                 playlistId: message.data?.playlistId,
@@ -169,7 +169,7 @@ const ScheduleScreen: React.FC = () => {
         );
       }
     });
-    
+
     // Cleanup on unmount
     return () => {
       console.log('🔌 [SCREEN] Cleaning up WebSocket subscription');
@@ -179,7 +179,7 @@ const ScheduleScreen: React.FC = () => {
 
   const filteredScreens = screens.filter(screen => {
     const matchesSearch = screen.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         screen.location.toLowerCase().includes(searchTerm.toLowerCase());
+      screen.location.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || screen.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -196,29 +196,46 @@ const ScheduleScreen: React.FC = () => {
       alert('Please enter a location');
       return;
     }
-    
+
+    // Check for selected playlist
+    if (!selectedPlaylistId.trim()) {
+      alert('Please select a playlist to assign for immediate deployment.');
+      return;
+    }
+
     try {
       console.log('📺 [SCREEN] Creating new screen:', newScreenName);
-      
+
       const selectedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
-      
+
       const result = await createScreen(
         newScreenName,
         newScreenLocation,
         newScreenResolution,
         newScreenIP,
-        selectedPlaylistId || undefined,
+        selectedPlaylistId, // Now required to deploy
         selectedPlaylist?.name || undefined
       );
-      
+
       if (result.success && result.screenId) {
         console.log('✅ [SCREEN] Created successfully:', result.screenId);
-        
-        // Refresh screens list
+
+        // --- DEPLOYMENT LOGIC START ---
+        const createdScreenId = screenItems[screenItems.length - 1]?.screenId || 'scr01'; // Get the generated scrXX ID
+
+        // 1. Send the deployment request via Socket.IO
+        websocketService.emitDeploymentRequest(
+          createdScreenId, // The ID the Android screen will join (e.g., 'scr01')
+          selectedPlaylistId
+        );
+        console.log(`🚀 [DEPLOY] Triggered deployment request for ${createdScreenId} with Playlist ${selectedPlaylistId}`);
+        // --- DEPLOYMENT LOGIC END ---
+
+        // Refresh screens list (remaining logic)
         const screensData = await getUserScreens(100);
         const screenItems: Screen[] = screensData.map(screen => ({
           id: screen.id,
-          screenId: screen.screenId,
+          screenId: screen.screenId, // The auto-generated ID (e.g., scr01)
           name: screen.name,
           location: screen.location,
           resolution: screen.resolution,
@@ -229,7 +246,7 @@ const ScheduleScreen: React.FC = () => {
           playlistName: screen.playlistName,
         }));
         setScreens(screenItems);
-        
+
         // Reset form and close modal
         setNewScreenName('');
         setNewScreenLocation('');
@@ -237,11 +254,11 @@ const ScheduleScreen: React.FC = () => {
         setNewScreenIP('');
         setSelectedPlaylistId('');
         setShowCreateModal(false);
-        
-        // Notify via WebSocket
+
+        // Notify via WebSocket (existing logic)
         websocketService.notifyScreenCreated(
           result.screenId,
-          screenItems[screenItems.length - 1]?.screenId || 'scr01'
+          createdScreenId
         );
       } else {
         console.error('❌ [SCREEN] Failed to create:', result.error);
@@ -255,16 +272,16 @@ const ScheduleScreen: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     const screenName = screens.find(s => s.id === id)?.name || 'this screen';
-    
+
     if (window.confirm(`Are you sure you want to delete "${screenName}"? This action cannot be undone.`)) {
       try {
         console.log('🗑️ [SCREEN] Deleting screen:', id);
         const result = await deleteScreen(id);
-        
+
         if (result.success) {
           setScreens(prev => prev.filter(s => s.id !== id));
           console.log('✅ [SCREEN] Deleted successfully');
-          
+
           // Notify via WebSocket
           websocketService.notifyScreenDeleted(id);
         } else {
@@ -289,7 +306,7 @@ const ScheduleScreen: React.FC = () => {
     const then = new Date(date);
     const diffMs = now.getTime() - then.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
@@ -310,7 +327,7 @@ const ScheduleScreen: React.FC = () => {
             <ArrowLeft size={20} />
             Back to Dashboard
           </button>
-          
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Display Screens</h1>
@@ -324,7 +341,7 @@ const ScheduleScreen: React.FC = () => {
                 )}
               </div>
             </div>
-            
+
             <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
@@ -402,35 +419,32 @@ const ScheduleScreen: React.FC = () => {
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
-          
+
           <div className="flex gap-2 bg-white rounded-lg p-1 border border-gray-300">
             <button
               onClick={() => setFilterStatus('all')}
-              className={`px-4 py-2 rounded font-semibold transition-colors ${
-                filterStatus === 'all'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
+              className={`px-4 py-2 rounded font-semibold transition-colors ${filterStatus === 'all'
+                ? 'bg-primary text-white'
+                : 'text-gray-600 hover:text-primary'
+                }`}
             >
               All
             </button>
             <button
               onClick={() => setFilterStatus('online')}
-              className={`px-4 py-2 rounded font-semibold transition-colors ${
-                filterStatus === 'online'
-                  ? 'bg-green-600 text-white'
-                  : 'text-gray-600 hover:text-green-600'
-              }`}
+              className={`px-4 py-2 rounded font-semibold transition-colors ${filterStatus === 'online'
+                ? 'bg-green-600 text-white'
+                : 'text-gray-600 hover:text-green-600'
+                }`}
             >
               Online
             </button>
             <button
               onClick={() => setFilterStatus('offline')}
-              className={`px-4 py-2 rounded font-semibold transition-colors ${
-                filterStatus === 'offline'
-                  ? 'bg-red-600 text-white'
-                  : 'text-gray-600 hover:text-red-600'
-              }`}
+              className={`px-4 py-2 rounded font-semibold transition-colors ${filterStatus === 'offline'
+                ? 'bg-red-600 text-white'
+                : 'text-gray-600 hover:text-red-600'
+                }`}
             >
               Offline
             </button>
