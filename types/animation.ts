@@ -1,0 +1,200 @@
+/**
+ * Animation System Types
+ * Data-driven animation model for SignCraft editor
+ */
+
+// ==================== Animation Types ====================
+
+export type AnimationType = 
+  // Basic animations
+  | 'fadeIn'
+  | 'fadeOut'
+  | 'slideInLeft'
+  | 'slideInRight'
+  | 'slideInUp'
+  | 'slideInDown'
+  | 'slideOutLeft'
+  | 'slideOutRight'
+  | 'slideOutUp'
+  | 'slideOutDown'
+  | 'scaleIn'
+  | 'scaleOut'
+  | 'rotateIn'
+  | 'rotateOut'
+  // Attention animations
+  | 'pulse'
+  | 'bounce'
+  | 'shake'
+  | 'wiggle'
+  | 'flash'
+  | 'swing'
+  | 'tada'
+  | 'heartbeat'
+  // Advanced
+  | 'flipIn'
+  | 'flipOut'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'rollIn'
+  | 'rollOut'
+  | 'none';
+
+export type EasingType = 
+  | 'linear'
+  | 'ease-in'
+  | 'ease-out'
+  | 'ease-in-out'
+  | 'ease-back'
+  | 'ease-elastic'
+  | 'ease-bounce'
+  | 'power1.in'
+  | 'power1.out'
+  | 'power1.inOut'
+  | 'power2.in'
+  | 'power2.out'
+  | 'power2.inOut'
+  | 'power3.in'
+  | 'power3.out'
+  | 'power3.inOut'
+  | 'power4.in'
+  | 'power4.out'
+  | 'power4.inOut'
+  | 'back.in'
+  | 'back.out'
+  | 'back.inOut'
+  | 'elastic.in'
+  | 'elastic.out'
+  | 'elastic.inOut'
+  | 'bounce.in'
+  | 'bounce.out'
+  | 'bounce.inOut';
+
+export type TriggerType = 
+  | 'onLoad'        // Triggers when preview mode starts
+  | 'afterPrevious' // Triggers after previous animation
+  | 'manual'        // Manually triggered via code
+  | 'loop';         // Continuously loops in preview
+
+export interface AnimationTrigger {
+  type: TriggerType;
+  /** For 'afterPrevious' trigger: ID of the element to wait for */
+  targetElementId?: string;
+  /** For 'loop' trigger: number of times to repeat (-1 for infinite) */
+  repeatCount?: number;
+  /** Delay before repeating (in ms) */
+  repeatDelay?: number;
+}
+
+export interface AnimationConfig {
+  /** Type of animation effect */
+  type: AnimationType;
+  /** Duration in milliseconds */
+  duration: number;
+  /** Delay before animation starts (in ms) */
+  delay: number;
+  /** Easing function */
+  easing: EasingType;
+  /** Animation direction (for reversible animations) */
+  direction?: 'normal' | 'reverse' | 'alternate';
+  /** Number of times to repeat (1 = play once, -1 = infinite) */
+  repeat?: number;
+  /** Delay between repeats (in ms) */
+  repeatDelay?: number;
+}
+
+export interface ElementAnimation {
+  /** Entrance animation (when element appears) */
+  enter?: AnimationConfig;
+  /** Exit animation (when element disappears) */
+  exit?: AnimationConfig;
+  /** Trigger conditions */
+  trigger?: AnimationTrigger;
+  /** Whether animation is enabled */
+  enabled: boolean;
+}
+
+// ==================== Animation State ====================
+
+export interface AnimationState {
+  /** Is the animation currently playing? */
+  isPlaying: boolean;
+  /** Is the animation paused? */
+  isPaused: boolean;
+  /** Current progress (0-1) */
+  progress: number;
+  /** Time elapsed (in ms) */
+  timeElapsed: number;
+  /** Animation instance reference (GSAP timeline or tween) */
+  instance?: any;
+}
+
+// ==================== Preset Animations ====================
+
+export interface AnimationPreset {
+  id: string;
+  name: string;
+  category: 'basic' | 'attention' | 'advanced' | 'featured' | 'reveal' | 'general' | 'effects' | 'addon';
+  description: string;
+  enter?: Partial<AnimationConfig>;
+  exit?: Partial<AnimationConfig>;
+  thumbnail?: string; // SVG or icon representation
+}
+
+// ==================== Timeline Support ====================
+
+export interface AnimationKeyframe {
+  /** Time in milliseconds from start */
+  time: number;
+  /** Properties to animate */
+  properties: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    opacity?: number;
+    rotation?: number;
+    scaleX?: number;
+    scaleY?: number;
+  };
+  /** Easing for this keyframe */
+  easing?: EasingType;
+}
+
+export interface AnimationTimeline {
+  /** Timeline ID */
+  id: string;
+  /** Element ID this timeline belongs to */
+  elementId: string;
+  /** Duration of entire timeline (in ms) */
+  duration: number;
+  /** Keyframes */
+  keyframes: AnimationKeyframe[];
+  /** Whether timeline loops */
+  loop: boolean;
+}
+
+// ==================== Animation Group ====================
+
+export interface AnimationGroup {
+  /** Group ID */
+  id: string;
+  /** Name of the group */
+  name: string;
+  /** Element IDs in this group */
+  elementIds: string[];
+  /** Stagger delay between elements (in ms) */
+  stagger: number;
+  /** Group animation configuration */
+  animation: AnimationConfig;
+}
+
+// ==================== Export/Import Support ====================
+
+export interface AnimationExport {
+  version: string;
+  animations: {
+    [elementId: string]: ElementAnimation;
+  };
+  groups?: AnimationGroup[];
+  timelines?: AnimationTimeline[];
+}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ArrowLeft } from 'lucide-react';
 
 const templates = [
   { id: '1', name: 'Coffee Shop Menu', category: 'Restaurant', img: 'https://picsum.photos/400/300?random=10' },
@@ -30,6 +30,16 @@ const Templates: React.FC = () => {
   return (
     <div className="bg-ivory min-h-screen py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            Back to Home
+          </button>
+        </div>
+
         <div className="text-center mb-12">
           <h1 className="text-4xl font-extrabold text-primary mb-4">Design Templates</h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">

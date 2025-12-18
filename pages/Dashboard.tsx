@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor } from 'lucide-react';
+import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserDesigns } from '../services/designService';
 
@@ -8,6 +8,7 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [designs, setDesigns] = useState<any[]>([]);
+  const [totalDesignCount, setTotalDesignCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,12 +17,22 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Fetching user designs for dashboard...');
+        console.log('📊 [DASHBOARD] Fetching user designs from Firebase...');
 
-        const designsData = await getUserDesigns(6); // Show last 6 designs for current user
-        setDesigns(designsData);
+        // Fetch recent designs for display (6 most recent)
+        const recentDesigns = await getUserDesigns(6);
+        setDesigns(recentDesigns);
+        
+        // Fetch total count for stats
+        const allDesigns = await getUserDesigns(1000); // Get all designs for count
+        setTotalDesignCount(allDesigns.length);
+        
+        console.log('✅ [DASHBOARD] Loaded:', {
+          recentDesigns: recentDesigns.length,
+          totalDesigns: allDesigns.length,
+        });
       } catch (err) {
-        console.error('Error fetching dashboard data:', err);
+        console.error('❌ [DASHBOARD] Error fetching data:', err);
         setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoading(false);
@@ -47,6 +58,16 @@ const Dashboard: React.FC = () => {
     <div className="bg-ivory min-h-screen py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            Back to Home
+          </button>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-4">
           <div>
             <h1 className="text-4xl font-bold text-primary">Dashboard</h1>
@@ -80,7 +101,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-gray-600 text-sm font-medium">Total Designs</p>
                 <p className="text-3xl font-bold text-primary mt-2">
-                  {loading ? '-' : designs.length}
+                  {loading ? '-' : totalDesignCount}
                 </p>
               </div>
               <Folder className="text-primary opacity-30" size={32} />
@@ -219,7 +240,7 @@ const Dashboard: React.FC = () => {
               <p className="text-gray-600 text-sm mb-4">
                 Upload and manage your design files. Create beautiful displays with our editor or import your own assets.
               </p>
-              <p className="text-3xl font-bold text-blue-600 mb-4">12</p>
+              <p className="text-3xl font-bold text-blue-600 mb-4">{loading ? '-' : totalDesignCount}</p>
               <button 
                 onClick={() => navigate('/creative')}
                 className="text-blue-600 font-semibold hover:text-blue-700 transition-colors"

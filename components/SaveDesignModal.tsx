@@ -40,12 +40,17 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
     isPublic: false,
     tags: [],
   });
+
+  // Update form title when defaultTitle changes (important for modify mode)
+  React.useEffect(() => {
+    setFormData(prev => ({ ...prev, title: defaultTitle }));
+  }, [defaultTitle]);
   const [tagInput, setTagInput] = useState('');
 
   if (!isOpen) return null;
 
   const handleSave = async () => {
-    if (!formData.title.trim()) {
+    if (!isModifying && !formData.title.trim()) {
       alert('Please enter a design title');
       return;
     }
@@ -74,7 +79,7 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
       <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 modal-content">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">Save Design</h2>
+          <h2 className="text-2xl font-bold">{isModifying ? 'Update Design' : 'Save Design'}</h2>
           <button
             onClick={onClose}
             disabled={isLoading}
@@ -213,16 +218,16 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || (!isModifying && !formData.title.trim())}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 button-hover-scale"
           >
             {isLoading ? (
               <>
                 <div className="loading-spinner w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                Saving...
+                {isModifying ? 'Updating...' : 'Saving...'}
               </>
             ) : (
-              'Save Design'
+              isModifying ? 'Update Design' : 'Save Design'
             )}
           </button>
         </div>

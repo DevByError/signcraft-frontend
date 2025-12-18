@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, Home } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+// import { useAuth } from '../contexts/AuthContext'; // Authentication removed
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  // const { user, logout } = useAuth(); // Authentication removed
+  const user = { name: 'Guest Designer', email: 'guest@signcraft.com' };
+  const logout = () => {};
   const location = useLocation();
   const navigate = useNavigate();
 

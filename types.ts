@@ -84,6 +84,9 @@ export interface CanvasElement {
   // Effects
   shadow?: Shadow;
   
+  // Animations (import from types/animation.ts)
+  animation?: any; // ElementAnimation type (avoiding circular dependency)
+  
   // State
   visible: boolean; // Required with default true
   locked: boolean; // Required with default false

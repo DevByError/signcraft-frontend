@@ -1,73 +1,181 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Edit2, Search, AlertCircle, Wifi, WifiOff, MapPin } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit2, Search, AlertCircle, Wifi, WifiOff, MapPin, X, Monitor, Zap } from 'lucide-react';
+import { 
+  getUserScreens, 
+  createScreen, 
+  deleteScreen,
+  assignPlaylistToScreen,
+  updateScreenStatus,
+  ScreenDocument 
+} from '../services/screenService';
+import { getUserPlaylists, PlaylistDocument } from '../services/playlistService';
+import websocketService, { WebSocketMessage } from '../services/websocketService';
 
 interface Screen {
   id: string;
+  screenId: string;
   name: string;
   location: string;
   resolution: string;
   status: 'online' | 'offline';
   lastSeen: string;
   ipAddress: string;
-  currentPlaylist?: string;
+  playlistId?: string;
+  playlistName?: string;
 }
 
 const ScheduleScreen: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [realtimeUpdates, setRealtimeUpdates] = useState<string[]>([]);
   
-  const [screens, setScreens] = useState<Screen[]>([
-    {
-      id: '1',
-      name: 'Lobby Display 1',
-      location: 'Main Entrance',
-      resolution: '1920x1080',
-      status: 'online',
-      lastSeen: new Date().toISOString(),
-      ipAddress: '192.168.1.101',
-      currentPlaylist: 'Morning Rotation',
-    },
-    {
-      id: '2',
-      name: 'Conference Room A',
-      location: 'Floor 2',
-      resolution: '1920x1080',
-      status: 'online',
-      lastSeen: new Date().toISOString(),
-      ipAddress: '192.168.1.102',
-      currentPlaylist: 'Lunch Time Special',
-    },
-    {
-      id: '3',
-      name: 'Cafeteria Screen',
-      location: 'Cafeteria',
-      resolution: '3840x2160',
-      status: 'offline',
-      lastSeen: new Date(Date.now() - 3600000).toISOString(),
-      ipAddress: '192.168.1.103',
-    },
-    {
-      id: '4',
-      name: 'Meeting Room B',
-      location: 'Floor 3',
-      resolution: '1920x1080',
-      status: 'online',
-      lastSeen: new Date().toISOString(),
-      ipAddress: '192.168.1.104',
-      currentPlaylist: 'Evening News',
-    },
-    {
-      id: '5',
-      name: 'Elevator Display',
-      location: 'Elevator Lobby',
-      resolution: '1920x1080',
-      status: 'offline',
-      lastSeen: new Date(Date.now() - 7200000).toISOString(),
-      ipAddress: '192.168.1.105',
-    },
-  ]);
+  const [screens, setScreens] = useState<Screen[]>([]);
+  const [playlists, setPlaylists] = useState<PlaylistDocument[]>([]);
+  
+  // Create form state
+  const [newScreenName, setNewScreenName] = useState('');
+  const [newScreenLocation, setNewScreenLocation] = useState('');
+  const [newScreenResolution, setNewScreenResolution] = useState('1920x1080');
+  const [newScreenIP, setNewScreenIP] = useState('');
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+
+  // Fetch screens and playlists from Firebase
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('📺 [SCREEN] Fetching screens and playlists from Firebase...');
+        
+        // Fetch screens
+        const screensData = await getUserScreens(100);
+        console.log(`✅ [SCREEN] Fetched ${screensData.length} screens`);
+        
+        // Fetch playlists for selection
+        const playlistsData = await getUserPlaylists(100);
+        console.log(`✅ [SCREEN] Fetched ${playlistsData.length} playlists`);
+        
+        setPlaylists(playlistsData);
+        
+        // Convert to UI format
+        const screenItems: Screen[] = screensData.map(screen => ({
+          id: screen.id,
+          screenId: screen.screenId,
+          name: screen.name,
+          location: screen.location,
+          resolution: screen.resolution,
+          status: screen.status,
+          lastSeen: screen.lastSeen.toDate().toISOString(),
+          ipAddress: screen.ipAddress,
+          playlistId: screen.playlistId,
+          playlistName: screen.playlistName,
+        }));
+        
+        setScreens(screenItems);
+      } catch (err) {
+        console.error('❌ [SCREEN] Error fetching data:', err);
+        setError(`Failed to load screens: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setScreens([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // WebSocket connection and real-time updates
+  useEffect(() => {
+    console.log('🔌 [SCREEN] Setting up WebSocket...');
+    
+    // Subscribe to WebSocket messages
+    const unsubscribe = websocketService.subscribe((message: WebSocketMessage) => {
+      console.log('📨 [SCREEN] WebSocket message:', message);
+      
+      // Update connection status
+      if (message.type === 'heartbeat') {
+        setWsConnected(true);
+      }
+      
+      // Handle screen status updates
+      if (message.type === 'screen_status_update' && message.screenId) {
+        setScreens(prevScreens => 
+          prevScreens.map(screen => {
+            if (screen.screenId === message.screenId || screen.id === message.screenId) {
+              const newStatus = message.data?.status || screen.status;
+              
+              // Add to realtime updates feed
+              setRealtimeUpdates(prev => [
+                `${screen.name} is now ${newStatus}`,
+                ...prev.slice(0, 4) // Keep last 5 updates
+              ]);
+              
+              return {
+                ...screen,
+                status: newStatus,
+                lastSeen: new Date().toISOString(),
+              };
+            }
+            return screen;
+          })
+        );
+        
+        // Update Firebase
+        if (message.screenId && message.data?.status) {
+          updateScreenStatus(message.screenId, message.data.status);
+        }
+      }
+      
+      // Handle screen connected
+      if (message.type === 'screen_connected' && message.screenCustomId) {
+        setRealtimeUpdates(prev => [
+          `Screen ${message.screenCustomId} connected`,
+          ...prev.slice(0, 4)
+        ]);
+      }
+      
+      // Handle screen disconnected
+      if (message.type === 'screen_disconnected' && message.screenCustomId) {
+        setRealtimeUpdates(prev => [
+          `Screen ${message.screenCustomId} disconnected`,
+          ...prev.slice(0, 4)
+        ]);
+      }
+      
+      // Handle playlist assigned
+      if (message.type === 'playlist_assigned' && message.screenId) {
+        setScreens(prevScreens =>
+          prevScreens.map(screen => {
+            if (screen.id === message.screenId) {
+              setRealtimeUpdates(prev => [
+                `Playlist "${message.data?.playlistName}" assigned to ${screen.name}`,
+                ...prev.slice(0, 4)
+              ]);
+              
+              return {
+                ...screen,
+                playlistId: message.data?.playlistId,
+                playlistName: message.data?.playlistName,
+              };
+            }
+            return screen;
+          })
+        );
+      }
+    });
+    
+    // Cleanup on unmount
+    return () => {
+      console.log('🔌 [SCREEN] Cleaning up WebSocket subscription');
+      unsubscribe();
+    };
+  }, []);
 
   const filteredScreens = screens.filter(screen => {
     const matchesSearch = screen.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -79,8 +187,101 @@ const ScheduleScreen: React.FC = () => {
   const onlineCount = screens.filter(s => s.status === 'online').length;
   const offlineCount = screens.filter(s => s.status === 'offline').length;
 
-  const handleDelete = (id: string) => {
-    setScreens(prev => prev.filter(s => s.id !== id));
+  const handleCreateScreen = async () => {
+    if (!newScreenName.trim()) {
+      alert('Please enter a screen name');
+      return;
+    }
+    if (!newScreenLocation.trim()) {
+      alert('Please enter a location');
+      return;
+    }
+    
+    try {
+      console.log('📺 [SCREEN] Creating new screen:', newScreenName);
+      
+      const selectedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
+      
+      const result = await createScreen(
+        newScreenName,
+        newScreenLocation,
+        newScreenResolution,
+        newScreenIP,
+        selectedPlaylistId || undefined,
+        selectedPlaylist?.name || undefined
+      );
+      
+      if (result.success && result.screenId) {
+        console.log('✅ [SCREEN] Created successfully:', result.screenId);
+        
+        // Refresh screens list
+        const screensData = await getUserScreens(100);
+        const screenItems: Screen[] = screensData.map(screen => ({
+          id: screen.id,
+          screenId: screen.screenId,
+          name: screen.name,
+          location: screen.location,
+          resolution: screen.resolution,
+          status: screen.status,
+          lastSeen: screen.lastSeen.toDate().toISOString(),
+          ipAddress: screen.ipAddress,
+          playlistId: screen.playlistId,
+          playlistName: screen.playlistName,
+        }));
+        setScreens(screenItems);
+        
+        // Reset form and close modal
+        setNewScreenName('');
+        setNewScreenLocation('');
+        setNewScreenResolution('1920x1080');
+        setNewScreenIP('');
+        setSelectedPlaylistId('');
+        setShowCreateModal(false);
+        
+        // Notify via WebSocket
+        websocketService.notifyScreenCreated(
+          result.screenId,
+          screenItems[screenItems.length - 1]?.screenId || 'scr01'
+        );
+      } else {
+        console.error('❌ [SCREEN] Failed to create:', result.error);
+        setError(result.error || 'Failed to create screen');
+      }
+    } catch (err) {
+      console.error('❌ [SCREEN] Error creating screen:', err);
+      setError('Failed to create screen');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const screenName = screens.find(s => s.id === id)?.name || 'this screen';
+    
+    if (window.confirm(`Are you sure you want to delete "${screenName}"? This action cannot be undone.`)) {
+      try {
+        console.log('🗑️ [SCREEN] Deleting screen:', id);
+        const result = await deleteScreen(id);
+        
+        if (result.success) {
+          setScreens(prev => prev.filter(s => s.id !== id));
+          console.log('✅ [SCREEN] Deleted successfully');
+          
+          // Notify via WebSocket
+          websocketService.notifyScreenDeleted(id);
+        } else {
+          console.error('❌ [SCREEN] Failed to delete:', result.error);
+          setError(result.error || 'Failed to delete screen');
+        }
+      } catch (err) {
+        console.error('❌ [SCREEN] Error deleting:', err);
+        setError('Failed to delete screen');
+      }
+    }
+  };
+
+  // Simulate screen status change (for testing)
+  const handleSimulateStatusChange = (screenId: string, currentStatus: 'online' | 'offline') => {
+    const newStatus = currentStatus === 'online' ? 'offline' : 'online';
+    websocketService.notifyScreenStatusUpdate(screenId, newStatus);
   };
 
   const formatLastSeen = (date: string) => {
@@ -113,10 +314,19 @@ const ScheduleScreen: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Display Screens</h1>
-              <p className="text-gray-600">Manage your digital display network</p>
+              <div className="flex items-center gap-3">
+                <p className="text-gray-600">Manage your digital display network</p>
+                {wsConnected && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-semibold text-green-700">Live Updates Active</span>
+                  </div>
+                )}
+              </div>
             </div>
             
             <button
+              onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
             >
               <Plus size={20} />
@@ -157,6 +367,28 @@ const ScheduleScreen: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Real-time Activity Feed */}
+        {realtimeUpdates.length > 0 && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap size={20} className="text-blue-600" />
+              <h3 className="font-semibold text-blue-900">Live Activity</h3>
+            </div>
+            <div className="space-y-2">
+              {realtimeUpdates.map((update, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 text-sm text-blue-800 animate-fade-in"
+                >
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  <span>{update}</span>
+                  <span className="text-blue-500 text-xs ml-auto">just now</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search and Filter */}
         <div className="flex gap-4 mb-8 flex-col md:flex-row items-start md:items-center">
@@ -206,7 +438,24 @@ const ScheduleScreen: React.FC = () => {
         </div>
 
         {/* Screens Display */}
-        {filteredScreens.length === 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading screens...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
+            <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Error Loading Screens</h3>
+            <p className="text-red-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredScreens.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-16 text-center">
             <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-2xl font-semibold text-gray-900 mb-2">
@@ -246,9 +495,9 @@ const ScheduleScreen: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-gray-600 font-mono">{screen.ipAddress}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{screen.resolution}</td>
                     <td className="px-6 py-4 text-sm">
-                      {screen.currentPlaylist ? (
+                      {screen.playlistName ? (
                         <span className="px-3 py-1 bg-primary/10 text-primary font-semibold rounded-full text-xs">
-                          {screen.currentPlaylist}
+                          {screen.playlistName}
                         </span>
                       ) : (
                         <span className="text-gray-400">—</span>
@@ -258,7 +507,7 @@ const ScheduleScreen: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {screen.status === 'online' ? (
                           <>
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                             <span className="font-semibold text-green-600">Online</span>
                           </>
                         ) : (
@@ -266,6 +515,16 @@ const ScheduleScreen: React.FC = () => {
                             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                             <span className="font-semibold text-red-600">Offline</span>
                           </>
+                        )}
+                        {/* Test button for simulating status changes */}
+                        {import.meta.env.DEV && (
+                          <button
+                            onClick={() => handleSimulateStatusChange(screen.id, screen.status)}
+                            className="ml-2 p-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+                            title="Simulate status change (dev only)"
+                          >
+                            <Zap size={12} />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -291,6 +550,138 @@ const ScheduleScreen: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Create Screen Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary/10 p-2 rounded-lg">
+                  <Monitor size={24} className="text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Add New Screen</h2>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Screen Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Screen Name *
+                </label>
+                <input
+                  type="text"
+                  value={newScreenName}
+                  onChange={(e) => setNewScreenName(e.target.value)}
+                  placeholder="e.g., Lobby Display 1"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Location *
+                </label>
+                <input
+                  type="text"
+                  value={newScreenLocation}
+                  onChange={(e) => setNewScreenLocation(e.target.value)}
+                  placeholder="e.g., Main Entrance, Floor 2"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              {/* Resolution */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Resolution
+                </label>
+                <select
+                  value={newScreenResolution}
+                  onChange={(e) => setNewScreenResolution(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  <option value="1920x1080">1920x1080 (Full HD)</option>
+                  <option value="3840x2160">3840x2160 (4K UHD)</option>
+                  <option value="2560x1440">2560x1440 (2K QHD)</option>
+                  <option value="1366x768">1366x768 (HD)</option>
+                  <option value="1280x720">1280x720 (HD 720p)</option>
+                  <option value="1080x1920">1080x1920 (Portrait Full HD)</option>
+                  <option value="2160x3840">2160x3840 (Portrait 4K)</option>
+                </select>
+              </div>
+
+              {/* IP Address */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  IP Address (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newScreenIP}
+                  onChange={(e) => setNewScreenIP(e.target.value)}
+                  placeholder="e.g., 192.168.1.100"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              {/* Playlist Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Assign Playlist (Optional)
+                </label>
+                <select
+                  value={selectedPlaylistId}
+                  onChange={(e) => setSelectedPlaylistId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  <option value="">No playlist (assign later)</option>
+                  {playlists.map(playlist => (
+                    <option key={playlist.id} value={playlist.id}>
+                      {playlist.name} ({playlist.designReferences.length} items)
+                    </option>
+                  ))}
+                </select>
+                {playlists.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    No playlists available. Create a playlist first.
+                  </p>
+                )}
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Screen ID will be auto-generated</strong> (e.g., scr01, scr02, etc.)
+                </p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 px-6 py-4 flex gap-3 justify-end border-t border-gray-200">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateScreen}
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+              >
+                Create Screen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,6 +11,8 @@ import Preview from './pages/Preview';
 import Dashboard from './pages/Dashboard';
 import Creative from './pages/Creative';
 import Playlist from './pages/Playlist';
+import PlaylistEditor from './pages/PlaylistEditor';
+import PlaylistPreview from './pages/PlaylistPreview';
 import Screen from './pages/Screen';
 import Auth from './pages/Auth';
 import Login from './pages/login';
@@ -45,6 +47,8 @@ const App: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/creative" element={<Creative />} />
             <Route path="/playlist" element={<Playlist />} />
+            <Route path="/playlist/edit/:id" element={<PlaylistEditor />} />
+            <Route path="/playlist/preview/:id" element={<PlaylistPreview />} />
             <Route path="/screen" element={<Screen />} />
 
             {/* Authentication */}

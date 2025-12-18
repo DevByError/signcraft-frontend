@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle, RefreshCw } from 'lucide-react';
 import { getUserDesigns, deleteDesignFromFirestore } from '../services/designService';
 
 interface Creative {
@@ -19,38 +19,55 @@ const ScheduleCreative: React.FC = () => {
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch designs from Firebase
-  useEffect(() => {
-    const fetchCreatives = async () => {
-      try {
+  // Fetch creatives from Firebase (extracted for reusability)
+  const fetchCreatives = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
         setLoading(true);
-        setError(null);
-        console.log('Fetching creatives from Firebase...');
-        
-        const designs = await getUserDesigns(50);
-        console.log('Fetched designs:', designs);
-        
-        // Convert Firebase designs to Creative format
-        const convertedCreatives: Creative[] = designs.map(design => ({
-          id: design.id,
-          name: design.metadata.title,
-          thumbnail: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%234ECDC4" width="400" height="300"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="white" font-weight="bold"%3E' + encodeURIComponent(design.metadata.title) + '%3C/text%3E%3C/svg%3E',
-          createdDate: design.metadata.createdAt,
-          duration: design.designJSON.elements.length * 5, // Default 5 seconds per element
-          size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
-        }));
-        
-        setCreatives(convertedCreatives);
-      } catch (err) {
-        console.error('Error fetching creatives:', err);
-        setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        setCreatives([]);
-      } finally {
-        setLoading(false);
       }
-    };
+      setError(null);
+      console.log('🎨 [CREATIVE] Fetching designs from Firebase...');
+      
+      const designs = await getUserDesigns(100); // Fetch up to 100 designs
+      console.log(`✅ [CREATIVE] Fetched ${designs.length} designs from Firebase`);
+      
+      // Convert Firebase designs to Creative format
+      const convertedCreatives: Creative[] = designs.map(design => {
+        // Generate thumbnail color based on design title
+        const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
+        const colorIndex = design.id.charCodeAt(0) % colors.length;
+        const thumbnailColor = colors[colorIndex];
+        
+        return {
+          id: design.id,
+          name: design.metadata.title || 'Untitled Design',
+          thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.metadata.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${design.designJSON.elements.length} elements%3C/text%3E%3C/svg%3E`,
+          createdDate: design.metadata.createdAt,
+          duration: design.designJSON.elements.length * 5, // 5 seconds per element
+          size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
+        };
+      });
+      
+      setCreatives(convertedCreatives);
+      setLastUpdated(new Date());
+      console.log(`✅ [CREATIVE] Converted ${convertedCreatives.length} creatives for display`);
+    } catch (err) {
+      console.error('❌ [CREATIVE] Error fetching designs:', err);
+      setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setCreatives([]);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
+  // Initial fetch on mount
+  useEffect(() => {
     fetchCreatives();
   }, []);
 
@@ -59,13 +76,16 @@ const ScheduleCreative: React.FC = () => {
   );
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this creative?')) {
+    const creativeName = creatives.find(c => c.id === id)?.name || 'this design';
+    
+    if (window.confirm(`Are you sure you want to delete "${creativeName}"? This action cannot be undone.`)) {
       try {
+        console.log(`🗑️ [CREATIVE] Deleting design: ${id}`);
         await deleteDesignFromFirestore(id);
         setCreatives(prev => prev.filter(c => c.id !== id));
-        console.log('✅ Creative deleted successfully');
+        console.log('✅ [CREATIVE] Design deleted successfully from Firebase');
       } catch (err) {
-        console.error('Error deleting creative:', err);
+        console.error('❌ [CREATIVE] Error deleting design:', err);
         setError(`Failed to delete creative: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     }
@@ -91,21 +111,38 @@ const ScheduleCreative: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Creative Library</h1>
-              <p className="text-gray-600">Manage your designs and creatives</p>
+              <p className="text-gray-600">
+                Manage your designs and creatives
+                {lastUpdated && (
+                  <span className="text-sm text-gray-500 ml-2">
+                    • Last updated: {lastUpdated.toLocaleTimeString()}
+                  </span>
+                )}
+              </p>
             </div>
             
-            <button
-              onClick={() => navigate('/editor')}
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-            >
-              <Plus size={20} />
-              New Creative
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => fetchCreatives(true)}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <button
+                onClick={() => navigate('/editor')}
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+              >
+                <Plus size={20} />
+                New Creative
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Search and View Toggle */}
-        <div className="flex gap-4 mb-8 items-center">
+        <div className="flex gap-4 mb-6 items-center">
           <div className="flex-1 relative">
             <Search size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
@@ -140,6 +177,43 @@ const ScheduleCreative: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Stats Bar */}
+        {!loading && !error && (
+          <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div>
+                  <p className="text-sm text-gray-600">Total Designs</p>
+                  <p className="text-2xl font-bold text-primary">{creatives.length}</p>
+                </div>
+                <div className="h-10 w-px bg-gray-300"></div>
+                <div>
+                  <p className="text-sm text-gray-600">Filtered Results</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredCreatives.length}</p>
+                </div>
+                {searchTerm && (
+                  <>
+                    <div className="h-10 w-px bg-gray-300"></div>
+                    <div>
+                      <p className="text-sm text-gray-600">Search: "{searchTerm}"</p>
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="text-sm text-primary hover:text-primaryLight font-semibold"
+                      >
+                        Clear Search
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-gray-600">Connected to Firebase</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error State */}
         {error && (

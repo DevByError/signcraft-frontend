@@ -449,15 +449,25 @@ export const getUserDesigns = async (maxResults: number = 50): Promise<Firestore
 
     const q = query(
       collection(db, DESIGNS_COLLECTION),
-      where('userId', '==', currentUser.uid),
-      orderBy('updatedAt', 'desc'),
-      limit(maxResults)
+      where('userId', '==', currentUser.uid)
+      // Note: orderBy removed to avoid composite index requirement
+      // We'll sort in memory instead
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => 
+    const designs = querySnapshot.docs.map(doc => 
       mapFirestoreDocToDesign(doc as QueryDocumentSnapshot<DocumentData>)
     );
+
+    // Sort by updatedAt in memory (newest first)
+    designs.sort((a, b) => {
+      const timeA = a.metadata.updatedAt ? new Date(a.metadata.updatedAt).getTime() : 0;
+      const timeB = b.metadata.updatedAt ? new Date(b.metadata.updatedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    // Apply limit after sorting
+    return designs.slice(0, maxResults);
   } catch (error: any) {
     console.error('Error retrieving user designs:', error);
     return [];

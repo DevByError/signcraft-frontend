@@ -71,6 +71,10 @@ const TEMPLATES = [
   { name: 'YouTube Thumbnail', width: 1280, height: 720, icon: <Maximize2 size={16} /> },
   { name: 'Facebook Cover', width: 1640, height: 924, icon: <Layout size={16} /> },
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
+  { name: 'Android Phone (Portrait)', width: 1080, height: 1920, icon: <Layout size={16} /> },
+  { name: 'Android Phone (Landscape)', width: 1920, height: 1080, icon: <RectangleHorizontal size={16} /> },
+  { name: 'Android Tablet (Portrait)', width: 1200, height: 1920, icon: <Layout size={16} /> },
+  { name: 'Android Tablet (Landscape)', width: 1920, height: 1200, icon: <Maximize2 size={16} /> },
 ];
 
 const WIDGET_CATEGORIES = [
@@ -151,6 +155,7 @@ const Editor: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 1280, height: 720 });
   const [canvasColor, setCanvasColor] = useState('#FDFBF7');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showSizeModal, setShowSizeModal] = useState(!designId); // Show size modal for new designs
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [designTitle, setDesignTitle] = useState('My Design');
   const [newElementIds, setNewElementIds] = useState<Set<string>>(new Set());
@@ -192,6 +197,35 @@ const Editor: React.FC = () => {
   const toggleSection = (id: string) => {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  // Auto-fit canvas to viewport
+  useEffect(() => {
+    const calculateOptimalZoom = () => {
+      if (!canvasRef.current) return;
+      
+      const container = canvasRef.current.parentElement;
+      if (!container) return;
+
+      const containerWidth = container.clientWidth - 96; // Account for padding
+      const containerHeight = container.clientHeight - 96;
+      
+      const scaleWidth = containerWidth / canvasSize.width;
+      const scaleHeight = containerHeight / canvasSize.height;
+      
+      const optimalScale = Math.min(scaleWidth, scaleHeight, 1); // Don't scale up beyond 100%
+      const optimalZoom = Math.floor(optimalScale * 100);
+      
+      // Only auto-adjust if canvas would overflow
+      if (canvasSize.width > containerWidth || canvasSize.height > containerHeight) {
+        setZoom(Math.max(10, optimalZoom)); // Minimum 10% zoom
+      }
+    };
+
+    calculateOptimalZoom();
+    window.addEventListener('resize', calculateOptimalZoom);
+    
+    return () => window.removeEventListener('resize', calculateOptimalZoom);
+  }, [canvasSize, leftSidebarOpen, rightSidebarOpen]);
 
   const updateHistory = (newElements: CanvasElement[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -1487,6 +1521,8 @@ const Editor: React.FC = () => {
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: 'center center',
                 transition: 'transform 0.2s ease-out',
+                maxWidth: '100%',
+                maxHeight: '100%',
               }}
             >
               {showGrid && (
@@ -2205,6 +2241,88 @@ const Editor: React.FC = () => {
           successMessage={successMessage}
           defaultTitle={designTitle}
         />
+
+        {/* Canvas Size Selection Modal */}
+        {showSizeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Choose Canvas Size</h2>
+              <p className="text-gray-600 mb-8">Select a preset size or create a custom canvas</p>
+
+              {/* Preset Templates */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Preset Sizes</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {TEMPLATES.map((template) => (
+                    <button
+                      key={template.name}
+                      onClick={() => {
+                        setCanvasSize({ width: template.width, height: template.height });
+                        setShowSizeModal(false);
+                      }}
+                      className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                    >
+                      <div className="text-primary group-hover:scale-110 transition-transform">
+                        {template.icon}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">{template.name}</p>
+                        <p className="text-sm text-gray-500">{template.width} × {template.height}px</p>
+                      </div>
+                      <ChevronRight className="text-gray-400 group-hover:text-primary transition-colors" size={20} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Size */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Custom Size</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
+                    <input
+                      type="number"
+                      min="100"
+                      max="5000"
+                      value={canvasSize.width}
+                      onChange={(e) => setCanvasSize(prev => ({ ...prev, width: parseInt(e.target.value) || 1280 }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
+                    <input
+                      type="number"
+                      min="100"
+                      max="5000"
+                      value={canvasSize.height}
+                      onChange={(e) => setCanvasSize(prev => ({ ...prev, height: parseInt(e.target.value) || 720 }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSizeModal(false)}
+                  className="mt-4 w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+                >
+                  Start Designing
+                </button>
+              </div>
+
+              {/* Common Sizes Reference */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs text-gray-600 mb-2 font-medium">Popular Display Sizes:</p>
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <div>• Full HD: 1920 × 1080</div>
+                  <div>• 4K: 3840 × 2160</div>
+                  <div>• HD: 1280 × 720</div>
+                  <div>• Portrait HD: 1080 × 1920</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
