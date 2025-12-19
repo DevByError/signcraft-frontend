@@ -51,6 +51,12 @@ export interface CanvasElementData {
   fontSize?: number; // Pixels
   textStyle?: TextStyleData;
   
+  // Widget-specific settings
+  widgetSettings?: any; // Widget configuration object
+  
+  // Animation
+  animation?: string; // Animation name
+  
   // Effects
   shadow?: ShadowData;
   
@@ -323,6 +329,16 @@ export const serializeCanvasDesign = (
     // Add text styling
     if (textStyle) {
       element.textStyle = textStyle;
+    }
+
+    // Add widget settings
+    if (el.widgetSettings !== undefined && el.widgetSettings !== null) {
+      element.widgetSettings = el.widgetSettings;
+    }
+
+    // Add animation
+    if (el.animation !== undefined && el.animation !== null && el.animation !== '') {
+      element.animation = String(el.animation);
     }
 
     // Add shadow effects

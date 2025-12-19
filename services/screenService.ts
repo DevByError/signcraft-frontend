@@ -16,7 +16,7 @@ import {
   where,
   Timestamp,
 } from 'firebase/firestore';
-import { db, auth } from './firebaseService';
+import { db } from './firebaseService';
 
 // ==================== TypeScript Interfaces ====================
 
@@ -45,10 +45,10 @@ const SCREENS_COLLECTION = 'screens';
 // ==================== Helper Functions ====================
 
 const getCurrentUser = () => {
-  const currentUser = auth.currentUser;
+  // Always use guest user (no authentication)
   return {
-    uid: currentUser?.uid || 'guest-user-123',
-    email: currentUser?.email || 'guest@signcraft.com',
+    uid: 'guest-user-123',
+    email: 'guest@signcraft.com',
   };
 };
 

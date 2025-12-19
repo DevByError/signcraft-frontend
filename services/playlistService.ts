@@ -18,7 +18,7 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
-import { db, auth } from './firebaseService';
+import { db } from './firebaseService';
 
 // ==================== TypeScript Interfaces ====================
 
@@ -77,11 +77,10 @@ const PLAYLISTS_COLLECTION = 'playlists';
 // ==================== Helper Functions ====================
 
 const getCurrentUser = () => {
-  const currentUser = auth.currentUser;
-  // Use default guest user if not authenticated
+  // Always use guest user (no authentication)
   return {
-    uid: currentUser?.uid || 'guest-user-123',
-    email: currentUser?.email || 'guest@signcraft.com',
+    uid: 'guest-user-123',
+    email: 'guest@signcraft.com',
   };
 };
 

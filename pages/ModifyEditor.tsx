@@ -8,7 +8,7 @@ import {
   Circle, Download, Eye, EyeOff,
   Triangle, Star, Heart, Menu, Plus, Minus, Lock, Unlock,
   Layers, Palette, Settings, Grid3x3, Layout, Maximize2,
-  RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar
+  RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { useDesignSave } from '../hooks/useDesignSave';
@@ -32,6 +32,32 @@ enum ElementType {
   TRAPEZOID = 'trapezoid',
   CRESCENT = 'crescent',
   CROSS = 'cross',
+  SLIDESHOW = 'slideshow',
+  TICKER = 'ticker',
+  RSS = 'rss',
+  WEATHER = 'weather',
+  GIF = 'gif',
+  MEDIA_RSS = 'media-rss',
+  YOUTUBE = 'youtube',
+  USTREAM = 'ustream',
+  FTP = 'ftp',
+  INSTAGRAM = 'instagram',
+  STREAMING = 'streaming',
+  LABEL = 'label',
+  CLOCK = 'clock',
+  TIMER = 'timer',
+  TOUCH = 'touch',
+  WEATHER_2 = 'weather-2',
+  AD_SERVING = 'ad-serving',
+  CALENDAR = 'calendar',
+  DASHBOARDS = 'dashboards',
+  TABLE = 'table',
+  SMART_SWITCH = 'smart-switch',
+  WEB_IMAGE = 'web-image',
+  WEB_VIDEO = 'web-video',
+  SUB_CREATIVE = 'sub-creative',
+  EMBED = 'embed',
+  HTML = 'html',
 }
 
 interface CanvasElement {
@@ -54,6 +80,8 @@ interface CanvasElement {
   borderRadius?: number;
   locked: boolean;
   visible: boolean;
+  animation?: string;
+  widgetSettings?: any;
   textStyle?: {
     bold: boolean;
     italic: boolean;
@@ -71,22 +99,56 @@ const TEMPLATES = [
   { name: 'YouTube Thumbnail', width: 1280, height: 720, icon: <Maximize2 size={16} /> },
   { name: 'Facebook Cover', width: 1640, height: 924, icon: <Layout size={16} /> },
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
+  { name: 'Android Phone (Portrait)', width: 1080, height: 1920, icon: <Layout size={16} /> },
+  { name: 'Android Phone (Landscape)', width: 1920, height: 1080, icon: <RectangleHorizontal size={16} /> },
+  { name: 'Android Tablet (Portrait)', width: 1200, height: 1920, icon: <Layout size={16} /> },
+  { name: 'Android Tablet (Landscape)', width: 1920, height: 1200, icon: <Maximize2 size={16} /> },
 ];
 
 const WIDGET_CATEGORIES = [
   { 
-    id: 'text', 
-    label: 'Text', 
-    icon: <FileText size={18} />,
+    id: 'essential', 
+    label: '🔹 Essential', 
+    icon: <Sparkles size={18} />,
     items: [
-      { type: ElementType.TEXT, label: 'Heading', icon: <Type size={18} />, fontSize: 48 },
-      { type: ElementType.TEXT, label: 'Subheading', icon: <Type size={18} />, fontSize: 32 },
-      { type: ElementType.TEXT, label: 'Body Text', icon: <Type size={18} />, fontSize: 16 },
+      { type: ElementType.TEXT, label: 'Text', icon: <Type size={18} /> },
+      { type: ElementType.IMAGE, label: 'Image', icon: <ImageIcon size={18} /> },
+      { type: ElementType.SLIDESHOW, label: 'Slideshow', icon: <Layout size={18} /> },
+      { type: ElementType.TICKER, label: 'Ticker', icon: <Type size={18} /> },
+      { type: ElementType.RSS, label: 'RSS', icon: <FileText size={18} /> },
+      { type: ElementType.WEATHER, label: 'Weather', icon: <CloudSun size={18} /> },
+    ] 
+  },
+  { 
+    id: 'media', 
+    label: '🔹 Media', 
+    icon: <Video size={18} />,
+    items: [
+      { type: ElementType.VIDEO, label: 'Video', icon: <Video size={18} /> },
+      { type: ElementType.GIF, label: 'GIF', icon: <Image size={18} /> },
+      { type: ElementType.MEDIA_RSS, label: 'Media RSS', icon: <FileText size={18} /> },
+      { type: ElementType.YOUTUBE, label: 'YouTube', icon: <Video size={18} /> },
+      { type: ElementType.USTREAM, label: 'Ustream', icon: <Video size={18} /> },
+      { type: ElementType.FTP, label: 'FTP', icon: <FileText size={18} /> },
+      { type: ElementType.INSTAGRAM, label: 'Instagram', icon: <Image size={18} /> },
+      { type: ElementType.STREAMING, label: 'Streaming', icon: <Video size={18} /> },
+    ] 
+  },
+  { 
+    id: 'general', 
+    label: '🔹 General', 
+    icon: <Settings size={18} />,
+    items: [
+      { type: ElementType.LABEL, label: 'Label', icon: <Type size={18} /> },
+      { type: ElementType.CLOCK, label: 'Clock', icon: <Clock size={18} /> },
+      { type: ElementType.TIMER, label: 'Timer', icon: <Clock size={18} /> },
+      { type: ElementType.TOUCH, label: 'Touch', icon: <MousePointer2 size={18} /> },
+      { type: ElementType.WEATHER_2, label: 'Weather 2.0', icon: <CloudSun size={18} /> },
     ] 
   },
   { 
     id: 'shapes', 
-    label: 'Shapes', 
+    label: '🔹 Shapes', 
     icon: <Shapes size={18} />,
     items: [
       { type: ElementType.RECT, label: 'Rectangle', icon: <Square size={18} /> },
@@ -104,12 +166,27 @@ const WIDGET_CATEGORIES = [
     ] 
   },
   { 
-    id: 'media', 
-    label: 'Media', 
-    icon: <Image size={18} />,
+    id: 'advanced', 
+    label: '🔹 Advanced', 
+    icon: <Grid3x3 size={18} />,
     items: [
-      { type: ElementType.IMAGE, label: 'Image', icon: <ImageIcon size={18} /> },
-      { type: ElementType.VIDEO, label: 'Video', icon: <Video size={18} /> },
+      { type: ElementType.AD_SERVING, label: 'Ad Serving', icon: <ImageIcon size={18} /> },
+      { type: ElementType.CALENDAR, label: 'Calendar', icon: <Grid3x3 size={18} /> },
+      { type: ElementType.DASHBOARDS, label: 'Dashboards', icon: <Layout size={18} /> },
+      { type: ElementType.TABLE, label: 'Table', icon: <Grid3x3 size={18} /> },
+      { type: ElementType.SMART_SWITCH, label: 'Smart Switch', icon: <Settings size={18} /> },
+    ] 
+  },
+  { 
+    id: 'embed', 
+    label: '🔹 Embed', 
+    icon: <Layout size={18} />,
+    items: [
+      { type: ElementType.WEB_IMAGE, label: 'Web Image', icon: <ImageIcon size={18} /> },
+      { type: ElementType.WEB_VIDEO, label: 'Web Video', icon: <Video size={18} /> },
+      { type: ElementType.SUB_CREATIVE, label: 'Sub Creative', icon: <Layout size={18} /> },
+      { type: ElementType.EMBED, label: 'Embed', icon: <Layout size={18} /> },
+      { type: ElementType.HTML, label: 'HTML', icon: <FileText size={18} /> },
     ] 
   },
 ];
@@ -134,14 +211,20 @@ const Editor: React.FC = () => {
   const navigate = useNavigate();
   const { designId } = useParams<{ designId?: string }>();
   const [elements, setElements] = useState<CanvasElement[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(100);
+  const [showSafeZone, setShowSafeZone] = useState(false);
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'templates' | 'uploads'>('design');
-  const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers'>('properties');
+  const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers' | 'animation'>('properties');
+  const [selectedAnimation, setSelectedAnimation] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  
+  // Computed values for backward compatibility
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const selectedElement = selectedId ? elements.find(el => el.id === selectedId) : null;
   const [history, setHistory] = useState<CanvasElement[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [searchWidget, setSearchWidget] = useState<string>('');
@@ -159,17 +242,19 @@ const Editor: React.FC = () => {
   const { saveDesign: saveDesignToFirebase, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    widgets_text: true,
-    widgets_shapes: false,
+    widgets_essential: true,
     widgets_media: false,
+    widgets_general: false,
+    widgets_shapes: false,
+    widgets_advanced: false,
+    widgets_embed: false,
   });
 
   const [dragInfo, setDragInfo] = useState<{ 
     id: string; 
     startX: number; 
     startY: number; 
-    initialX: number; 
-    initialY: number 
+    initialPositions: Map<string, { x: number; y: number }>;
   } | null>(null);
   
   const [draggingFromSidebar, setDraggingFromSidebar] = useState(false);
@@ -326,15 +411,61 @@ const Editor: React.FC = () => {
     const newElements = [...elements, newElement];
     setElements(newElements);
     updateHistory(newElements);
-    setSelectedId(newElement.id);
+    setSelectedIds([newElement.id]);
     setRightSidebarOpen(true);
+  };
+
+  const getYouTubeEmbedUrl = (url: string): string | null => {
+    if (!url) return null;
+    
+    // Extract video ID from various YouTube URL formats
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
+      /youtube\.com\/embed\/([^&\s]+)/,
+      /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return `https://www.youtube.com/embed/${match[1]}`;
+      }
+    }
+    
+    return null;
   };
 
   const getDefaultContent = (type: ElementType) => {
     switch (type) {
       case ElementType.TEXT: return 'Double click to edit';
       case ElementType.IMAGE: return 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400';
-      case ElementType.VIDEO: return 'Video';
+      case ElementType.VIDEO: return 'Video Source URL';
+      case ElementType.SLIDESHOW: return 'Slideshow';
+      case ElementType.TICKER: return 'Breaking News • Latest Updates • Important Information';
+      case ElementType.RSS: return 'RSS Feed URL';
+      case ElementType.WEATHER: return 'Weather Widget';
+      case ElementType.GIF: return 'GIF URL';
+      case ElementType.MEDIA_RSS: return 'Media RSS URL';
+      case ElementType.YOUTUBE: return 'YouTube Video ID';
+      case ElementType.USTREAM: return 'Ustream Channel';
+      case ElementType.FTP: return 'FTP Path';
+      case ElementType.INSTAGRAM: return 'Instagram URL';
+      case ElementType.STREAMING: return 'Stream URL';
+      case ElementType.LABEL: return 'Label Text';
+      case ElementType.CLOCK: return 'Clock';
+      case ElementType.TIMER: return 'Timer';
+      case ElementType.TOUCH: return 'Touch';
+      case ElementType.WEATHER_2: return 'Weather 2.0';
+      case ElementType.AD_SERVING: return 'Ad';
+      case ElementType.CALENDAR: return 'Calendar';
+      case ElementType.DASHBOARDS: return 'Dashboard';
+      case ElementType.TABLE: return 'Table';
+      case ElementType.SMART_SWITCH: return 'Smart Switch';
+      case ElementType.WEB_IMAGE: return 'Web Image URL';
+      case ElementType.WEB_VIDEO: return 'Web Video URL';
+      case ElementType.SUB_CREATIVE: return 'Sub Creative';
+      case ElementType.EMBED: return 'Embed Code';
+      case ElementType.HTML: return '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;">HTML Content</div>';
       default: return '';
     }
   };
@@ -423,20 +554,87 @@ const Editor: React.FC = () => {
     }
   };
 
+  const getAnimationClass = (animation?: string) => {
+    if (!animation) return '';
+    
+    const animationMap: Record<string, string> = {
+      // Featured
+      'Shake Zoom': 'animate-shake-zoom',
+      'Whip Slide': 'animate-whip-slide',
+      'Old TV': 'animate-old-tv',
+      'Chroma Wave': 'animate-chroma-wave',
+      
+      // Reveal
+      'Brush': 'animate-brush',
+      'Ink': 'animate-ink',
+      'Digital': 'animate-digital',
+      'Spray Paint': 'animate-spray-paint',
+      'Sketch': 'animate-sketch',
+      'Gradient': 'animate-gradient',
+      
+      // General
+      'Rise': 'animate-rise',
+      'Pan': 'animate-pan',
+      'Fade': 'animate-fade',
+      'Pop': 'animate-pop',
+      'Wipe': 'animate-wipe',
+      'Blur': 'animate-blur',
+      'Succession': 'animate-succession',
+      'Breathe': 'animate-breathe',
+      'Baseline': 'animate-baseline',
+      'Drift': 'animate-drift',
+      'Tectonic': 'animate-tectonic',
+      'Tumble': 'animate-tumble',
+      'Neon': 'animate-neon',
+      'Scrapbook': 'animate-scrapbook',
+      'Stomp': 'animate-stomp',
+      
+      // Add-on Effects
+      'Rotate': 'animate-rotate-effect',
+      'Flicker': 'animate-flicker',
+      'Pulse': 'animate-pulse-effect',
+      'Wiggle': 'animate-wiggle-effect',
+    };
+    
+    return animationMap[animation] || '';
+  };
+
   const handleMouseDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const element = elements.find(el => el.id === id);
     
-    setSelectedId(id);
+    // Multi-selection with Ctrl/Cmd key
+    if (e.ctrlKey || e.metaKey) {
+      if (selectedIds.includes(id)) {
+        setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
+      } else {
+        setSelectedIds([...selectedIds, id]);
+      }
+    } else {
+      // If clicking on an already selected item, keep the selection
+      if (!selectedIds.includes(id)) {
+        setSelectedIds([id]);
+      }
+    }
     setRightSidebarOpen(true);
     
     if (element && !element.locked && !editingTextId) {
+      // Store initial positions of all selected items
+      const initialPositions = new Map<string, { x: number; y: number }>();
+      const itemsToMove = selectedIds.includes(id) ? selectedIds : [id];
+      
+      itemsToMove.forEach(itemId => {
+        const el = elements.find(e => e.id === itemId);
+        if (el) {
+          initialPositions.set(itemId, { x: el.x, y: el.y });
+        }
+      });
+      
       setDragInfo({
         id,
         startX: e.clientX,
         startY: e.clientY,
-        initialX: element.x,
-        initialY: element.y
+        initialPositions
       });
     }
   };
@@ -448,10 +646,12 @@ const Editor: React.FC = () => {
       const dy = (e.clientY - dragInfo.startY) / scale;
 
       setElements(prev => prev.map(el => {
-        if (el.id === dragInfo.id) {
-          // Calculate proposed snapped position first
-          const rawX = dragInfo.initialX + dx;
-          const rawY = dragInfo.initialY + dy;
+        // Move all items that were selected when drag started
+        const initialPos = dragInfo.initialPositions.get(el.id);
+        if (initialPos) {
+          // Calculate proposed snapped position
+          const rawX = initialPos.x + dx;
+          const rawY = initialPos.y + dy;
           const snappedX = snapValue(rawX);
           const snappedY = snapValue(rawY);
 
@@ -671,26 +871,11 @@ const Editor: React.FC = () => {
           lineHeight: 1.2,
         };
 
+        // Use spread operator to preserve ALL properties (animation, widgetSettings, etc.)
         return {
-          id: el.id || '',
-          type: el.type || ElementType.RECT,
+          ...el,
           content: el.content || '',
-          x: el.x ?? 0,
-          y: el.y ?? 0,
-          width: el.width ?? 100,
-          height: el.height ?? 100,
-          fontSize: el.fontSize ?? 16,
-          color: el.color || '#000000',
-          backgroundColor: el.backgroundColor || '#ffffff',
-          fillColor: el.fillColor || '#cccccc',
-          opacity: el.opacity ?? 100,
-          rotation: el.rotation ?? 0,
-          zIndex: el.zIndex ?? 0,
-          strokeColor: el.strokeColor || '#000000',
-          strokeWidth: el.strokeWidth ?? 1,
-          borderRadius: el.borderRadius ?? 0,
-          locked: el.locked ?? false,
-          visible: el.visible ?? true,
+          visible: el.visible !== undefined ? el.visible : true,
           textStyle: el.textStyle || defaultTextStyle,
         };
       });
@@ -1084,8 +1269,6 @@ const Editor: React.FC = () => {
     setShowTemplateModal(false);
   };
 
-  const selectedElement = elements.find(el => el.id === selectedId);
-
   // Load design from Firebase if designId is provided
   useEffect(() => {
     if (designId) {
@@ -1227,6 +1410,13 @@ const Editor: React.FC = () => {
             title="Toggle Grid"
           >
             {showGrid ? <Eye size={18} /> : <EyeOff size={18} />}
+          </button>
+          <button 
+            onClick={() => setShowSafeZone(!showSafeZone)} 
+            className={`p-2 rounded-lg transition-all ${showSafeZone ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
+            title="Toggle Safe Zone"
+          >
+            <Maximize2 size={18} />
           </button>
 
           <button 
@@ -1506,28 +1696,45 @@ const Editor: React.FC = () => {
                 </>
               )}
 
+              {/* Safe Zone - 5% margin from edges */}
+              {showSafeZone && (
+                <div 
+                  className="absolute pointer-events-none border-2 border-green-500 border-dashed"
+                  style={{
+                    left: '5%',
+                    top: '5%',
+                    width: '90%',
+                    height: '90%',
+                  }}
+                >
+                  <div className="absolute -top-6 left-0 bg-green-500 text-white text-xs px-2 py-1 rounded">Safe Zone (5%)</div>
+                </div>
+              )}
+
               {elements
                 .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
                 .map(el => (
                   <div
                     key={el.id}
                     className={`absolute group select-none transition-all ${
-                      selectedId === el.id 
-                        ? 'ring-2 ring-slate-900 shadow-lg' 
-                        : 'hover:ring-2 hover:ring-slate-300'
+                      selectedIds.includes(el.id) 
+                        ? 'ring-2 ring-slate-900 shadow-lg animate-glow' 
+                        : 'hover:ring-2 hover:ring-slate-300 hover:shadow-md'
                     } ${el.locked ? 'cursor-not-allowed' : ''} ${
-                      dragInfo?.id === el.id ? 'opacity-75 ring-2 ring-blue-500 shadow-xl' : ''
-                    }`}
+                      dragInfo?.initialPositions.has(el.id) ? 'opacity-75 ring-2 ring-blue-500 shadow-xl' : ''
+                    } ${getAnimationClass(el.animation)}`}
                     style={{
                       left: el.x,
                       top: el.y,
                       width: el.width,
                       height: el.height,
-                      opacity: dragInfo?.id === el.id ? 0.75 : el.opacity,
-                      zIndex: dragInfo?.id === el.id ? 1000 : el.zIndex,
-                      transform: `rotate(${el.rotation || 0}deg) ${dragInfo?.id === el.id ? 'scale(1.05)' : ''}`,
-                      cursor: el.locked ? 'not-allowed' : (dragInfo?.id === el.id ? 'grabbing' : 'grab'),
-                      transition: dragInfo?.id === el.id ? 'none' : 'all 0.2s ease',
+                      opacity: dragInfo?.initialPositions.has(el.id) ? 0.75 : el.opacity,
+                      zIndex: dragInfo?.initialPositions.has(el.id) ? 1000 : el.zIndex,
+                      transform: `rotate(${el.rotation || 0}deg) ${dragInfo?.initialPositions.has(el.id) ? 'scale(1.02)' : ''}`,
+                      cursor: el.locked ? 'not-allowed' : (dragInfo?.initialPositions.has(el.id) ? 'grabbing' : 'grab'),
+                      transition: dragInfo?.initialPositions.has(el.id) ? 'none' : 'all 0.2s ease',
+                      borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined,
+                      overflow: 'hidden',
                     }}
                     onMouseDown={(e) => handleMouseDown(e, el.id)}
                     onClick={(e) => e.stopPropagation()} 
@@ -1580,13 +1787,360 @@ const Editor: React.FC = () => {
                         className="w-full h-full object-cover pointer-events-none" 
                         style={{ borderRadius: el.borderRadius }} 
                       />
+                    ) : el.type === ElementType.HTML ? (
+                      <iframe
+                        srcDoc={el.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">Add HTML code in properties</div>'}
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ) : el.type === ElementType.VIDEO ? (
+                      el.content && (el.content.startsWith('http') || el.content.startsWith('blob:')) ? (
+                        <video 
+                          src={el.content} 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                          muted
+                          loop
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white text-sm">
+                          <Video className="mr-2" size={20} />
+                          Video (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.SLIDESHOW ? (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-slate-700 text-sm">
+                        <Layout className="mr-2" size={20} />
+                        Slideshow
+                      </div>
+                    ) : el.type === ElementType.TICKER ? (
+                      <div className="w-full h-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold overflow-hidden">
+                        <div className="animate-marquee whitespace-nowrap">{el.content || 'Ticker Text'}</div>
+                      </div>
+                    ) : el.type === ElementType.RSS ? (
+                      <div className="w-full h-full bg-orange-100 flex items-center justify-center text-orange-700 text-sm">
+                        <FileText className="mr-2" size={20} />
+                        RSS Feed
+                      </div>
+                    ) : el.type === ElementType.WEATHER ? (
+                      <div className="w-full h-full bg-sky-100 flex items-center justify-center text-sky-700 text-sm">
+                        <CloudSun className="mr-2" size={20} />
+                        Weather
+                      </div>
+                    ) : el.type === ElementType.GIF ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <img 
+                          src={el.content} 
+                          alt="GIF" 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-green-100 flex items-center justify-center text-green-700 text-sm">
+                          <Image className="mr-2" size={20} />
+                          GIF (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.MEDIA_RSS ? (
+                      <div className="w-full h-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-sm">
+                        <FileText className="mr-2" size={20} />
+                        Media RSS
+                      </div>
+                    ) : el.type === ElementType.YOUTUBE ? (
+                      getYouTubeEmbedUrl(el.content) ? (
+                        <iframe
+                          src={getYouTubeEmbedUrl(el.content) || ''}
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-red-600 flex items-center justify-center text-white text-sm">
+                          <Video className="mr-2" size={20} />
+                          YouTube (Add URL in properties)
+                        </div>
+                      )
+                    ) : el.type === ElementType.USTREAM ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <iframe
+                          src={el.content}
+                          className="w-full h-full border-0"
+                          style={{ pointerEvents: 'none' }}
+                          allow="autoplay; fullscreen"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                          <Video className="mr-2" size={20} />
+                          Ustream (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.FTP ? (
+                      <div className="w-full h-full bg-gray-600 flex items-center justify-center text-white text-sm">
+                        <FileText className="mr-2" size={20} />
+                        FTP
+                      </div>
+                    ) : el.type === ElementType.INSTAGRAM ? (
+                      el.widgetSettings?.embedCode ? (
+                        <iframe
+                          srcDoc={el.widgetSettings.embedCode}
+                          className="w-full h-full border-0"
+                          sandbox="allow-scripts allow-same-origin"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : el.content && el.content.startsWith('http') ? (
+                        <img 
+                          src={el.content} 
+                          alt="Instagram" 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500 flex items-center justify-center text-white text-sm">
+                          <Image className="mr-2" size={20} />
+                          Instagram (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.STREAMING ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <iframe
+                          src={el.content}
+                          className="w-full h-full border-0"
+                          style={{ pointerEvents: 'none' }}
+                          allow="autoplay"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-teal-600 flex items-center justify-center text-white text-sm">
+                          <Video className="mr-2" size={20} />
+                          Streaming (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.LABEL ? (
+                      <div 
+                        className="w-full h-full flex items-center justify-center p-2"
+                        style={{
+                          backgroundColor: el.backgroundColor || '#fef3c7',
+                          color: el.color || '#92400e',
+                          fontSize: el.fontSize || 16,
+                          fontWeight: el.textStyle?.bold ? 'bold' : 600,
+                          fontStyle: el.textStyle?.italic ? 'italic' : 'normal',
+                          textAlign: el.textStyle?.textAlign || 'center',
+                        }}
+                      >
+                        {el.content || 'Label'}
+                      </div>
+                    ) : el.type === ElementType.CLOCK ? (
+                      <div 
+                        className="w-full h-full flex flex-col items-center justify-center gap-2"
+                        style={{
+                          backgroundColor: el.backgroundColor || '#1e293b',
+                          color: el.color || '#f1f5f9',
+                        }}
+                      >
+                        <Clock className="opacity-50" size={Math.min(el.fontSize || 24, 32)} />
+                        <div 
+                          className="font-bold font-mono"
+                          style={{ fontSize: el.fontSize || 24 }}
+                        >
+                          {new Date().toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: el.widgetSettings?.timeFormat !== '24'
+                          })}
+                        </div>
+                      </div>
+                    ) : el.type === ElementType.TIMER ? (
+                      <div 
+                        className="w-full h-full flex flex-col items-center justify-center gap-2"
+                        style={{
+                          backgroundColor: el.backgroundColor || '#dc2626',
+                          color: el.color || '#ffffff',
+                        }}
+                      >
+                        <Clock className="opacity-75" size={Math.min(el.fontSize || 24, 32)} />
+                        <div 
+                          className="font-bold font-mono"
+                          style={{ fontSize: el.fontSize || 32 }}
+                        >
+                          {el.content || '00:00:00'}
+                        </div>
+                      </div>
+                    ) : el.type === ElementType.TOUCH ? (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-blue-300 opacity-20 animate-pulse"></div>
+                        <div className="z-10 flex flex-col items-center gap-3 text-white">
+                          <MousePointer2 size={32} className="animate-bounce" />
+                          <span className="text-sm font-semibold">{el.content || 'Touch Zone'}</span>
+                        </div>
+                      </div>
+                    ) : el.type === ElementType.WEATHER_2 ? (
+                      <div className="w-full h-full bg-gradient-to-br from-sky-400 to-blue-500 p-4 text-white flex flex-col items-center justify-center gap-2">
+                        <CloudSun size={48} className="mb-2" />
+                        <div className="text-3xl font-bold">{el.widgetSettings?.temperature || '72'}°{el.widgetSettings?.temperatureUnit || 'F'}</div>
+                        <div className="text-lg">{el.widgetSettings?.condition || 'Sunny'}</div>
+                        <div className="text-sm opacity-90">{el.widgetSettings?.location || 'New York, NY'}</div>
+                      </div>
+                    ) : el.type === ElementType.AD_SERVING ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <img 
+                          src={el.content} 
+                          alt="Advertisement" 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center gap-3 text-white p-4">
+                          <ImageIcon size={40} />
+                          <div className="text-center">
+                            <div className="font-bold text-lg">Advertisement</div>
+                            <div className="text-xs opacity-75 mt-1">{el.content || 'Add image URL in properties'}</div>
+                          </div>
+                        </div>
+                      )
+                    ) : el.type === ElementType.CALENDAR ? (
+                      <div className="w-full h-full bg-white p-3 flex flex-col">
+                        <div className="text-center font-bold text-gray-800 mb-2 pb-2 border-b border-gray-200">
+                          {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 flex-1 text-xs">
+                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                            <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
+                          ))}
+                          {Array.from({ length: 28 }, (_, i) => (
+                            <div 
+                              key={i} 
+                              className={`text-center p-1 rounded ${
+                                i === new Date().getDate() - 1 
+                                  ? 'bg-green-500 text-white font-bold' 
+                                  : 'text-gray-700'
+                              }`}
+                            >
+                              {i + 1}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : el.type === ElementType.DASHBOARDS ? (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-800 p-3 text-white">
+                        <div className="font-bold text-sm mb-3 pb-2 border-b border-gray-700">
+                          {el.content || 'Dashboard'}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 h-3/4">
+                          <div className="bg-cyan-600 rounded-lg p-2 flex flex-col">
+                            <div className="text-xs opacity-75">Views</div>
+                            <div className="text-2xl font-bold mt-auto">12.5K</div>
+                          </div>
+                          <div className="bg-green-600 rounded-lg p-2 flex flex-col">
+                            <div className="text-xs opacity-75">Revenue</div>
+                            <div className="text-2xl font-bold mt-auto">$8.2K</div>
+                          </div>
+                          <div className="bg-purple-600 rounded-lg p-2 flex flex-col">
+                            <div className="text-xs opacity-75">Users</div>
+                            <div className="text-2xl font-bold mt-auto">3.4K</div>
+                          </div>
+                          <div className="bg-orange-600 rounded-lg p-2 flex flex-col">
+                            <div className="text-xs opacity-75">Growth</div>
+                            <div className="text-2xl font-bold mt-auto">+24%</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : el.type === ElementType.TABLE ? (
+                      <div className="w-full h-full bg-white overflow-hidden">
+                        <table className="w-full h-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-amber-500 text-white">
+                              <th className="p-2 text-left border border-amber-600">Name</th>
+                              <th className="p-2 text-left border border-amber-600">Status</th>
+                              <th className="p-2 text-left border border-amber-600">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {['Item 1', 'Item 2', 'Item 3'].map((item, i) => (
+                              <tr key={i} className="border-b border-gray-200 hover:bg-gray-50">
+                                <td className="p-2 border border-gray-200">{item}</td>
+                                <td className="p-2 border border-gray-200">
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                    i === 0 ? 'bg-green-100 text-green-700' : 
+                                    i === 1 ? 'bg-yellow-100 text-yellow-700' : 
+                                    'bg-red-100 text-red-700'
+                                  }`}>
+                                    {i === 0 ? 'Active' : i === 1 ? 'Pending' : 'Inactive'}
+                                  </span>
+                                </td>
+                                <td className="p-2 border border-gray-200 font-mono">${(Math.random() * 1000).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : el.type === ElementType.SMART_SWITCH ? (
+                      <div className="w-full h-full bg-gradient-to-br from-lime-400 to-green-500 flex flex-col items-center justify-center gap-4 p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="text-white text-sm font-semibold">Option A</div>
+                          <div className="relative w-14 h-7 bg-white rounded-full shadow-inner">
+                            <div className="absolute top-1 left-1 w-5 h-5 bg-green-600 rounded-full transition-transform"></div>
+                          </div>
+                          <div className="text-white text-sm font-semibold">Option B</div>
+                        </div>
+                        <div className="text-white text-xs opacity-90">{el.content || 'Smart Switch'}</div>
+                        <Settings className="text-white opacity-50" size={20} />
+                      </div>
+                    ) : el.type === ElementType.WEB_IMAGE ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <img 
+                          src={el.content} 
+                          alt="Web Image" 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-pink-100 flex items-center justify-center text-pink-700 text-sm">
+                          <ImageIcon className="mr-2" size={20} />
+                          Web Image (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.WEB_VIDEO ? (
+                      el.content && el.content.startsWith('http') ? (
+                        <video 
+                          src={el.content} 
+                          className="w-full h-full object-cover"
+                          style={{ pointerEvents: 'none' }}
+                          muted
+                          loop
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-rose-100 flex items-center justify-center text-rose-700 text-sm">
+                          <Video className="mr-2" size={20} />
+                          Web Video (Add URL)
+                        </div>
+                      )
+                    ) : el.type === ElementType.SUB_CREATIVE ? (
+                      <div className="w-full h-full bg-violet-100 flex items-center justify-center text-violet-700 text-sm">
+                        <Layout className="mr-2" size={20} />
+                        Sub Creative
+                      </div>
+                    ) : el.type === ElementType.EMBED ? (
+                      el.widgetSettings?.embedCode ? (
+                        <iframe
+                          srcDoc={el.widgetSettings.embedCode}
+                          className="w-full h-full border-0"
+                          sandbox="allow-scripts allow-same-origin"
+                          style={{ pointerEvents: 'none' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-600 text-sm">
+                          <Layout className="mr-2" size={20} />
+                          Embed (Add code in properties)
+                        </div>
+                      )
                     ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type) ? (
                       <div style={{ borderRadius: el.borderRadius, width: '100%', height: '100%' }}>
                         {renderShape(el.type, el.fillColor || '#0F172A', el.strokeColor, el.strokeWidth)}
                       </div>
                     ) : null}
 
-                    {selectedId === el.id && !el.locked && (
+                    {selectedIds.includes(el.id) && selectedIds.length === 1 && !el.locked && (
                       <>
                         {/* Resize handles */}
                         <div className="absolute -top-2 -left-2 w-3 h-3 bg-white border-2 border-slate-900 rounded-full cursor-nw-resize shadow-lg hover:scale-125 transition-transform" onMouseDown={(e) => handleResizeStart(e, el.id, 'nw')}></div>
@@ -1655,31 +2209,44 @@ const Editor: React.FC = () => {
                 </button>
               </div>
               
-              <div className="flex gap-2 bg-white p-1 rounded-lg shadow-sm">
+              <div className="flex gap-1 bg-white p-1 rounded-lg shadow-sm">
                 <button 
                   onClick={() => setActiveRightTab('properties')} 
-                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                  className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
                     activeRightTab === 'properties' 
                       ? 'bg-slate-900 text-white shadow-md' 
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-1">
                     <Settings size={14} />
-                    {selectedElement ? 'Design' : 'Canvas'}
+                    <span className="hidden sm:inline">{selectedElement ? 'Design' : 'Canvas'}</span>
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setActiveRightTab('animation')} 
+                  className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
+                    activeRightTab === 'animation' 
+                      ? 'bg-slate-900 text-white shadow-md' 
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <Sparkles size={14} />
+                    <span className="hidden sm:inline">Animate</span>
                   </div>
                 </button>
                 <button 
                   onClick={() => setActiveRightTab('layers')} 
-                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                  className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
                     activeRightTab === 'layers' 
                       ? 'bg-slate-900 text-white shadow-md' 
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-1">
                     <Layers size={14} />
-                    Layers
+                    <span className="hidden sm:inline">Layers</span>
                   </div>
                 </button>
               </div>
@@ -2103,6 +2670,918 @@ const Editor: React.FC = () => {
                         </div>
                       )}
 
+                      {/* Image & Media Properties */}
+                      {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <ImageIcon size={14} />
+                            Image Settings
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Image URL</label>
+                            <input
+                              type="text"
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="https://example.com/image.jpg"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Fit Mode</label>
+                            <select 
+                              value={selectedElement.widgetSettings?.fitMode || 'cover'}
+                              onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                ...selectedElement.widgetSettings, 
+                                fitMode: e.target.value 
+                              })}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                            >
+                              <option value="cover">Cover (Fill)</option>
+                              <option value="contain">Contain (Fit)</option>
+                              <option value="fill">Stretch to Fill</option>
+                              <option value="none">Original Size</option>
+                            </select>
+                          </div>
+
+                          {selectedElement.type === ElementType.GIF && (
+                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                              <input 
+                                type="checkbox" 
+                                id="modify-gif-autoplay" 
+                                className="rounded"
+                                checked={selectedElement.widgetSettings?.autoplay ?? true}
+                                onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                  ...selectedElement.widgetSettings, 
+                                  autoplay: e.target.checked 
+                                })}
+                              />
+                              <label htmlFor="modify-gif-autoplay" className="text-xs text-gray-600">Auto-play GIF</label>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Video & Streaming Properties */}
+                      {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Video size={14} />
+                            Video Settings
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">
+                              {selectedElement.type === ElementType.YOUTUBE ? 'YouTube URL/ID' : 'Video URL'}
+                            </label>
+                            <input
+                              type="text"
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder={selectedElement.type === ElementType.YOUTUBE ? 'https://youtube.com/watch?v=...' : 'https://example.com/video.mp4'}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                            />
+                          </div>
+
+                          {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                            <>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                  <input 
+                                    type="checkbox" 
+                                    id="modify-autoplay" 
+                                    className="rounded"
+                                    checked={selectedElement.widgetSettings?.autoplay || false}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      autoplay: e.target.checked 
+                                    })}
+                                  />
+                                  <label htmlFor="modify-autoplay" className="text-xs text-gray-600">Autoplay</label>
+                                </div>
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                  <input 
+                                    type="checkbox" 
+                                    id="modify-loop" 
+                                    className="rounded"
+                                    checked={selectedElement.widgetSettings?.loop ?? true}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      loop: e.target.checked 
+                                    })}
+                                  />
+                                  <label htmlFor="modify-loop" className="text-xs text-gray-600">Loop</label>
+                                </div>
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                  <input 
+                                    type="checkbox" 
+                                    id="modify-mute" 
+                                    className="rounded"
+                                    checked={selectedElement.widgetSettings?.mute ?? false}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      mute: e.target.checked 
+                                    })}
+                                  />
+                                  <label htmlFor="modify-mute" className="text-xs text-gray-600">Mute</label>
+                                </div>
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                  <input 
+                                    type="checkbox" 
+                                    id="modify-controls" 
+                                    className="rounded"
+                                    checked={selectedElement.widgetSettings?.controls ?? true}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      controls: e.target.checked 
+                                    })}
+                                  />
+                                  <label htmlFor="modify-controls" className="text-xs text-gray-600">Controls</label>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Playback Speed</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.playbackSpeed || '1'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    playbackSpeed: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="0.5">0.5x (Half Speed)</option>
+                                  <option value="0.75">0.75x</option>
+                                  <option value="1">1x (Normal)</option>
+                                  <option value="1.25">1.25x</option>
+                                  <option value="1.5">1.5x</option>
+                                  <option value="2">2x (Double Speed)</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Volume</label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={selectedElement.widgetSettings?.volume || 100}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    volume: Number(e.target.value) 
+                                  })}
+                                  className="w-full"
+                                />
+                                <div className="text-xs text-gray-500 text-center mt-1">{selectedElement.widgetSettings?.volume || 100}%</div>
+                              </div>
+                            </>
+                          )}
+
+                          {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Fit Mode</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.fitMode || 'cover'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    fitMode: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="cover">Cover (Fill)</option>
+                                  <option value="contain">Contain (Fit)</option>
+                                  <option value="fill">Stretch to Fill</option>
+                                  <option value="none">Original Size</option>
+                                </select>
+                              </div>
+
+                              {selectedElement.type === ElementType.GIF && (
+                                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                  <input 
+                                    type="checkbox" 
+                                    id="modify-gif-autoplay" 
+                                    className="rounded"
+                                    checked={selectedElement.widgetSettings?.autoplay ?? true}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      autoplay: e.target.checked 
+                                    })}
+                                  />
+                                  <label htmlFor="modify-gif-autoplay" className="text-xs text-gray-600">Auto-play GIF</label>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Feed Widget Properties - RSS, TICKER, SLIDESHOW */}
+                      {[ElementType.RSS, ElementType.MEDIA_RSS, ElementType.TICKER, ElementType.SLIDESHOW].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            {selectedElement.type === ElementType.SLIDESHOW ? <Layout size={14} /> : <FileText size={14} />}
+                            {selectedElement.type === ElementType.TICKER ? 'Ticker Settings' : (selectedElement.type === ElementType.SLIDESHOW ? 'Slideshow Settings' : 'RSS Feed Settings')}
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">
+                              {selectedElement.type === ElementType.TICKER ? 'Ticker Text' : (selectedElement.type === ElementType.SLIDESHOW ? 'Image URLs (one per line)' : 'Feed URL')}
+                            </label>
+                            <textarea
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder={selectedElement.type === ElementType.TICKER ? 'Breaking News • Latest Updates' : (selectedElement.type === ElementType.SLIDESHOW ? 'https://example.com/image1.jpg&#10;https://example.com/image2.jpg' : 'https://example.com/rss')}
+                              className="w-full h-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                          </div>
+
+                          {selectedElement.type === ElementType.TICKER && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Scroll Speed</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.scrollSpeed || 'medium'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    scrollSpeed: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="slow">Slow</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="fast">Fast</option>
+                                  <option value="very-fast">Very Fast</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Direction</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.direction || 'left'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    direction: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="left">Left to Right</option>
+                                  <option value="right">Right to Left</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                <input 
+                                  type="checkbox" 
+                                  id="modify-ticker-loop" 
+                                  className="rounded"
+                                  checked={selectedElement.widgetSettings?.loop ?? true}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    loop: e.target.checked 
+                                  })}
+                                />
+                                <label htmlFor="modify-ticker-loop" className="text-xs text-gray-600">Continuous loop</label>
+                              </div>
+                            </>
+                          )}
+
+                          {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type) && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Update Interval (minutes)</label>
+                                <input
+                                  type="number"
+                                  value={selectedElement.widgetSettings?.updateInterval || 15}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    updateInterval: Number(e.target.value) 
+                                  })}
+                                  min={1}
+                                  max={1440}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Max Items to Display</label>
+                                <input
+                                  type="number"
+                                  value={selectedElement.widgetSettings?.maxItems || 5}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    maxItems: Number(e.target.value) 
+                                  })}
+                                  min={1}
+                                  max={50}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Display Mode</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.displayMode || 'scroll'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    displayMode: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="scroll">Scrolling List</option>
+                                  <option value="static">Static List</option>
+                                  <option value="fade">Fade In/Out</option>
+                                  <option value="ticker">Ticker Style</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedElement.type === ElementType.SLIDESHOW && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Transition Duration (seconds)</label>
+                                <input
+                                  type="number"
+                                  value={selectedElement.widgetSettings?.transitionDuration || 5}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    transitionDuration: Number(e.target.value) 
+                                  })}
+                                  min={1}
+                                  max={60}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Transition Effect</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.transitionEffect || 'fade'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    transitionEffect: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="fade">Fade</option>
+                                  <option value="slide">Slide</option>
+                                  <option value="zoom">Zoom</option>
+                                  <option value="flip">Flip</option>
+                                  <option value="cube">Cube</option>
+                                  <option value="dissolve">Dissolve</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                <input 
+                                  type="checkbox" 
+                                  id="modify-slideshow-autoplay" 
+                                  className="rounded"
+                                  checked={selectedElement.widgetSettings?.autoplay ?? true}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    autoplay: e.target.checked 
+                                  })}
+                                />
+                                <label htmlFor="modify-slideshow-autoplay" className="text-xs text-gray-600">Auto-play slideshow</label>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Streaming Widgets Properties */}
+                      {[ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Video size={14} />
+                            Streaming Settings
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Stream URL</label>
+                            <textarea
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="Enter stream embed URL"
+                              className="w-full h-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Instagram Widget Properties */}
+                      {selectedElement.type === ElementType.INSTAGRAM && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Image size={14} />
+                            Instagram Settings
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Image URL</label>
+                            <textarea
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="Enter Instagram image URL"
+                              className="w-full h-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Or Embed Code (Optional)</label>
+                            <textarea
+                              value={selectedElement.widgetSettings?.embedCode || ''}
+                              onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                ...selectedElement.widgetSettings, 
+                                embedCode: e.target.value 
+                              })}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="<iframe src='...'></iframe>"
+                              className="w-full h-32 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Label Widget Properties */}
+                      {selectedElement.type === ElementType.LABEL && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Type size={14} />
+                            Label Content
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Label Text</label>
+                            <textarea
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="Enter label text"
+                              className="w-full h-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EMBED Widget Properties */}
+                      {selectedElement.type === ElementType.EMBED && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Layout size={14} />
+                            Embed Code
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Embed HTML/Code</label>
+                            <textarea
+                              value={selectedElement.widgetSettings?.embedCode || ''}
+                              onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                ...selectedElement.widgetSettings, 
+                                embedCode: e.target.value 
+                              })}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="<iframe src='...'></iframe>"
+                              className="w-full h-48 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">Paste iframe or embed code here.</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* General Widget Properties - CLOCK, TIMER, WEATHER */}
+                      {[ElementType.CLOCK, ElementType.TIMER, ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) ? <CloudSun size={14} /> : <Clock size={14} />}
+                            {selectedElement.type === ElementType.CLOCK ? 'Clock Settings' : (selectedElement.type === ElementType.TIMER ? 'Timer Settings' : 'Weather Settings')}
+                          </h4>
+                          
+                          {selectedElement.type === ElementType.CLOCK && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Time Format</label>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      timeFormat: '12' 
+                                    })}
+                                    className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.timeFormat === '12' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
+                                  >
+                                    12 Hour
+                                  </button>
+                                  <button 
+                                    onClick={() => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      timeFormat: '24' 
+                                    })}
+                                    className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.timeFormat === '24' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
+                                  >
+                                    24 Hour
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Display Style</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.displayStyle || 'digital'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    displayStyle: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="digital">Digital</option>
+                                  <option value="analog">Analog</option>
+                                  <option value="text">Text Format</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                <input 
+                                  type="checkbox" 
+                                  id="modify-clock-showSeconds" 
+                                  className="rounded"
+                                  checked={selectedElement.widgetSettings?.showSeconds ?? true}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    showSeconds: e.target.checked 
+                                  })}
+                                />
+                                <label htmlFor="modify-clock-showSeconds" className="text-xs text-gray-600">Show seconds</label>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedElement.type === ElementType.TIMER && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Timer Type</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.timerType || 'countdown'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    timerType: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="countdown">Countdown</option>
+                                  <option value="countup">Count Up</option>
+                                  <option value="stopwatch">Stopwatch</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Countdown To</label>
+                                <input
+                                  type="datetime-local"
+                                  value={selectedElement.widgetSettings?.countdownTo || ''}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    countdownTo: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Display Format</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.displayFormat || 'HH:MM:SS'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    displayFormat: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="HH:MM:SS">HH:MM:SS</option>
+                                  <option value="DD:HH:MM:SS">DD:HH:MM:SS</option>
+                                  <option value="Days, Hours, Minutes">Days, Hours, Minutes</option>
+                                  <option value="Seconds">Seconds Only</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+
+                          {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Location</label>
+                                <input
+                                  type="text"
+                                  value={selectedElement.widgetSettings?.location || 'New York, NY'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    location: e.target.value 
+                                  })}
+                                  placeholder="New York, NY"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Temperature Unit</label>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      temperatureUnit: 'F' 
+                                    })}
+                                    className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'F' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
+                                  >
+                                    °F
+                                  </button>
+                                  <button 
+                                    onClick={() => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      temperatureUnit: 'C' 
+                                    })}
+                                    className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'C' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
+                                  >
+                                    °C
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Display Style</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.displayStyle || 'current'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    displayStyle: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="current">Current Conditions</option>
+                                  <option value="forecast">5-Day Forecast</option>
+                                  <option value="hourly">Hourly Forecast</option>
+                                  <option value="detailed">Detailed View</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Font Size</label>
+                            <input
+                              type="number"
+                              value={selectedElement.fontSize || 24}
+                              onChange={(e) => updateSelectedElement('fontSize', Number(e.target.value))}
+                              onBlur={() => updateHistory(elements)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Advanced Widget Properties - TABLE, CALENDAR, DASHBOARDS */}
+                      {[ElementType.TABLE, ElementType.CALENDAR, ElementType.DASHBOARDS].includes(selectedElement.type) && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <Grid3x3 size={14} />
+                            {selectedElement.type === ElementType.TABLE ? 'Table Settings' : (selectedElement.type === ElementType.CALENDAR ? 'Calendar Settings' : 'Dashboard Settings')}
+                          </h4>
+                          
+                          {selectedElement.type === ElementType.TABLE && (
+                            <>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs text-gray-600 mb-2 block font-medium">Rows</label>
+                                  <input
+                                    type="number"
+                                    value={selectedElement.widgetSettings?.rows || 5}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      rows: Number(e.target.value) 
+                                    })}
+                                    min={1}
+                                    max={100}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-600 mb-2 block font-medium">Columns</label>
+                                  <input
+                                    type="number"
+                                    value={selectedElement.widgetSettings?.columns || 3}
+                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                      ...selectedElement.widgetSettings, 
+                                      columns: Number(e.target.value) 
+                                    })}
+                                    min={1}
+                                    max={20}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.dataSource || 'manual'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    dataSource: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="manual">Manual Entry</option>
+                                  <option value="csv">CSV Import</option>
+                                  <option value="sheets">Google Sheets</option>
+                                  <option value="api">API Endpoint</option>
+                                  <option value="database">Database Query</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Table Style</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.tableStyle || 'default'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    tableStyle: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="default">Default</option>
+                                  <option value="striped">Striped Rows</option>
+                                  <option value="bordered">Bordered</option>
+                                  <option value="minimal">Minimal</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                <input 
+                                  type="checkbox" 
+                                  id="modify-table-showHeader" 
+                                  className="rounded"
+                                  checked={selectedElement.widgetSettings?.showHeader ?? true}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    showHeader: e.target.checked 
+                                  })}
+                                />
+                                <label htmlFor="modify-table-showHeader" className="text-xs text-gray-600">Show header row</label>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedElement.type === ElementType.CALENDAR && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Calendar Source</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.calendarSource || 'google'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    calendarSource: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="google">Google Calendar</option>
+                                  <option value="outlook">Outlook Calendar</option>
+                                  <option value="ical">Custom iCal URL</option>
+                                  <option value="local">Local Events</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">View Mode</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.viewMode || 'monthly'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    viewMode: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="monthly">Monthly Grid</option>
+                                  <option value="weekly">Weekly View</option>
+                                  <option value="agenda">Agenda List</option>
+                                  <option value="day">Single Day</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Color Scheme</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.colorScheme || 'default'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    colorScheme: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="default">Default</option>
+                                  <option value="blue">Blue</option>
+                                  <option value="green">Green</option>
+                                  <option value="purple">Purple</option>
+                                  <option value="dark">Dark Mode</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedElement.type === ElementType.DASHBOARDS && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Dashboard Type</label>
+                                <select 
+                                  value={selectedElement.widgetSettings?.dashboardType || 'metrics'}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    dashboardType: e.target.value 
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                                >
+                                  <option value="metrics">Metrics Overview</option>
+                                  <option value="analytics">Analytics</option>
+                                  <option value="kpi">KPI Dashboard</option>
+                                  <option value="custom">Custom Widgets</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
+                                <input
+                                  type="text"
+                                  value={selectedElement.widgetSettings?.dataUrl || ''}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    dataUrl: e.target.value 
+                                  })}
+                                  placeholder="API Endpoint URL"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-600 mb-2 block font-medium">Refresh Rate (seconds)</label>
+                                <input
+                                  type="number"
+                                  value={selectedElement.widgetSettings?.refreshRate || 30}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    refreshRate: Number(e.target.value) 
+                                  })}
+                                  min={5}
+                                  max={3600}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                <input 
+                                  type="checkbox" 
+                                  id="modify-dashboard-autoRefresh" 
+                                  className="rounded"
+                                  checked={selectedElement.widgetSettings?.autoRefresh ?? true}
+                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
+                                    ...selectedElement.widgetSettings, 
+                                    autoRefresh: e.target.checked 
+                                  })}
+                                />
+                                <label htmlFor="modify-dashboard-autoRefresh" className="text-xs text-gray-600">Auto-refresh data</label>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* HTML Embed Properties */}
+                      {selectedElement.type === ElementType.HTML && (
+                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                            <FileText size={14} />
+                            HTML Code
+                          </h4>
+                          
+                          <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">HTML Content</label>
+                            <textarea
+                              value={selectedElement.content}
+                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                              onBlur={() => updateHistory(elements)}
+                              placeholder="<div>Your HTML here</div>"
+                              className="w-full h-48 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">Enter HTML code. JavaScript is sandboxed for security.</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Layer Actions */}
                       <div className="space-y-2 pt-4 border-t border-gray-200">
                         <button 
@@ -2137,6 +3616,147 @@ const Editor: React.FC = () => {
                     </>
                   )}
                 </div>
+              ) : activeRightTab === 'animation' ? (
+                <div className="space-y-4">
+                  {/* Featured Animations */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                      <Sparkles size={14} />
+                      Featured
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Shake Zoom', 'Whip Slide', 'Old TV', 'Chroma Wave'].map((anim) => (
+                        <button
+                          key={anim}
+                          onClick={() => {
+                            setSelectedAnimation(anim);
+                            if (selectedElement) {
+                              updateSelectedElement('animation', anim);
+                            }
+                          }}
+                          className={`px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedElement?.animation === anim
+                              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {anim}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reveal Animations */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                      <Eye size={14} />
+                      Reveal
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Brush', 'Ink', 'Digital', 'Spray Paint', 'Sketch', 'Gradient'].map((anim) => (
+                        <button
+                          key={anim}
+                          onClick={() => {
+                            setSelectedAnimation(anim);
+                            if (selectedElement) {
+                              updateSelectedElement('animation', anim);
+                            }
+                          }}
+                          className={`px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedElement?.animation === anim
+                              ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {anim}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* General Animations */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                      <Zap size={14} />
+                      General
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Rise', 'Pan', 'Fade', 'Pop', 'Wipe', 'Blur', 'Succession', 'Breathe', 'Baseline', 'Drift', 'Tectonic', 'Tumble', 'Neon', 'Scrapbook', 'Stomp'].map((anim) => (
+                        <button
+                          key={anim}
+                          onClick={() => {
+                            setSelectedAnimation(anim);
+                            if (selectedElement) {
+                              updateSelectedElement('animation', anim);
+                            }
+                          }}
+                          className={`px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedElement?.animation === anim
+                              ? 'bg-gradient-to-r from-green-600 to-teal-600 text-white shadow-lg'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {anim}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add-on Effects */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                      <Star size={14} />
+                      Add-on Effects
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Rotate', 'Flicker', 'Pulse', 'Wiggle'].map((anim) => (
+                        <button
+                          key={anim}
+                          onClick={() => {
+                            setSelectedAnimation(anim);
+                            if (selectedElement) {
+                              updateSelectedElement('animation', anim);
+                            }
+                          }}
+                          className={`px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                            selectedElement?.animation === anim
+                              ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {anim}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Animation Info */}
+                  {selectedElement && (
+                    <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                      <p className="text-xs text-gray-600 mb-2 font-medium">Selected Animation:</p>
+                      <p className="text-sm font-bold text-gray-800">
+                        {selectedElement.animation || 'None'}
+                      </p>
+                      {selectedElement.animation && (
+                        <button
+                          onClick={() => {
+                            setSelectedAnimation(null);
+                            updateSelectedElement('animation', undefined);
+                          }}
+                          className="mt-3 w-full px-3 py-2 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all border border-gray-200"
+                        >
+                          Remove Animation
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {!selectedElement && (
+                    <div className="text-center text-gray-400 text-sm py-8">
+                      Select an element to apply animations
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -2146,28 +3766,64 @@ const Editor: React.FC = () => {
                   {[...elements].reverse().map((el, i) => (
                     <div 
                       key={el.id} 
-                      onClick={() => {
-                        setSelectedId(el.id);
+                      onClick={(e) => {
+                        // Multi-selection with Ctrl/Cmd key
+                        if (e.ctrlKey || e.metaKey) {
+                          if (selectedIds.includes(el.id)) {
+                            setSelectedIds(selectedIds.filter(id => id !== el.id));
+                          } else {
+                            setSelectedIds([...selectedIds, el.id]);
+                          }
+                        } else {
+                          setSelectedIds([el.id]);
+                        }
                         setRightSidebarOpen(true);
                       }}
                       className={`p-3 rounded-xl flex items-center gap-3 cursor-pointer transition-all ${
-                        selectedId === el.id 
+                        selectedIds.includes(el.id)
                           ? 'bg-slate-900 text-white shadow-lg' 
                           : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                       }`}
                     >
-                      <div className={selectedId === el.id ? 'text-white' : 'text-gray-400'}>
+                      <div className={selectedIds.includes(el.id) ? 'text-white' : 'text-gray-400'}>
                         {el.type === ElementType.TEXT && <Type size={16} />}
                         {el.type === ElementType.IMAGE && <ImageIcon size={16} />}
-                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(el.type) && <Shapes size={16} />}
+                        {el.type === ElementType.VIDEO && <Video size={16} />}
+                        {el.type === ElementType.SLIDESHOW && <Layout size={16} />}
+                        {el.type === ElementType.TICKER && <Type size={16} />}
+                        {el.type === ElementType.RSS && <FileText size={16} />}
+                        {el.type === ElementType.WEATHER && <CloudSun size={16} />}
+                        {el.type === ElementType.GIF && <Image size={16} />}
+                        {el.type === ElementType.MEDIA_RSS && <FileText size={16} />}
+                        {el.type === ElementType.YOUTUBE && <Video size={16} />}
+                        {el.type === ElementType.USTREAM && <Video size={16} />}
+                        {el.type === ElementType.FTP && <FileText size={16} />}
+                        {el.type === ElementType.INSTAGRAM && <Image size={16} />}
+                        {el.type === ElementType.STREAMING && <Video size={16} />}
+                        {el.type === ElementType.LABEL && <Type size={16} />}
+                        {el.type === ElementType.CLOCK && <Clock size={16} />}
+                        {el.type === ElementType.TIMER && <Clock size={16} />}
+                        {el.type === ElementType.TOUCH && <MousePointer2 size={16} />}
+                        {el.type === ElementType.WEATHER_2 && <CloudSun size={16} />}
+                        {el.type === ElementType.AD_SERVING && <ImageIcon size={16} />}
+                        {el.type === ElementType.CALENDAR && <Grid3x3 size={16} />}
+                        {el.type === ElementType.DASHBOARDS && <Layout size={16} />}
+                        {el.type === ElementType.TABLE && <Grid3x3 size={16} />}
+                        {el.type === ElementType.SMART_SWITCH && <Settings size={16} />}
+                        {el.type === ElementType.WEB_IMAGE && <ImageIcon size={16} />}
+                        {el.type === ElementType.WEB_VIDEO && <Video size={16} />}
+                        {el.type === ElementType.SUB_CREATIVE && <Layout size={16} />}
+                        {el.type === ElementType.EMBED && <Layout size={16} />}
+                        {el.type === ElementType.HTML && <FileText size={16} />}
+                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type) && <Shapes size={16} />}
                       </div>
-                      <span className={`text-sm flex-1 font-medium ${selectedId === el.id ? 'text-white' : 'text-gray-700'}`}>
+                      <span className={`text-sm flex-1 font-medium ${selectedIds.includes(el.id) ? 'text-white' : 'text-gray-700'}`}>
                         {el.type.charAt(0).toUpperCase() + el.type.slice(1)} {elements.length - i}
                       </span>
                       {el.locked && (
-                        <Lock size={14} className={selectedId === el.id ? 'text-white/80' : 'text-gray-400'} />
+                        <Lock size={14} className={selectedIds.includes(el.id) ? 'text-white/80' : 'text-gray-400'} />
                       )}
-                      <span className={`text-xs ${selectedId === el.id ? 'text-white/80' : 'text-gray-400'}`}>z:{el.zIndex}</span>
+                      <span className={`text-xs ${selectedIds.includes(el.id) ? 'text-white/80' : 'text-gray-400'}`}>z:{el.zIndex}</span>
                     </div>
                   ))}
                   {elements.length === 0 && (

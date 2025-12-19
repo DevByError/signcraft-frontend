@@ -21,7 +21,7 @@ import {
   DocumentData,
   QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { db, auth } from './firebaseService';
+import { db } from './firebaseService';
 import {
   ResponsiveDesignDocument,
   SaveDesignResponse,
@@ -41,14 +41,14 @@ const DEFAULT_USER_ID = 'local_user';
 const DEFAULT_USER_EMAIL = 'local@signcraft.dev';
 
 /**
- * Get current user (with fallback for local development)
+ * Get current user (always uses guest user - no authentication)
  */
 const getCurrentUser = () => {
-  const authUser = auth?.currentUser;
+  // Always use default user (no authentication)
   return {
-    uid: authUser?.uid || DEFAULT_USER_ID,
-    email: authUser?.email || DEFAULT_USER_EMAIL,
-    isAuthenticated: !!authUser,
+    uid: DEFAULT_USER_ID,
+    email: DEFAULT_USER_EMAIL,
+    isAuthenticated: false,
   };
 };
 

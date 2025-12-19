@@ -35,7 +35,73 @@ interface CanvasElement {
     lineHeight: number;
   };
   borderRadius?: number;
+  animation?: string;
+  widgetSettings?: any;
 }
+
+// Animation helper function
+const getAnimationClass = (animation?: string) => {
+  if (!animation) return '';
+  
+  const animationMap: Record<string, string> = {
+    // Featured
+    'Shake Zoom': 'animate-shake-zoom',
+    'Whip Slide': 'animate-whip-slide',
+    'Old TV': 'animate-old-tv',
+    'Chroma Wave': 'animate-chroma-wave',
+    // Reveal
+    'Brush': 'animate-brush',
+    'Ink': 'animate-ink',
+    'Digital': 'animate-digital',
+    'Spray Paint': 'animate-spray-paint',
+    'Sketch': 'animate-sketch',
+    'Gradient': 'animate-gradient',
+    // General
+    'Rise': 'animate-rise',
+    'Pan': 'animate-pan',
+    'Fade': 'animate-fade',
+    'Pop': 'animate-pop',
+    'Wipe': 'animate-wipe',
+    'Blur': 'animate-blur',
+    'Succession': 'animate-succession',
+    'Breathe': 'animate-breathe',
+    'Baseline': 'animate-baseline',
+    'Drift': 'animate-drift',
+    'Tectonic': 'animate-tectonic',
+    'Tumble': 'animate-tumble',
+    'Neon': 'animate-neon',
+    'Scrapbook': 'animate-scrapbook',
+    'Stomp': 'animate-stomp',
+    // Add-on Effects
+    'Rotate': 'animate-rotate-effect',
+    'Flicker': 'animate-flicker',
+    'Pulse': 'animate-pulse-effect',
+    'Wiggle': 'animate-wiggle-effect',
+  };
+  
+  return animationMap[animation] || '';
+}
+
+// YouTube URL to embed URL converter
+const getYouTubeEmbedUrl = (url: string): string | null => {
+  if (!url) return null;
+  
+  // Extract video ID from various YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
+    /youtube\.com\/embed\/([^&\s]+)/,
+    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return `https://www.youtube.com/embed/${match[1]}`;
+    }
+  }
+  
+  return null;
+};
 
 const PlaylistPreview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -155,17 +221,23 @@ const PlaylistPreview: React.FC = () => {
       transform: `rotate(${element.rotation}deg)`,
       zIndex: element.zIndex ?? 1,
       visibility: element.visible === false ? 'hidden' : 'visible',
+      borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
+      overflow: 'hidden',
     };
+
+    const animationClass = getAnimationClass(element.animation);
 
     switch (element.type) {
       case 'text':
         return (
           <div
             key={element.id}
+            className={animationClass}
             style={{
               ...baseStyle,
               fontSize: `${element.fontSize}px`,
               color: element.color,
+              backgroundColor: element.backgroundColor,
               fontWeight: element.textStyle?.bold ? 'bold' : 'normal',
               fontStyle: element.textStyle?.italic ? 'italic' : 'normal',
               textDecoration: element.textStyle?.underline ? 'underline' : 'none',
@@ -180,10 +252,162 @@ const PlaylistPreview: React.FC = () => {
             {element.content}
           </div>
         );
-      case 'rectangle':
+      case 'html':
+        return (
+          <iframe
+            key={element.id}
+            srcDoc={element.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              border: 'none',
+            }}
+            sandbox="allow-scripts allow-same-origin"
+          />
+        );
+
+      case 'video':
+      case 'web-video':
+        return element.content && (element.content.startsWith('http') || element.content.startsWith('blob:')) ? (
+          <video 
+            key={element.id}
+            className={animationClass}
+            src={element.content}
+            style={{
+              ...baseStyle,
+              objectFit: 'cover',
+            }}
+            muted
+            loop
+            autoPlay
+          />
+        ) : null;
+
+      case 'gif':
+      case 'web-image':
+        return element.content && element.content.startsWith('http') ? (
+          <img
+            key={element.id}
+            className={animationClass}
+            src={element.content}
+            alt="Media"
+            style={{
+              ...baseStyle,
+              objectFit: 'cover',
+            }}
+          />
+        ) : null;
+
+      case 'instagram':
+        return element.widgetSettings?.embedCode ? (
+          <iframe
+            key={element.id}
+            srcDoc={element.widgetSettings.embedCode}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              border: 'none',
+            }}
+            sandbox="allow-scripts allow-same-origin"
+          />
+        ) : element.content && element.content.startsWith('http') ? (
+          <img
+            key={element.id}
+            className={animationClass}
+            src={element.content}
+            alt="Instagram"
+            style={{
+              ...baseStyle,
+              objectFit: 'cover',
+            }}
+          />
+        ) : null;
+
+      case 'ustream':
+      case 'streaming':
+        return element.content && element.content.startsWith('http') ? (
+          <iframe
+            key={element.id}
+            src={element.content}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              border: 'none',
+            }}
+            allow="autoplay; fullscreen"
+          />
+        ) : null;
+
+      case 'ticker':
         return (
           <div
             key={element.id}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: element.backgroundColor || '#1e293b',
+              color: element.color || '#ffffff',
+            }}
+          >
+            <div className="animate-marquee whitespace-nowrap" style={{ fontSize: element.fontSize }}>
+              {element.content}
+            </div>
+          </div>
+        );
+
+      case 'embed':
+        return element.widgetSettings?.embedCode ? (
+          <iframe
+            key={element.id}
+            srcDoc={element.widgetSettings.embedCode}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              border: 'none',
+            }}
+            sandbox="allow-scripts allow-same-origin"
+          />
+        ) : null;
+
+      case 'youtube':
+        const youtubeEmbedUrl = getYouTubeEmbedUrl(element.content);
+        return youtubeEmbedUrl ? (
+          <iframe
+            key={element.id}
+            className={animationClass}
+            src={youtubeEmbedUrl}
+            style={{
+              ...baseStyle,
+              border: 'none',
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <div
+            key={element.id}
+            className={animationClass}
+            style={{
+              ...baseStyle,
+              backgroundColor: '#000',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            YouTube
+          </div>
+        );
+      case 'rectangle':
+      case 'rect':
+        return (
+          <div
+            key={element.id}
+            className={animationClass}
             style={{
               ...baseStyle,
               backgroundColor: element.fillColor,
@@ -197,6 +421,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -216,6 +441,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -235,6 +461,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -254,6 +481,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -273,6 +501,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -292,6 +521,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -311,6 +541,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -330,6 +561,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -349,6 +581,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -368,6 +601,7 @@ const PlaylistPreview: React.FC = () => {
           <svg
             key={element.id}
             viewBox="0 0 100 100"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -384,6 +618,7 @@ const PlaylistPreview: React.FC = () => {
             key={element.id}
             viewBox="0 0 100 4"
             preserveAspectRatio="none"
+            className={animationClass}
             style={{
               ...baseStyle,
               overflow: 'visible',
@@ -395,6 +630,7 @@ const PlaylistPreview: React.FC = () => {
         return (
           <img
             key={element.id}
+            className={animationClass}
             src={element.content}
             alt="Design element"
             style={{

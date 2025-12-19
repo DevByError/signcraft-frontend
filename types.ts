@@ -12,11 +12,33 @@ export interface Template {
 }
 
 export enum ElementType {
-  // Text & Image
+  // Essential
   TEXT = 'TEXT',
   IMAGE = 'IMAGE',
+  SLIDESHOW = 'SLIDESHOW',
+  TICKER = 'TICKER',
+  RSS = 'RSS',
+  WEATHER = 'WEATHER',
   
-  // Primitive Shapes (NOT styles of rectangle!)
+  // Media
+  VIDEO = 'VIDEO',
+  GIF = 'GIF',
+  MEDIA_RSS = 'MEDIA_RSS',
+  YOUTUBE = 'YOUTUBE',
+  USTREAM = 'USTREAM',
+  FTP = 'FTP',
+  INSTAGRAM = 'INSTAGRAM',
+  STREAMING = 'STREAMING',
+  
+  // General
+  LABEL = 'LABEL',
+  CLOCK = 'CLOCK',
+  TIMER = 'TIMER',
+  SHAPE = 'SHAPE',
+  TOUCH = 'TOUCH',
+  WEATHER_2 = 'WEATHER_2',
+  
+  // Primitive Shapes
   RECT = 'RECT',
   CIRCLE = 'CIRCLE',
   TRIANGLE = 'TRIANGLE',
@@ -28,10 +50,18 @@ export enum ElementType {
   OCTAGON = 'OCTAGON',
   LINE = 'LINE',
   
-  // Placeholder for future
-  VIDEO = 'VIDEO',
-  CLOCK = 'CLOCK',
-  WEATHER = 'WEATHER',
+  // Advanced
+  AD_SERVING = 'AD_SERVING',
+  CALENDAR = 'CALENDAR',
+  DASHBOARDS = 'DASHBOARDS',
+  TABLE = 'TABLE',
+  SMART_SWITCH = 'SMART_SWITCH',
+  
+  // Embed
+  WEB_IMAGE = 'WEB_IMAGE',
+  WEB_VIDEO = 'WEB_VIDEO',
+  SUB_CREATIVE = 'SUB_CREATIVE',
+  EMBED = 'EMBED',
 }
 
 export interface TextStyle {
@@ -50,6 +80,77 @@ export interface Shadow {
   blur: number; // In pixels, required
   color: string; // Hex format (#RRGGBBAA), required
   opacity: number; // 0-1, required
+}
+
+export interface WidgetSettings {
+  // Video/YouTube/Streaming settings
+  autoplay?: boolean;
+  loop?: boolean;
+  videoUrl?: string;
+  
+  // Slideshow settings
+  transitionDuration?: number; // seconds
+  transitionEffect?: 'fade' | 'slide' | 'zoom' | 'flip';
+  
+  // Ticker settings
+  scrollSpeed?: 'slow' | 'medium' | 'fast';
+  
+  // RSS settings
+  feedUrl?: string;
+  updateInterval?: number; // minutes
+  maxItems?: number;
+  
+  // Weather settings
+  location?: string;
+  temperatureUnit?: 'F' | 'C';
+  apiKey?: string;
+  
+  // Clock settings
+  timeFormat?: '12' | '24';
+  timezone?: string;
+  
+  // Timer settings
+  countdownTo?: string; // ISO datetime
+  displayFormat?: 'HH:MM:SS' | 'DD:HH:MM:SS' | 'Days, Hours, Minutes';
+  
+  // Calendar settings
+  calendarSource?: 'google' | 'outlook' | 'ical';
+  calendarUrl?: string;
+  viewMode?: 'monthly' | 'weekly' | 'agenda';
+  
+  // Table settings
+  rows?: number;
+  columns?: number;
+  dataSource?: 'manual' | 'csv' | 'sheets' | 'api';
+  dataUrl?: string;
+  
+  // Dashboard settings
+  refreshRate?: number; // seconds
+  
+  // Instagram settings
+  username?: string;
+  displayMode?: 'grid' | 'carousel' | 'single';
+  
+  // Touch settings
+  actionType?: 'url' | 'show' | 'hide' | 'play' | 'custom';
+  targetAction?: string;
+  
+  // Smart Switch settings
+  switchCondition?: 'time' | 'day' | 'weather' | 'custom';
+  contentA?: string;
+  contentB?: string;
+  
+  // Ad Serving settings
+  adNetwork?: string;
+  adUnitId?: string;
+  
+  // FTP settings
+  ftpServer?: string;
+  ftpUsername?: string;
+  ftpPassword?: string;
+  
+  // Embed settings
+  embedCode?: string;
 }
 
 export interface CanvasElement {
@@ -80,6 +181,9 @@ export interface CanvasElement {
   // Text styling
   fontSize?: number; // In pixels
   textStyle?: TextStyle;
+  
+  // Widget-specific settings
+  widgetSettings?: WidgetSettings;
   
   // Effects
   shadow?: Shadow;

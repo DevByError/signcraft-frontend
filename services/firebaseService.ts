@@ -1,7 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -50,7 +49,7 @@ try {
 }
 
 // Export Firebase services for use throughout the app
-export const auth = getAuth(firebaseApp);
+// Note: Authentication is disabled - using guest user mode
 export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
 
