@@ -180,6 +180,22 @@ const ANIMATION_DEFINITIONS: Record<AnimationType, (element: HTMLElement | any) 
     from: { rotationY: 0, opacity: 1 },
     to: { rotationY: 90, opacity: 0 },
   }),
+  flipInX: () => ({
+    from: { rotationX: 90, opacity: 0 },
+    to: { rotationX: 0, opacity: 1 },
+  }),
+  flipOutX: () => ({
+    from: { rotationX: 0, opacity: 1 },
+    to: { rotationX: 90, opacity: 0 },
+  }),
+  flipInY: () => ({
+    from: { rotationY: 90, opacity: 0 },
+    to: { rotationY: 0, opacity: 1 },
+  }),
+  flipOutY: () => ({
+    from: { rotationY: 0, opacity: 1 },
+    to: { rotationY: 90, opacity: 0 },
+  }),
 
   // Advanced - Zoom
   zoomIn: () => ({

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Type, ImageIcon, Square, Video, Clock, CloudSun,
-  ChevronRight, ChevronDown, Search, ArrowLeft,
+  ChevronRight, ChevronDown, ChevronUp, Search, ArrowLeft,
   Copy, Trash2, Undo, Redo, Save,
   AlignCenter, AlignLeft, AlignRight,
   Circle, Download, Eye, EyeOff,
@@ -14,7 +14,13 @@ import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignMo
 import { useDesignSave } from '../hooks/useDesignSave';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
 import { getDesignById, updateDesignInFirestore } from '../services/designService';
+import TimelineCapCut from '../components/TimelineCapCut';
+import { useTimeline } from '../hooks/useTimeline';
+import * as timelineService from '../services/timelineService';
+import * as propertyPlaybackService from '../services/propertyPlaybackService';
+import type { CanvasElement as SharedCanvasElement } from '../types';
 
+// Editor's extended ElementType enum
 enum ElementType {
   // Essential
   TEXT = 'text',
@@ -27,7 +33,7 @@ enum ElementType {
   // Media
   VIDEO = 'video',
   GIF = 'gif',
-  MEDIA_RSS = 'media-rss',
+  MEDIA_RSS = 'media_rss',
   YOUTUBE = 'youtube',
   USTREAM = 'ustream',
   FTP = 'ftp',
@@ -40,38 +46,41 @@ enum ElementType {
   TIMER = 'timer',
   SHAPE = 'shape',
   TOUCH = 'touch',
-  WEATHER_2 = 'weather-2',
+  WEATHER_2 = 'weather_2',
   
-  // Shapes (for backward compatibility)
+  // Primitive Shapes
   RECT = 'rect',
   CIRCLE = 'circle',
   TRIANGLE = 'triangle',
   STAR = 'star',
   HEART = 'heart',
-  LINE = 'line',
+  DIAMOND = 'diamond',
   PENTAGON = 'pentagon',
   HEXAGON = 'hexagon',
   OCTAGON = 'octagon',
-  DIAMOND = 'diamond',
+  LINE = 'line',
+  
+  // Extended shapes (Editor-specific)
   TRAPEZOID = 'trapezoid',
   CRESCENT = 'crescent',
   CROSS = 'cross',
   
   // Advanced
-  AD_SERVING = 'ad-serving',
+  AD_SERVING = 'ad_serving',
   CALENDAR = 'calendar',
   DASHBOARDS = 'dashboards',
   TABLE = 'table',
-  SMART_SWITCH = 'smart-switch',
+  SMART_SWITCH = 'smart_switch',
   
   // Embed
-  WEB_IMAGE = 'web-image',
-  WEB_VIDEO = 'web-video',
-  SUB_CREATIVE = 'sub-creative',
+  WEB_IMAGE = 'web_image',
+  WEB_VIDEO = 'web_video',
+  SUB_CREATIVE = 'sub_creative',
   EMBED = 'embed',
   HTML = 'html',
 }
 
+// Editor's extended CanvasElement interface
 interface CanvasElement {
   id: string;
   type: ElementType;
@@ -93,35 +102,140 @@ interface CanvasElement {
   locked: boolean;
   visible: boolean;
   animation?: string;
-  widgetSettings?: any;
+  animationDuration?: number;
+  animationSpeed?: number;
+  widgetSettings?: {
+    // General
+    autoplay?: boolean;
+    loop?: boolean;
+    mute?: boolean;
+    controls?: boolean;
+    volume?: number;
+    playbackSpeed?: number;
+    fitMode?: string;
+    videoUrl?: string;
+    embedCode?: string;
+    
+    // Slideshow
+    transitionDuration?: number;
+    transitionEffect?: string;
+    
+    // Ticker/RSS
+    scrollSpeed?: string;
+    updateInterval?: number;
+    maxItems?: number;
+    displayMode?: string;
+    
+    // Weather
+    temperature?: number;
+    condition?: string;
+    location?: string;
+    temperatureUnit?: string;
+    apiKey?: string;
+    
+    // Clock/Timer
+    timeFormat?: string;
+    timezone?: string;
+    showSeconds?: boolean;
+    showDate?: boolean;
+    showIcon?: boolean;
+    displayStyle?: string;
+    timerType?: string;
+    countdownTo?: string;
+    displayFormat?: string;
+    labelText?: string;
+    autoStart?: boolean;
+    
+    // Direction/Animation
+    direction?: string;
+    pauseOnHover?: boolean;
+    showImages?: boolean;
+    
+    // Calendar
+    calendarSource?: string;
+    calendarUrl?: string;
+    viewMode?: string;
+    colorScheme?: string;
+    showWeekends?: boolean;
+    
+    // Table
+    rows?: number;
+    columns?: number;
+    dataSource?: string;
+    dataUrl?: string;
+    tableStyle?: string;
+    showHeader?: boolean;
+    sortable?: boolean;
+    
+    // Dashboard
+    dashboardType?: string;
+    refreshRate?: number;
+    layout?: string;
+    showCharts?: boolean;
+    autoRefresh?: boolean;
+    
+    // Smart Switch
+    switchCondition?: string;
+    contentA?: string;
+    contentB?: string;
+    
+    // Ad Serving
+    adNetwork?: string;
+    adUnitId?: string;
+    
+    // FTP
+    ftpServer?: string;
+    ftpUsername?: string;
+    ftpPassword?: string;
+    
+    // Instagram/Social
+    username?: string;
+    
+    // Touch/Interactive
+    actionType?: string;
+    targetAction?: string;
+  };
+  shadow?: {
+    offsetX: number;
+    offsetY: number;
+    blur: number;
+    color: string;
+    opacity: number;
+  };
+  radius?: number;
   textStyle?: {
     bold: boolean;
     italic: boolean;
     underline: boolean;
-    textAlign: 'left' | 'center' | 'right';
+    textAlign: 'left' | 'center' | 'right' | 'justify';
     fontFamily: string;
     letterSpacing: number;
     lineHeight: number;
   };
 }
 
+// Templates
 const TEMPLATES = [
-  { name: 'Instagram Post', width: 1080, height: 1080, icon: <Grid3x3 size={16} /> },
-  { name: 'Instagram Story', width: 1080, height: 1920, icon: <Layout size={16} /> },
-  { name: 'YouTube Thumbnail', width: 1280, height: 720, icon: <Maximize2 size={16} /> },
-  { name: 'Facebook Cover', width: 1640, height: 924, icon: <Layout size={16} /> },
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
   { name: 'Android Phone (Portrait)', width: 1080, height: 1920, icon: <Layout size={16} /> },
   { name: 'Android Phone (Landscape)', width: 1920, height: 1080, icon: <RectangleHorizontal size={16} /> },
-  { name: 'Android Tablet (Portrait)', width: 1200, height: 1920, icon: <Layout size={16} /> },
-  { name: 'Android Tablet (Landscape)', width: 1920, height: 1200, icon: <Maximize2 size={16} /> },
 ];
 
+// Unit conversion constants (to pixels)
+const UNIT_TO_PX = {
+  px: 1,
+  mm: 3.779527559,      // 96 DPI / 25.4 mm per inch
+  cm: 37.79527559,      // 96 DPI / 2.54 cm per inch
+  m: 3779.527559,       // 96 DPI / 0.0254 m per inch
+  in: 96,               // 96 DPI
+  ft: 1152,             // 96 DPI * 12 inches
+} as const;
+
 const WIDGET_CATEGORIES = [
-  { 
-    id: 'essential', 
-    label: '🔹 Essential', 
-    icon: <Sparkles size={18} />,
+  {
+    id: 'essential',
+    label: '🔹 Essential',
+    icon: <Type size={18} />,
     items: [
       { type: ElementType.TEXT, label: 'Text', icon: <Type size={18} /> },
       { type: ElementType.IMAGE, label: 'Image', icon: <ImageIcon size={18} /> },
@@ -244,6 +358,7 @@ const Editor: React.FC = () => {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [selectedPalette, setSelectedPalette] = useState<keyof typeof COLOR_PALETTES>('Navy & Ivory');
   const [canvasSize, setCanvasSize] = useState({ width: 1280, height: 720 });
+  const [canvasSizeUnit, setCanvasSizeUnit] = useState<'px' | 'mm' | 'cm' | 'm' | 'in' | 'ft'>('px');
   const [canvasColor, setCanvasColor] = useState('#FDFBF7');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSizeModal, setShowSizeModal] = useState(!designId); // Show size modal for new designs
@@ -287,9 +402,44 @@ const Editor: React.FC = () => {
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Timeline state (always visible like CapCut)
+  const [showTimeline, setShowTimeline] = useState(true);
+  const [timelineHeight, setTimelineHeight] = useState(350);
+  
+  // Initialize timeline hook
+  const {
+    timeline,
+    selectedItems,
+    canUndo: canUndoTimeline,
+    canRedo: canRedoTimeline,
+    updateTimeline,
+    undo: undoTimeline,
+    redo: redoTimeline,
+    addElementToTimeline,
+    removeElementFromTimeline,
+    play,
+    pause,
+    stop,
+    seek,
+    selectItem,
+    syncElementsToTimeline,
+    updateItem,
+    removeItem,
+    duplicateItem: duplicateTimelineItem,
+    exportTimeline,
+  } = useTimeline({
+    designId: designId || 'editor-design',
+    elements: elements as any, // Cast to avoid type mismatch with Editor's extended CanvasElement
+    autoSave: false,
+  });
+
   const toggleSection = (id: string) => {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  // Unit conversion helper functions
+  const convertToPx = (value: number, unit: typeof canvasSizeUnit) => value * UNIT_TO_PX[unit as keyof typeof UNIT_TO_PX];
+  const convertFromPx = (value: number, unit: typeof canvasSizeUnit) => value / UNIT_TO_PX[unit as keyof typeof UNIT_TO_PX];
 
   // Auto-fit canvas to viewport
   useEffect(() => {
@@ -332,6 +482,7 @@ const Editor: React.FC = () => {
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
       setElements(history[newIndex]);
+      // Timeline will auto-sync via useEffect when elements change
     }
   };
 
@@ -340,6 +491,7 @@ const Editor: React.FC = () => {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
       setElements(history[newIndex]);
+      // Timeline will auto-sync via useEffect when elements change
     }
   };
 
@@ -529,6 +681,9 @@ const Editor: React.FC = () => {
       zIndex: elements.length + 1,
       visible: true,
       locked: false,
+      animation: undefined,
+      animationDuration: 1, // Default duration in seconds
+      animationSpeed: 1, // Default speed multiplier
       widgetSettings: initWidgetSettings(),
       textStyle: isTextBased || type === ElementType.CLOCK || type === ElementType.TIMER ? {
         textAlign: 'center',
@@ -545,6 +700,9 @@ const Editor: React.FC = () => {
     updateHistory(newElements);
     setSelectedIds([newElement.id]);
     setNewElementIds(prev => new Set([...prev, newElement.id]));
+    
+    // Timeline will auto-sync the new element via useEffect
+    
     // Remove from new elements set after animation completes
     setTimeout(() => {
       setNewElementIds(prev => {
@@ -876,6 +1034,48 @@ const Editor: React.FC = () => {
   const handleMouseUp = () => {
     if (dragInfo || resizing) {
       updateHistory(elements);
+      
+      // Update timeline items for moved/resized elements
+      if (dragInfo) {
+        const movedElements = elements.filter(el => dragInfo.initialPositions.has(el.id));
+        movedElements.forEach(el => {
+          const timelineItems = timeline.tracks
+            .flatMap(t => t.items)
+            .filter(item => item.elementId === el.id);
+          
+          timelineItems.forEach(item => {
+            updateItem(item.id, {
+              properties: {
+                ...item.properties,
+                x: el.x,
+                y: el.y
+              }
+            });
+          });
+        });
+      }
+      
+      if (resizing) {
+        const el = elements.find(e => e.id === resizing.id);
+        if (el) {
+          const timelineItems = timeline.tracks
+            .flatMap(t => t.items)
+            .filter(item => item.elementId === el.id);
+          
+          timelineItems.forEach(item => {
+            updateItem(item.id, {
+              properties: {
+                ...item.properties,
+                x: el.x,
+                y: el.y,
+                width: el.width,
+                height: el.height
+              }
+            });
+          });
+        }
+      }
+      
       setDragInfo(null);
       setResizing(null);
     }
@@ -911,11 +1111,23 @@ const Editor: React.FC = () => {
       if (unlockedIds.length === 0) return;
       
       const newElements = elements.filter(el => !unlockedIds.includes(el.id));
+      
+      // Remove from timeline as well
+      unlockedIds.forEach(id => {
+        removeElementFromTimeline(id);
+      });
+      
       setElements(newElements);
       updateHistory(newElements);
       setSelectedIds([]);
     } else {
       const newElements = elements.filter(el => !selectedIds.includes(el.id));
+      
+      // Remove from timeline as well
+      selectedIds.forEach(id => {
+        removeElementFromTimeline(id);
+      });
+      
       setElements(newElements);
       updateHistory(newElements);
       setSelectedIds([]);
@@ -946,6 +1158,8 @@ const Editor: React.FC = () => {
     updateHistory(newElements);
     setSelectedIds(newIds);
     setRightSidebarOpen(true);
+    
+    // Timeline will auto-sync via useEffect
   };
 
   const updateSelectedElement = (key: keyof CanvasElement, value: any) => {
@@ -957,6 +1171,23 @@ const Editor: React.FC = () => {
       return el;
     });
     setElements(newElements);
+    
+    // Update timeline item properties for position, size, rotation, opacity, color
+    const visualProps = ['x', 'y', 'width', 'height', 'rotation', 'opacity', 'zIndex', 'color', 'backgroundColor', 'fillColor', 'fontSize'];
+    if (visualProps.includes(key as string)) {
+      const timelineItems = timeline.tracks
+        .flatMap(t => t.items)
+        .filter(item => item.elementId === selectedId);
+      
+      timelineItems.forEach(item => {
+        updateItem(item.id, {
+          properties: {
+            ...item.properties,
+            [key]: value
+          }
+        });
+      });
+    }
   };
 
   const updateSelectedElementImmediate = (key: keyof CanvasElement, value: any) => {
@@ -984,12 +1215,62 @@ const Editor: React.FC = () => {
     if (!selectedId) return;
     const maxZ = Math.max(...elements.map(e => e.zIndex || 0));
     updateSelectedElementImmediate('zIndex', maxZ + 1);
+    
+    // Update timeline item layer
+    const timelineItems = timeline.tracks
+      .flatMap(t => t.items)
+      .filter(item => item.elementId === selectedId);
+    
+    timelineItems.forEach(item => {
+      updateItem(item.id, { layer: maxZ + 1 });
+    });
   };
 
   const sendToBack = () => {
     if (!selectedId) return;
     const minZ = Math.min(...elements.map(e => e.zIndex || 0));
     updateSelectedElementImmediate('zIndex', minZ - 1);
+    
+    // Update timeline item layer
+    const timelineItems = timeline.tracks
+      .flatMap(t => t.items)
+      .filter(item => item.elementId === selectedId);
+    
+    timelineItems.forEach(item => {
+      updateItem(item.id, { layer: minZ - 1 });
+    });
+  };
+
+  const moveLayerForward = () => {
+    if (!selectedId) return;
+    const element = elements.find(el => el.id === selectedId);
+    if (!element) return;
+    updateSelectedElementImmediate('zIndex', element.zIndex + 1);
+    
+    // Update timeline item layer
+    const timelineItems = timeline.tracks
+      .flatMap(t => t.items)
+      .filter(item => item.elementId === selectedId);
+    
+    timelineItems.forEach(item => {
+      updateItem(item.id, { layer: element.zIndex + 1 });
+    });
+  };
+
+  const moveLayerBackward = () => {
+    if (!selectedId) return;
+    const element = elements.find(el => el.id === selectedId);
+    if (!element) return;
+    updateSelectedElementImmediate('zIndex', element.zIndex - 1);
+    
+    // Update timeline item layer
+    const timelineItems = timeline.tracks
+      .flatMap(t => t.items)
+      .filter(item => item.elementId === selectedId);
+    
+    timelineItems.forEach(item => {
+      updateItem(item.id, { layer: element.zIndex - 1 });
+    });
   };
 
   const alignElements = (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
@@ -1026,7 +1307,7 @@ const Editor: React.FC = () => {
     ];
     
     if (element && editableTypes.includes(element.type)) {
-      setSelectedId(id);
+      setSelectedIds([id]);
       setEditingTextId(id);
       setEditingText(element.content);
       setTimeout(() => textInputRef.current?.focus(), 0);
@@ -1087,6 +1368,7 @@ const Editor: React.FC = () => {
           elements: elementsWithDefaults,
           totalElements: elementsWithDefaults.length,
           version: '1.0.0',
+          timeline: exportTimeline(), // Include timeline state
         },
       };
 
@@ -1173,6 +1455,7 @@ const Editor: React.FC = () => {
         elements: elementsWithDefaults,
         totalElements: elementsWithDefaults.length,
         version: '1.0',
+        timeline: exportTimeline(), // Include timeline state
       },
     };
     downloadDesignAsJSON(exportData, `${designTitle}-${Date.now()}.json`);
@@ -1419,7 +1702,7 @@ const Editor: React.FC = () => {
 
       // Restore user state
       setZoom(previousZoom);
-      setSelectedId(previousSelectedId);
+      setSelectedIds(previousSelectedId ? [previousSelectedId] : []);
 
     } catch (error) {
       console.error('Export failed:', error);
@@ -1461,6 +1744,8 @@ const Editor: React.FC = () => {
     updateHistory(newElements);
     setCanvasSize({ width: template.width, height: template.height });
     setShowTemplateModal(false);
+    
+    // Timeline will auto-sync all elements via useEffect
   };
 
   // Load design from Firebase if designId is provided
@@ -1477,7 +1762,7 @@ const Editor: React.FC = () => {
             setCanvasColor(design.metadata.canvasColor);
             
             // Map the design elements to CanvasElement format
-            const loadedElements = design.designJSON.elements.map(el => ({
+            const loadedElements = design.designJSON.elements.map((el: any) => ({
               id: el.id,
               type: el.type as ElementType,
               content: el.content,
@@ -1500,6 +1785,8 @@ const Editor: React.FC = () => {
               textStyle: el.textStyle,
               widgetSettings: el.widgetSettings,
               animation: el.animation,
+              animationDuration: el.animationDuration,
+              animationSpeed: el.animationSpeed,
               shadow: el.shadow,
               radius: el.radius,
             } as CanvasElement));
@@ -1516,9 +1803,105 @@ const Editor: React.FC = () => {
     }
   }, [designId]);
 
+  // Timeline: Sync elements to timeline when they change
+  useEffect(() => {
+    if (elements.length > 0) {
+      // Ensure all elements are in timeline
+      const timelineElementIds = new Set(
+        timeline.tracks.flatMap(t => t.items).map(item => item.elementId)
+      );
+      const hasUnsynced = elements.some(el => !timelineElementIds.has(el.id));
+      
+      if (hasUnsynced || timeline.tracks.flatMap(t => t.items).length === 0) {
+        syncElementsToTimeline();
+      }
+    }
+  }, [elements.length, elements.map(e => e.id).join(','), syncElementsToTimeline, timeline.tracks]);  // Sync when elements change
+
+  // Timeline: Sync canvas selection to timeline selection
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      // Find timeline items for selected elements
+      const timelineItems = timeline.tracks
+        .flatMap(t => t.items)
+        .filter(item => selectedIds.includes(item.elementId));
+      
+      if (timelineItems.length > 0) {
+        // Select the corresponding timeline items (without causing re-render)
+        timelineItems.forEach(item => selectItem(item.id));
+      }
+    }
+  }, [selectedIds.join(',')]); // Use string join to prevent array reference changes
+
+  // Timeline: Apply property playback - show/hide elements based on timeline position
+  useEffect(() => {
+    // Only apply if we have timeline items
+    const hasTimelineItems = timeline.tracks.some(t => t.items.length > 0);
+    
+    if (hasTimelineItems) {
+      // Apply timeline playback (hybrid mode handles visibility automatically)
+      const updatedElements = propertyPlaybackService.applyTimelineToElements(elements as any, timeline);
+      setElements(updatedElements as any);
+    } else if (elements.length > 0) {
+      // Ensure all elements are visible when no timeline items yet
+      const visibleElements = elements.map(el => ({ ...el, visible: true }));
+      setElements(visibleElements);
+    }
+  }, [timeline.currentTime, timeline.isPlaying, timeline.tracks.flatMap(t => t.items).length]);
+
+  // Timeline handlers
+  const handleTimelineItemSelect = (itemId: string) => {
+    selectItem(itemId);
+    const item = timeline.tracks
+      .flatMap(t => t.items)
+      .find(i => i.id === itemId);
+    if (item) {
+      setSelectedIds([item.elementId]);
+    }
+  };
+
+  const handleSplitItem = (itemId: string, splitTime: number) => {
+    try {
+      const updated = timelineService.splitItem(timeline, itemId, splitTime);
+      updateTimeline(updated);
+    } catch (error) {
+      console.error('Split failed:', error);
+    }
+  };
+
+  const handleArrangeSequential = () => {
+    const updated = timelineService.autoArrangeAll(timeline, 500);
+    updateTimeline(updated);
+  };
+
+  const handleTimelineResize = (e: React.MouseEvent) => {
+    const startY = e.clientY;
+    const startHeight = timelineHeight;
+
+    const handleMouseMove = (moveE: MouseEvent) => {
+      const deltaY = startY - moveE.clientY;
+      setTimelineHeight(Math.max(200, Math.min(600, startHeight + deltaY)));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingTextId) return;
+
+      // Don't handle keyboard shortcuts if user is typing in an input field
+      const target = e.target as HTMLElement;
+      const isTypingInInput = 
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.contentEditable === 'true');
 
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
@@ -1532,7 +1915,8 @@ const Editor: React.FC = () => {
             break;
         }
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Only delete element if not typing in input field
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTypingInInput) {
         if (selectedIds.length > 0) {
             e.preventDefault();
             deleteSelected();
@@ -1633,6 +2017,14 @@ const Editor: React.FC = () => {
             title="Snap to Grid"
           >
             <Grid3x3 size={18} />
+          </button>
+
+          <button 
+            onClick={() => setShowTimeline(!showTimeline)} 
+            className={`p-2 rounded-lg transition-all button-hover-scale ${showTimeline ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
+            title="Toggle Timeline"
+          >
+            <Clock size={18} />
           </button>
 
           <div className="w-px h-6 bg-gray-200 mx-2"></div>
@@ -1893,6 +2285,16 @@ const Editor: React.FC = () => {
                 maxHeight: '100%',
               }}
             >
+              {/* Timeline Position Indicator - CapCut Style */}
+              {showTimeline && timeline.currentTime > 0 && (
+                <div className="absolute top-4 left-4 z-50 bg-black/90 text-white px-4 py-2 rounded-lg font-mono text-sm backdrop-blur-sm shadow-2xl border border-white/20">
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} />
+                    <span>{(timeline.currentTime / 1000).toFixed(2)}s / {(timeline.totalDuration / 1000).toFixed(2)}s</span>
+                  </div>
+                </div>
+              )}
+
               {showGrid && (
                 <>
                   <div 
@@ -1925,7 +2327,15 @@ const Editor: React.FC = () => {
 
               {elements
                 .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-                .map(el => (
+                .map(el => {
+                  // Check if element is in timeline
+                  const isInTimeline = timeline.tracks.flatMap(t => t.items).some(item => item.elementId === el.id);
+                  const timelineItem = timeline.tracks.flatMap(t => t.items).find(item => item.elementId === el.id);
+                  const isActive = timelineItem ? 
+                    timeline.currentTime >= timelineItem.startTime && 
+                    timeline.currentTime < timelineItem.startTime + timelineItem.duration : false;
+                  
+                  return (
                   <div
                     key={el.id}
                     className={`absolute group select-none transition-all ${
@@ -1949,6 +2359,8 @@ const Editor: React.FC = () => {
                       transition: dragInfo?.initialPositions.has(el.id) ? 'none' : 'all 0.2s ease',
                       borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined,
                       overflow: 'hidden',
+                      animationDuration: el.animation && el.animationDuration ? `${el.animationDuration}s` : undefined,
+                      animationTimingFunction: el.animation && el.animationSpeed ? `cubic-bezier(${el.animationSpeed > 1 ? '0.5, 0, 0.5, 1' : '0.25, 0.1, 0.25, 1'})` : undefined,
                     }}
                     onMouseDown={(e) => handleMouseDown(e, el.id)}
                     onClick={(e) => e.stopPropagation()} 
@@ -2264,14 +2676,6 @@ const Editor: React.FC = () => {
                       <div className="w-full h-full bg-teal-50 border border-teal-300 p-3 flex items-center gap-2">
                         <div className="text-teal-800 text-sm">{el.content}</div>
                       </div>
-                    ) : el.type === ElementType.INSTAGRAM ? (
-                      <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center text-white font-bold text-xl">
-                        {el.content}
-                      </div>
-                    ) : el.type === ElementType.WEB_IMAGE ? (
-                      <div className="w-full h-full bg-gray-200 border border-gray-400 flex items-center justify-center text-gray-600">
-                        {el.content}
-                      </div>
                     ) : el.type === ElementType.SUB_CREATIVE ? (
                       <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
                         {el.content}
@@ -2321,8 +2725,23 @@ const Editor: React.FC = () => {
                         <Lock size={12} />
                       </div>
                     )}
+
+                    {/* Timeline Badge - CapCut Style with Partition Info */}
+                    {isInTimeline && showTimeline && (
+                      <div className={`absolute bottom-1 right-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${
+                        isActive 
+                          ? 'bg-green-500 text-white shadow-lg animate-pulse' 
+                          : 'bg-blue-500/90 text-white opacity-70 hover:opacity-100'
+                      }`}>
+                        <div className="flex items-center gap-1">
+                          <Clock size={10} />
+                          <span>{(timelineItem!.startTime / 1000).toFixed(1)}s - {((timelineItem!.startTime + timelineItem!.duration) / 1000).toFixed(1)}s</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
 
               {/* Multi-selection bounding box */}
               {selectedIds.length > 1 && (() => {
@@ -2457,25 +2876,54 @@ const Editor: React.FC = () => {
                           <Maximize2 size={14} />
                           Dimensions
                         </h4>
+                        
+                        {/* Unit Selector */}
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1.5 block font-medium">Unit</label>
+                          <select 
+                            value={canvasSizeUnit} 
+                            onChange={(e) => setCanvasSizeUnit(e.target.value as typeof canvasSizeUnit)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all bg-white"
+                          >
+                            <option value="px">Pixels (px)</option>
+                            <option value="mm">Millimeters (mm)</option>
+                            <option value="cm">Centimeters (cm)</option>
+                            <option value="m">Meters (m)</option>
+                            <option value="in">Inches (in)</option>
+                            <option value="ft">Feet (ft)</option>
+                          </select>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs text-gray-600 mb-1.5 block font-medium">Width (px)</label>
+                            <label className="text-xs text-gray-600 mb-1.5 block font-medium">Width ({canvasSizeUnit})</label>
                             <input 
                               type="number" 
-                              value={canvasSize.width} 
-                              onChange={(e) => setCanvasSize(prev => ({ ...prev, width: Number(e.target.value) }))}
+                              value={Math.round(convertFromPx(canvasSize.width, canvasSizeUnit) * 100) / 100} 
+                              onChange={(e) => {
+                                const pxValue = convertToPx(Number(e.target.value), canvasSizeUnit);
+                                setCanvasSize(prev => ({ ...prev, width: Math.round(pxValue) }));
+                              }}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
                           <div>
-                            <label className="text-xs text-gray-600 mb-1.5 block font-medium">Height (px)</label>
+                            <label className="text-xs text-gray-600 mb-1.5 block font-medium">Height ({canvasSizeUnit})</label>
                             <input 
                               type="number" 
-                              value={canvasSize.height} 
-                              onChange={(e) => setCanvasSize(prev => ({ ...prev, height: Number(e.target.value) }))}
+                              value={Math.round(convertFromPx(canvasSize.height, canvasSizeUnit) * 100) / 100} 
+                              onChange={(e) => {
+                                const pxValue = convertToPx(Number(e.target.value), canvasSizeUnit);
+                                setCanvasSize(prev => ({ ...prev, height: Math.round(pxValue) }));
+                              }}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
+                        </div>
+
+                        {/* Pixel display for reference */}
+                        <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                          Reference: {canvasSize.width} × {canvasSize.height}px
                         </div>
                       </div>
 
@@ -4151,6 +4599,22 @@ const Editor: React.FC = () => {
                         </button>
                         
                         <button 
+                          onClick={moveLayerForward}
+                          className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium flex items-center justify-center gap-2"
+                        >
+                          <ChevronUp size={18} />
+                          Move Forward
+                        </button>
+                        
+                        <button 
+                          onClick={moveLayerBackward}
+                          className="w-full px-4 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all font-medium flex items-center justify-center gap-2"
+                        >
+                          <ChevronDown size={18} />
+                          Move Backward
+                        </button>
+                        
+                        <button 
                           onClick={sendToBack}
                           className="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-medium"
                         >
@@ -4274,6 +4738,82 @@ const Editor: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Animation Controls */}
+                  {selectedElement && selectedElement.animation && (
+                    <div className="space-y-3 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                        <Settings size={14} />
+                        Animation Settings
+                      </h4>
+                      
+                      <div>
+                        <label className="text-xs text-gray-600 mb-2 block font-medium">Duration (seconds)</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0.1"
+                            max="10"
+                            step="0.1"
+                            value={selectedElement.animationDuration || 1}
+                            onChange={(e) => updateSelectedElementImmediate('animationDuration', parseFloat(e.target.value))}
+                            className="flex-1 h-2 bg-gradient-to-r from-indigo-200 to-purple-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="0.1"
+                            max="10"
+                            step="0.1"
+                            value={selectedElement.animationDuration || 1}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value);
+                              if (!isNaN(value) && value >= 0.1 && value <= 10) {
+                                updateSelectedElementImmediate('animationDuration', value);
+                              }
+                            }}
+                            className="w-16 px-2 py-1 border border-indigo-300 rounded-lg text-sm font-bold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mt-1">
+                          <span>0.1s</span>
+                          <span>10s</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-gray-600 mb-2 block font-medium">Speed Multiplier</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0.1"
+                            max="3"
+                            step="0.1"
+                            value={selectedElement.animationSpeed || 1}
+                            onChange={(e) => updateSelectedElementImmediate('animationSpeed', parseFloat(e.target.value))}
+                            className="flex-1 h-2 bg-gradient-to-r from-purple-200 to-pink-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="0.1"
+                            max="3"
+                            step="0.1"
+                            value={selectedElement.animationSpeed || 1}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value);
+                              if (!isNaN(value) && value >= 0.1 && value <= 3) {
+                                updateSelectedElementImmediate('animationSpeed', value);
+                              }
+                            }}
+                            className="w-16 px-2 py-1 border border-purple-300 rounded-lg text-sm font-bold text-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mt-1">
+                          <span>0.1x (Slower)</span>
+                          <span>3x (Faster)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Animation Info */}
                   {selectedElement && (
                     <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
@@ -4286,6 +4826,8 @@ const Editor: React.FC = () => {
                           onClick={() => {
                             setSelectedAnimation(null);
                             updateSelectedElement('animation', undefined);
+                            updateSelectedElement('animationDuration', undefined);
+                            updateSelectedElement('animationSpeed', undefined);
                           }}
                           className="mt-3 w-full px-3 py-2 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all border border-gray-200"
                         >
@@ -4365,100 +4907,122 @@ const Editor: React.FC = () => {
             </button>
           </div>
         )}
+      </div>
 
-        {/* Save Design Modal */}
-        <SaveDesignModal
-          isOpen={showSaveModal}
-          onClose={() => setShowSaveModal(false)}
-          onSave={handleSaveDesign}
-          isLoading={isSavingDesign}
-          error={saveError}
-          successMessage={successMessage}
-          defaultTitle={designTitle}
-        />
+      {/* Timeline - CapCut style: Full width at bottom */}
+      {showTimeline && (
+        <div className="border-t-2 border-gray-700 relative bg-gray-900 flex-shrink-0" style={{ height: `${timelineHeight}px` }}>
+          {/* Resize handle */}
+          <div
+            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-blue-500 transition-colors z-30"
+            onMouseDown={handleTimelineResize}
+          />
+          
+          <div className="w-full h-full pt-1">
+            <TimelineCapCut
+              timeline={timeline}
+              onTimelineChange={updateTimeline}
+              onItemSelect={handleTimelineItemSelect}
+              selectedItemIds={selectedItems}
+              onSplitItem={handleSplitItem}
+              onArrangeSequential={handleArrangeSequential}
+            />
+          </div>
+        </div>
+      )}
 
-        {/* Canvas Size Selection Modal */}
-        {showSizeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Choose Canvas Size</h2>
-              <p className="text-gray-600 mb-8">Select a preset size or create a custom canvas</p>
+      {/* Save Design Modal */}
+      <SaveDesignModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={handleSaveDesign}
+        isLoading={isSavingDesign}
+        error={saveError}
+        successMessage={successMessage}
+        defaultTitle={designTitle}
+      />
 
-              {/* Preset Templates */}
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Preset Sizes</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {TEMPLATES.map((template) => (
-                    <button
-                      key={template.name}
-                      onClick={() => {
-                        setCanvasSize({ width: template.width, height: template.height });
-                        setShowSizeModal(false);
-                      }}
-                      className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
-                    >
-                      <div className="text-primary group-hover:scale-110 transition-transform">
-                        {template.icon}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{template.name}</p>
-                        <p className="text-sm text-gray-500">{template.width} × {template.height}px</p>
-                      </div>
-                      <ChevronRight className="text-gray-400 group-hover:text-primary transition-colors" size={20} />
-                    </button>
-                  ))}
+      {/* Canvas Size Selection Modal */}
+      {showSizeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Choose Canvas Size</h2>
+            <p className="text-gray-600 mb-8">Select a preset size or create a custom canvas</p>
+
+            {/* Preset Templates */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Preset Sizes</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {TEMPLATES.map((template) => (
+                  <button
+                    key={template.name}
+                    onClick={() => {
+                      setCanvasSize({ width: template.width, height: template.height });
+                      setShowSizeModal(false);
+                    }}
+                    className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                  >
+                    <div className="text-primary group-hover:scale-110 transition-transform">
+                      {template.icon}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{template.name}</p>
+                      <p className="text-sm text-gray-500">{template.width} × {template.height}px</p>
+                    </div>
+                    <ChevronRight className="text-gray-400 group-hover:text-primary transition-colors" size={20} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Size */}
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Custom Size</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="5000"
+                    value={canvasSize.width}
+                    onChange={(e) => setCanvasSize(prev => ({ ...prev, width: parseInt(e.target.value) || 1280 }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="5000"
+                    value={canvasSize.height}
+                    onChange={(e) => setCanvasSize(prev => ({ ...prev, height: parseInt(e.target.value) || 720 }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
                 </div>
               </div>
+              <button
+                onClick={() => setShowSizeModal(false)}
+                className="mt-4 w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+              >
+                Start Designing
+              </button>
+            </div>
 
-              {/* Custom Size */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Custom Size</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
-                    <input
-                      type="number"
-                      min="100"
-                      max="5000"
-                      value={canvasSize.width}
-                      onChange={(e) => setCanvasSize(prev => ({ ...prev, width: parseInt(e.target.value) || 1280 }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
-                    <input
-                      type="number"
-                      min="100"
-                      max="5000"
-                      value={canvasSize.height}
-                      onChange={(e) => setCanvasSize(prev => ({ ...prev, height: parseInt(e.target.value) || 720 }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowSizeModal(false)}
-                  className="mt-4 w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-                >
-                  Start Designing
-                </button>
-              </div>
-
-              {/* Common Sizes Reference */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-600 mb-2 font-medium">Popular Display Sizes:</p>
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                  <div>• Full HD: 1920 × 1080</div>
-                  <div>• 4K: 3840 × 2160</div>
-                  <div>• HD: 1280 × 720</div>
-                  <div>• Portrait HD: 1080 × 1920</div>
-                </div>
+            {/* Common Sizes Reference */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-xs text-gray-600 mb-2 font-medium">Popular Display Sizes:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                <div>• Full HD: 1920 × 1080</div>
+                <div>• 4K: 3840 × 2160</div>
+                <div>• HD: 1280 × 720</div>
+                <div>• Portrait HD: 1080 × 1920</div>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

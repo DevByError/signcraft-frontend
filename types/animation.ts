@@ -1,53 +1,109 @@
 /**
- * Animation System Types
- * Data-driven animation model for SignCraft editor
+ * Animation System Types - CapCut Style
+ * Pure JSON-based animations with clip-local time
+ * 
+ * CRITICAL PRINCIPLES:
+ * 1. All time values are clip-local (starting at 0)
+ * 2. Animations use keyframes, not preset names
+ * 3. Stateless evaluation - pure functions only
+ * 4. JSON-friendly - no functions in data
  */
 
-// ==================== Animation Types ====================
-
-export type AnimationType = 
-  // Basic animations
-  | 'fadeIn'
-  | 'fadeOut'
-  | 'slideInLeft'
-  | 'slideInRight'
-  | 'slideInUp'
-  | 'slideInDown'
-  | 'slideOutLeft'
-  | 'slideOutRight'
-  | 'slideOutUp'
-  | 'slideOutDown'
-  | 'scaleIn'
-  | 'scaleOut'
-  | 'rotateIn'
-  | 'rotateOut'
-  // Attention animations
-  | 'pulse'
-  | 'bounce'
-  | 'shake'
-  | 'wiggle'
-  | 'flash'
-  | 'swing'
-  | 'tada'
-  | 'heartbeat'
-  // Advanced
-  | 'flipIn'
-  | 'flipOut'
-  | 'zoomIn'
-  | 'zoomOut'
-  | 'rollIn'
-  | 'rollOut'
-  | 'none';
+// ==================== Easing Functions ====================
 
 export type EasingType = 
-  | 'linear'
-  | 'ease-in'
-  | 'ease-out'
-  | 'ease-in-out'
-  | 'ease-back'
-  | 'ease-elastic'
-  | 'ease-bounce'
-  | 'power1.in'
+  | 'linear' 
+  | 'easeIn' 
+  | 'easeOut' 
+  | 'easeInOut' 
+  | 'easeInCubic' 
+  | 'easeOutCubic' 
+  | 'easeInOutCubic'
+  | 'easeInQuad'
+  | 'easeOutQuad'
+  | 'easeInOutQuad';
+
+// ==================== Keyframe Types ====================
+
+export interface Keyframe<T> {
+  /** Time in milliseconds (clip-local, starting at 0) */
+  timeMs: number;
+  /** Value at this keyframe */
+  value: T;
+  /** Easing function to use when interpolating TO this keyframe */
+  easing?: EasingType;
+}
+
+// ==================== Animation Property Types ====================
+
+export interface OpacityKeyframe extends Keyframe<number> {
+  value: number; // 0-1
+}
+
+export interface PositionKeyframe extends Keyframe<{ x: number; y: number }> {
+  value: { x: number; y: number };
+}
+
+export interface ScaleKeyframe extends Keyframe<{ x: number; y: number }> {
+  value: { x: number; y: number }; // 1 = 100%
+}
+
+export interface RotationKeyframe extends Keyframe<number> {
+  value: number; // degrees
+}
+
+// ==================== Animation Definitions ====================
+
+export interface OpacityAnimation {
+  type: 'opacity';
+  /** Delay before animation starts (clip-local time) */
+  delayMs: number;
+  /** Keyframes (clip-local time, starting at 0) */
+  keyframes: OpacityKeyframe[];
+}
+
+export interface PositionAnimation {
+  type: 'position';
+  delayMs: number;
+  keyframes: PositionKeyframe[];
+}
+
+export interface ScaleAnimation {
+  type: 'scale';
+  delayMs: number;
+  keyframes: ScaleKeyframe[];
+}
+
+export interface RotationAnimation {
+  type: 'rotation';
+  delayMs: number;
+  keyframes: RotationKeyframe[];
+}
+
+export type Animation = OpacityAnimation | PositionAnimation | ScaleAnimation | RotationAnimation;
+
+// ==================== Clip Animation Container ====================
+
+export interface ClipAnimations {
+  /** All animations for this clip */
+  animations: Animation[];
+}
+
+// ==================== Evaluated Animation Result ====================
+
+export interface EvaluatedAnimations {
+  /** Evaluated opacity (0-1) */
+  opacity: number;
+  /** Evaluated position */
+  position: { x: number; y: number };
+  /** Evaluated scale */
+  scale: { x: number; y: number };
+  /** Evaluated rotation (degrees) */
+  rotation: number;
+}
+
+// ==================== Legacy Animation Types (Deprecated) ====================
+// These are kept for backward compatibility but should not be used for new code
   | 'power1.out'
   | 'power1.inOut'
   | 'power2.in'

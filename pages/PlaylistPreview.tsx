@@ -42,7 +42,7 @@ interface CanvasElement {
 // Animation helper function
 const getAnimationClass = (animation?: string) => {
   if (!animation) return '';
-  
+
   const animationMap: Record<string, string> = {
     // Featured
     'Shake Zoom': 'animate-shake-zoom',
@@ -78,45 +78,55 @@ const getAnimationClass = (animation?: string) => {
     'Pulse': 'animate-pulse-effect',
     'Wiggle': 'animate-wiggle-effect',
   };
-  
+
   return animationMap[animation] || '';
 }
 
 // YouTube URL to embed URL converter
 const getYouTubeEmbedUrl = (url: string): string | null => {
   if (!url) return null;
-  
+
   // Extract video ID from various YouTube URL formats
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
     /youtube\.com\/embed\/([^&\s]+)/,
     /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
   ];
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match && match[1]) {
       return `https://www.youtube.com/embed/${match[1]}`;
     }
   }
-  
+
   return null;
 };
 
-const PlaylistPreview: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+interface PlaylistPreviewProps {
+  id?: string;
+  forceAutoplay?: boolean;
+  onReady?: () => void;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+}
+
+const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAutoplay, onReady, onCanvasReady }) => {
+  const params = useParams<{ id: string }>();
+  const id = propId || params.id;
   const navigate = useNavigate();
-  
+
   const [playlist, setPlaylist] = useState<PlaylistDocument | null>(null);
   const [designs, setDesigns] = useState<FirestoreDesignDocument[]>([]);
+  const [displayElements, setDisplayElements] = useState<CanvasElement[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(forceAutoplay ?? true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Load playlist and all designs
   useEffect(() => {
@@ -146,11 +156,19 @@ const PlaylistPreview: React.FC = () => {
 
         setDesigns(loadedDesigns);
         
+        // Set initial display elements from first design
+        if (loadedDesigns.length > 0 && loadedDesigns[0].designJSON?.elements) {
+          setDisplayElements(loadedDesigns[0].designJSON.elements);
+        }
+
         if (loadedDesigns.length > 0 && playlistDoc.designReferences.length > 0) {
           setTimeRemaining(playlistDoc.designReferences[0].duration);
         }
 
-        console.log('✅ Playlist loaded:', playlistDoc.name, 'with', loadedDesigns.length, 'designs');
+        // Notify parent when ready for export
+        if (onReady && loadedDesigns.length > 0) {
+          onReady();
+        }
       } catch (err) {
         console.error('❌ Error loading playlist:', err);
         setError(`Failed to load playlist: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -165,7 +183,78 @@ const PlaylistPreview: React.FC = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [id]);
+  }, [id, onReady]);
+
+  // Update display elements when design changes
+  useEffect(() => {
+    if (designs.length > currentIndex && designs[currentIndex]?.designJSON?.elements) {
+      setDisplayElements(designs[currentIndex].designJSON.elements);
+    }
+  }, [currentIndex, designs]);
+
+  // Draw current design to canvas for export
+  useEffect(() => {
+    if (!canvasRef.current || !designs.length || !playlist) {
+      if (onCanvasReady) {
+        onCanvasReady(canvasRef.current || null);
+      }
+      return;
+    }
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) {
+      if (onCanvasReady) {
+        onCanvasReady(null);
+      }
+      return;
+    }
+    const currentDesign = designs[currentIndex];
+    if (!currentDesign) {
+      if (onCanvasReady) {
+        onCanvasReady(null);
+      }
+      return;
+    }
+    
+    const width = currentDesign.metadata?.canvasWidth || 1280;
+    const height = currentDesign.metadata?.canvasHeight || 720;
+    
+    // Set canvas size
+    canvasRef.current.width = width;
+    canvasRef.current.height = height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw background
+    ctx.fillStyle = currentDesign.metadata?.canvasColor || '#fff';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw elements (only text and rectangles for canvas)
+    const elements = currentDesign.designJSON?.elements || [];
+    for (const element of elements) {
+      if (element.type === 'text') {
+        ctx.save();
+        ctx.font = `${element.textStyle?.bold ? 'bold ' : ''}${element.textStyle?.italic ? 'italic ' : ''}${element.fontSize || 24}px ${element.textStyle?.fontFamily || 'Arial'}`;
+        ctx.fillStyle = element.color || '#000';
+        ctx.globalAlpha = element.opacity ?? 1;
+        ctx.translate(element.x, element.y);
+        ctx.rotate((element.rotation || 0) * Math.PI / 180);
+        ctx.fillText(element.content, 0, element.height / 2);
+        ctx.restore();
+      } else if (element.type === 'rectangle' || element.type === 'rect') {
+        ctx.save();
+        ctx.globalAlpha = element.opacity ?? 1;
+        ctx.fillStyle = element.fillColor || '#888';
+        ctx.fillRect(element.x, element.y, element.width, element.height);
+        ctx.restore();
+      }
+    }
+    
+    // Notify parent with canvas ref for export
+    if (onCanvasReady) {
+      onCanvasReady(canvasRef.current);
+    }
+  }, [currentIndex, designs, playlist, onCanvasReady]);
 
   // Slideshow auto-advance
   useEffect(() => {
@@ -269,7 +358,7 @@ const PlaylistPreview: React.FC = () => {
       case 'video':
       case 'web-video':
         return element.content && (element.content.startsWith('http') || element.content.startsWith('blob:')) ? (
-          <video 
+          <video
             key={element.id}
             className={animationClass}
             src={element.content}
@@ -700,7 +789,7 @@ const PlaylistPreview: React.FC = () => {
   }
 
   const currentDesign = designs[currentIndex];
-  const currentDuration = playlist.designReferences[currentIndex]?.duration || 5;
+  const currentDuration = playlist?.designReferences[currentIndex]?.duration || 5;
 
   return (
     <div className="fixed inset-0 bg-black flex flex-col">
@@ -714,11 +803,11 @@ const PlaylistPreview: React.FC = () => {
             <ArrowLeft size={20} />
             Exit Preview
           </button>
-          
+
           <div className="text-white text-center">
-            <h2 className="text-xl font-bold">{playlist.name}</h2>
+            <h2 className="text-xl font-bold">{playlist?.name}</h2>
             <p className="text-sm text-gray-300">
-              {currentIndex + 1} / {playlist.designReferences.length}
+              {currentIndex + 1} / {playlist?.designReferences.length}
             </p>
           </div>
 
@@ -729,22 +818,35 @@ const PlaylistPreview: React.FC = () => {
         </div>
       </div>
 
-      {/* Canvas Display */}
-      <div className="flex-1 flex items-center justify-center">
+      {/* Design Display */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
         {currentDesign && (
-          <div
-            style={{
-              width: `${currentDesign.metadata.canvasWidth}px`,
-              height: `${currentDesign.metadata.canvasHeight}px`,
-              backgroundColor: currentDesign.metadata.canvasColor,
-              position: 'relative',
-              maxWidth: '100vw',
-              maxHeight: '100vh',
-              objectFit: 'contain',
-            }}
-          >
-            {currentDesign.designJSON.elements.map(element => renderElement(element))}
-          </div>
+          <>
+            {/* Hidden canvas for export */}
+            <canvas
+              ref={canvasRef}
+              style={{
+                display: 'none',
+              }}
+            />
+            
+            {/* Design Container */}
+            <div
+              style={{
+                width: `${currentDesign.metadata?.canvasWidth || 1280}px`,
+                height: `${currentDesign.metadata?.canvasHeight || 720}px`,
+                backgroundColor: currentDesign.metadata?.canvasColor || '#fff',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8)',
+                maxWidth: '100vw',
+                maxHeight: '100vh',
+                aspectRatio: `${currentDesign.metadata?.canvasWidth || 1280} / ${currentDesign.metadata?.canvasHeight || 720}`,
+              }}
+            >
+              {displayElements.map(renderElement)}
+            </div>
+          </>
         )}
       </div>
 
@@ -757,14 +859,14 @@ const PlaylistPreview: React.FC = () => {
           >
             <SkipBack size={24} />
           </button>
-          
+
           <button
             onClick={() => setIsPlaying(!isPlaying)}
             className="p-4 bg-primary hover:bg-primaryLight text-white rounded-full transition-colors"
           >
             {isPlaying ? <Pause size={28} /> : <Play size={28} />}
           </button>
-          
+
           <button
             onClick={handleNext}
             className="p-3 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"

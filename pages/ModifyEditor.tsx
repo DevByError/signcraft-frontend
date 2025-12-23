@@ -8,12 +8,12 @@ import {
   Circle, Download, Eye, EyeOff,
   Triangle, Star, Heart, Menu, Plus, Minus, Lock, Unlock,
   Layers, Palette, Settings, Grid3x3, Layout, Maximize2,
-  RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap
+  Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { useDesignSave } from '../hooks/useDesignSave';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
-import { getDesignById, updateDesignInFirestore, saveDesignToFirestore } from '../services/designService';
+import { getDesignById, updateDesignInFirestore } from '../services/designService';
 
 enum ElementType {
   TEXT = 'text',
@@ -94,15 +94,9 @@ interface CanvasElement {
 }
 
 const TEMPLATES = [
-  { name: 'Instagram Post', width: 1080, height: 1080, icon: <Grid3x3 size={16} /> },
-  { name: 'Instagram Story', width: 1080, height: 1920, icon: <Layout size={16} /> },
-  { name: 'YouTube Thumbnail', width: 1280, height: 720, icon: <Maximize2 size={16} /> },
-  { name: 'Facebook Cover', width: 1640, height: 924, icon: <Layout size={16} /> },
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
   { name: 'Android Phone (Portrait)', width: 1080, height: 1920, icon: <Layout size={16} /> },
   { name: 'Android Phone (Landscape)', width: 1920, height: 1080, icon: <RectangleHorizontal size={16} /> },
-  { name: 'Android Tablet (Portrait)', width: 1200, height: 1920, icon: <Layout size={16} /> },
-  { name: 'Android Tablet (Landscape)', width: 1920, height: 1200, icon: <Maximize2 size={16} /> },
 ];
 
 const WIDGET_CATEGORIES = [
@@ -216,7 +210,6 @@ const Editor: React.FC = () => {
   const [showSafeZone, setShowSafeZone] = useState(false);
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'templates' | 'uploads'>('design');
   const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers' | 'animation'>('properties');
-  const [selectedAnimation, setSelectedAnimation] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
   const [showGrid, setShowGrid] = useState(true);
@@ -239,7 +232,7 @@ const Editor: React.FC = () => {
   const [designData, setDesignData] = useState<any>(null);
   
   // Design save hook
-  const { saveDesign: saveDesignToFirebase, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
+  const { saveDesign, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_essential: true,
@@ -382,7 +375,7 @@ const Editor: React.FC = () => {
     const safeY = Math.max(0, Math.min(canvasSize.height - height, y));
 
     const newElement: CanvasElement = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 11),
       type,
       content: customContent || getDefaultContent(type),
       x: safeX,
@@ -756,7 +749,7 @@ const Editor: React.FC = () => {
     const newElements = elements.filter(el => el.id !== selectedId);
     setElements(newElements);
     updateHistory(newElements);
-    setSelectedId(null);
+    setSelectedIds([]);
   };
 
   const duplicateSelected = () => {
@@ -765,7 +758,7 @@ const Editor: React.FC = () => {
     if (element) {
       const newElement = {
         ...element,
-        id: Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).substring(2, 11),
         x: Math.min(element.x + 20, canvasSize.width - element.width),
         y: Math.min(element.y + 20, canvasSize.height - element.height),
         zIndex: elements.length + 1,
@@ -774,7 +767,7 @@ const Editor: React.FC = () => {
       const newElements = [...elements, newElement];
       setElements(newElements);
       updateHistory(newElements);
-      setSelectedId(newElement.id);
+      setSelectedIds([newElement.id]);
       setRightSidebarOpen(true);
     }
   };
@@ -835,7 +828,7 @@ const Editor: React.FC = () => {
     if (element?.locked) return;
     
     if (element && element.type === ElementType.TEXT) {
-      setSelectedId(id);
+      setSelectedIds([id]);
       setEditingTextId(id);
       setEditingText(element.content);
       setTimeout(() => textInputRef.current?.focus(), 0);
@@ -852,7 +845,7 @@ const Editor: React.FC = () => {
   };
 
   // Save design - opens modal for metadata entry
-  const saveDesign = () => {
+  const openSaveModal = () => {
     setShowSaveModal(true);
   };
 
@@ -940,8 +933,8 @@ const Editor: React.FC = () => {
     }
   };
 
-  // Export design as local JSON file
-  const exportDesignAsJSON = () => {
+  // Export design as local JSON file (for future use)
+  const _exportDesignAsJSON = () => {
     // Ensure all elements have required fields with proper defaults
     const elementsWithDefaults = elements.map(el => {
       const defaultTextStyle = {
@@ -1225,7 +1218,7 @@ const Editor: React.FC = () => {
 
       // Restore user state
       setZoom(previousZoom);
-      setSelectedId(previousSelectedId);
+      setSelectedIds(previousSelectedId ? [previousSelectedId] : []);
 
     } catch (error) {
       console.error('Export failed:', error);
@@ -1324,7 +1317,7 @@ const Editor: React.FC = () => {
           case 'z': e.preventDefault(); undo(); break;
           case 'y': e.preventDefault(); redo(); break;
           case 'd': e.preventDefault(); duplicateSelected(); break;
-          case 's': e.preventDefault(); saveDesign(); break;
+          case 's': e.preventDefault(); openSaveModal(); break;
         }
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -1474,7 +1467,7 @@ const Editor: React.FC = () => {
           </button>
 
           <button 
-            onClick={saveDesign}
+            onClick={openSaveModal}
             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-900/30"
           >
             <Save size={18} />
@@ -1657,7 +1650,7 @@ const Editor: React.FC = () => {
         <div className="flex-1 relative overflow-hidden flex flex-col">
           <div 
             className={`flex-1 overflow-auto p-12 flex items-center justify-center transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''}`}
-            onClick={() => setSelectedId(null)}
+            onClick={() => setSelectedIds([])}
             onDragOver={(e) => {
               e.preventDefault();
               setDraggingFromSidebar(true);
@@ -3629,7 +3622,6 @@ const Editor: React.FC = () => {
                         <button
                           key={anim}
                           onClick={() => {
-                            setSelectedAnimation(anim);
                             if (selectedElement) {
                               updateSelectedElement('animation', anim);
                             }
@@ -3657,7 +3649,6 @@ const Editor: React.FC = () => {
                         <button
                           key={anim}
                           onClick={() => {
-                            setSelectedAnimation(anim);
                             if (selectedElement) {
                               updateSelectedElement('animation', anim);
                             }
@@ -3685,7 +3676,6 @@ const Editor: React.FC = () => {
                         <button
                           key={anim}
                           onClick={() => {
-                            setSelectedAnimation(anim);
                             if (selectedElement) {
                               updateSelectedElement('animation', anim);
                             }
@@ -3713,7 +3703,6 @@ const Editor: React.FC = () => {
                         <button
                           key={anim}
                           onClick={() => {
-                            setSelectedAnimation(anim);
                             if (selectedElement) {
                               updateSelectedElement('animation', anim);
                             }
@@ -3740,7 +3729,6 @@ const Editor: React.FC = () => {
                       {selectedElement.animation && (
                         <button
                           onClick={() => {
-                            setSelectedAnimation(null);
                             updateSelectedElement('animation', undefined);
                           }}
                           className="mt-3 w-full px-3 py-2 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all border border-gray-200"

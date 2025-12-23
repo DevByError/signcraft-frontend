@@ -1,11 +1,455 @@
 /**
  * Animation Presets
- * Pre-configured animation combinations (Canva-style)
+ * Pre-configured animation combinations (CapCut-style)
+ * 
+ * IN animations start at clip start
+ * OUT animations end at clip end
+ * Default duration: 300–600ms
+ * OUT animations are time-reversed versions of IN animations
+ * All animations are clip-local and JSON-driven
  */
 
 import { AnimationPreset } from '../types/animation';
 
 export const ANIMATION_PRESETS: AnimationPreset[] = [
+  // ==================== 🟢 IN ANIMATIONS ====================
+  {
+    id: 'fade-in',
+    name: 'Fade In',
+    category: 'basic',
+    description: 'Smooth fade in from transparent',
+    enter: {
+      type: 'fadeIn',
+      duration: 400,
+      delay: 0,
+      easing: 'ease-out',
+    },
+  },
+  {
+    id: 'slide-up',
+    name: 'Slide Up',
+    category: 'basic',
+    description: 'Slide in from bottom',
+    enter: {
+      type: 'slideInUp',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'slide-down',
+    name: 'Slide Down',
+    category: 'basic',
+    description: 'Slide in from top',
+    enter: {
+      type: 'slideInDown',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'slide-left',
+    name: 'Slide Left',
+    category: 'basic',
+    description: 'Slide in from right',
+    enter: {
+      type: 'slideInRight',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'slide-right',
+    name: 'Slide Right',
+    category: 'basic',
+    description: 'Slide in from left',
+    enter: {
+      type: 'slideInLeft',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'zoom-in',
+    name: 'Zoom In',
+    category: 'basic',
+    description: 'Zoom in from small',
+    enter: {
+      type: 'scaleIn',
+      duration: 400,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'zoom-in-soft',
+    name: 'Zoom In (Soft)',
+    category: 'basic',
+    description: 'Gentle zoom in effect',
+    enter: {
+      type: 'scaleIn',
+      duration: 600,
+      delay: 0,
+      easing: 'power1.out',
+    },
+  },
+  {
+    id: 'pop-in',
+    name: 'Pop In',
+    category: 'attention',
+    description: 'Pop in with elastic bounce',
+    enter: {
+      type: 'scaleIn',
+      duration: 500,
+      delay: 0,
+      easing: 'back.out',
+    },
+  },
+  {
+    id: 'bounce-in',
+    name: 'Bounce In',
+    category: 'attention',
+    description: 'Bounce in from above',
+    enter: {
+      type: 'bounce',
+      duration: 600,
+      delay: 0,
+      easing: 'bounce.out',
+    },
+  },
+  {
+    id: 'rotate-in',
+    name: 'Rotate In',
+    category: 'attention',
+    description: 'Rotate while fading in',
+    enter: {
+      type: 'rotateIn',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'flip-in-x',
+    name: 'Flip In (X)',
+    category: 'attention',
+    description: 'Flip in horizontally',
+    enter: {
+      type: 'flipInX',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'flip-in-y',
+    name: 'Flip In (Y)',
+    category: 'attention',
+    description: 'Flip in vertically',
+    enter: {
+      type: 'flipInY',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'blur-in',
+    name: 'Blur In',
+    category: 'advanced',
+    description: 'Fade in from blur',
+    enter: {
+      type: 'fadeIn',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'wipe-in',
+    name: 'Wipe In',
+    category: 'advanced',
+    description: 'Wipe across screen',
+    enter: {
+      type: 'slideInRight',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+  },
+  {
+    id: 'elastic-in',
+    name: 'Elastic In',
+    category: 'advanced',
+    description: 'Elastic spring entry',
+    enter: {
+      type: 'scaleIn',
+      duration: 800,
+      delay: 0,
+      easing: 'elastic.out',
+    },
+  },
+
+  // ==================== 🔴 OUT ANIMATIONS ====================
+  {
+    id: 'fade-out',
+    name: 'Fade Out',
+    category: 'basic',
+    description: 'Smooth fade out to transparent',
+    exit: {
+      type: 'fadeOut',
+      duration: 400,
+      delay: 0,
+      easing: 'ease-in',
+    },
+  },
+  {
+    id: 'slide-down-out',
+    name: 'Slide Down',
+    category: 'basic',
+    description: 'Slide out to bottom',
+    exit: {
+      type: 'slideOutDown',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'slide-up-out',
+    name: 'Slide Up',
+    category: 'basic',
+    description: 'Slide out to top',
+    exit: {
+      type: 'slideOutUp',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'slide-left-out',
+    name: 'Slide Left',
+    category: 'basic',
+    description: 'Slide out to left',
+    exit: {
+      type: 'slideOutLeft',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'slide-right-out',
+    name: 'Slide Right',
+    category: 'basic',
+    description: 'Slide out to right',
+    exit: {
+      type: 'slideOutRight',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'zoom-out',
+    name: 'Zoom Out',
+    category: 'basic',
+    description: 'Zoom out to small',
+    exit: {
+      type: 'scaleOut',
+      duration: 400,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'zoom-out-soft',
+    name: 'Zoom Out (Soft)',
+    category: 'basic',
+    description: 'Gentle zoom out effect',
+    exit: {
+      type: 'scaleOut',
+      duration: 600,
+      delay: 0,
+      easing: 'power1.in',
+    },
+  },
+  {
+    id: 'pop-out',
+    name: 'Pop Out',
+    category: 'attention',
+    description: 'Pop out with elastic bounce',
+    exit: {
+      type: 'scaleOut',
+      duration: 500,
+      delay: 0,
+      easing: 'back.in',
+    },
+  },
+  {
+    id: 'bounce-out',
+    name: 'Bounce Out',
+    category: 'attention',
+    description: 'Bounce out downward',
+    exit: {
+      type: 'bounce',
+      duration: 600,
+      delay: 0,
+      easing: 'bounce.in',
+    },
+  },
+  {
+    id: 'rotate-out',
+    name: 'Rotate Out',
+    category: 'attention',
+    description: 'Rotate while fading out',
+    exit: {
+      type: 'rotateOut',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'flip-out-x',
+    name: 'Flip Out (X)',
+    category: 'attention',
+    description: 'Flip out horizontally',
+    exit: {
+      type: 'flipOutX',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'flip-out-y',
+    name: 'Flip Out (Y)',
+    category: 'attention',
+    description: 'Flip out vertically',
+    exit: {
+      type: 'flipOutY',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'blur-out',
+    name: 'Blur Out',
+    category: 'advanced',
+    description: 'Fade out with blur',
+    exit: {
+      type: 'fadeOut',
+      duration: 600,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'wipe-out',
+    name: 'Wipe Out',
+    category: 'advanced',
+    description: 'Wipe off screen',
+    exit: {
+      type: 'slideOutLeft',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'elastic-out',
+    name: 'Elastic Out',
+    category: 'advanced',
+    description: 'Elastic spring exit',
+    exit: {
+      type: 'scaleOut',
+      duration: 800,
+      delay: 0,
+      easing: 'elastic.in',
+    },
+  },
+
+  // ==================== 🟡 COMBO / DYNAMIC ANIMATIONS ====================
+  {
+    id: 'fade-in-out',
+    name: 'Fade In + Out',
+    category: 'advanced',
+    description: 'Fade in at start, fade out at end',
+    enter: {
+      type: 'fadeIn',
+      duration: 400,
+      delay: 0,
+      easing: 'ease-out',
+    },
+    exit: {
+      type: 'fadeOut',
+      duration: 400,
+      delay: 0,
+      easing: 'ease-in',
+    },
+  },
+  {
+    id: 'zoom-in-hold-zoom-out',
+    name: 'Zoom In → Hold → Zoom Out',
+    category: 'advanced',
+    description: 'Zoom in, hold, then zoom out',
+    enter: {
+      type: 'scaleIn',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+    exit: {
+      type: 'scaleOut',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'slide-in-hold-slide-out',
+    name: 'Slide In → Hold → Slide Out',
+    category: 'advanced',
+    description: 'Slide in from left, hold, slide out to right',
+    enter: {
+      type: 'slideInLeft',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.out',
+    },
+    exit: {
+      type: 'slideOutRight',
+      duration: 500,
+      delay: 0,
+      easing: 'power2.in',
+    },
+  },
+  {
+    id: 'pop-in-settle-pop-out',
+    name: 'Pop In → Settle → Pop Out',
+    category: 'advanced',
+    description: 'Pop in with bounce, settle, then pop out',
+    enter: {
+      type: 'scaleIn',
+      duration: 600,
+      delay: 0,
+      easing: 'back.out',
+    },
+    exit: {
+      type: 'scaleOut',
+      duration: 600,
+      delay: 0,
+      easing: 'back.in',
+    },
+  },
+
   // ==================== Featured ====================
   {
     id: 'shake-zoom',

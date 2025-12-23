@@ -3,22 +3,22 @@ import multer, { Multer } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-
-// 1. NEW: Import Socket.IO and HTTP modules
 import { Server as SocketIOServer } from 'socket.io';
 import http from 'http';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SOCKET_PORT = 3001;
+const SOCKET_PORT = 3002;
 
-
-// 1. NEW: Create HTTP Server and Socket.IO Server
+// Create HTTP Server and Socket.IO Server
 const httpServer = http.createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"], // Adjust for your React frontend URL
+    origin: "*", // In production, replace with your specific frontend URL
     methods: ["GET", "POST"]
   }
 });
@@ -26,7 +26,6 @@ const io = new SocketIOServer(httpServer, {
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../uploads')));
-// app.use(express.static('uploads'));
 
 // Storage configuration for multer
 const storage = multer.diskStorage({
@@ -56,78 +55,149 @@ const upload: Multer = multer({
   },
 });
 
-// In-memory storage for designs and collaboration (use database in production)
+// In-memory storage
 const designs = new Map();
 const collaborativeSessions = new Map();
 const userUploads = new Map();
 
+// --- SOCKET.IO REAL-TIME LOGIC ---
 
-// --- NEW MOCK DATA & HELPER ---
-
-// MOCK: In a real app, this would query your Firebase/DB
-// It returns a direct media URL for the screen to play
-function getFirstMediaFromPlaylist(playlistId: string): { url: string; mediaType: string } | null {
-  // Simple mock: Playlist 1 deploys a video, any other playlist deploys an image
-  if (playlistId === 'test-playlist-video') {
-    return {
-      url: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-      mediaType: 'video'
-    };
-  }
-  if (playlistId === 'test-playlist-image') {
-    return {
-      url: 'https://picsum.photos/1920/1080',
-      mediaType: 'image'
-    };
-  }
-  // Fallback to a default image URL
-  return {
-    url: 'https://cdn.pixabay.com/photo/2023/10/26/15/41/forest-8342784_1280.jpg',
-    mediaType: 'image'
-  };
+interface ConnectedClient {
+  socketId: string;
+  type: 'dashboard' | 'android';
+  screenId?: string; // e.g., 'scr01'
 }
 
-
-// --- SOCKET.IO REAL-TIME LOGIC ---
-const SCREEN_ROOM_PREFIX = 'screen-';
+let connectedClients: ConnectedClient[] = [];
 
 io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+  console.log(`[Socket.IO] New Connection: ${socket.id}`);
 
-  // Android screen clients will join a room based on their Screen ID (e.g., scr01)
-  socket.on('join_screen_room', (screenId: string) => {
-    socket.join(SCREEN_ROOM_PREFIX + screenId);
-    console.log(`[Socket.IO] Client ${socket.id} joined room: ${SCREEN_ROOM_PREFIX + screenId}`);
+  // 1. Device Registration
+  socket.on('register-device', (data: { type: 'dashboard' | 'android', screenId?: string }) => {
+    // Clean up any old registration for this specific socket
+    connectedClients = connectedClients.filter(c => c.socketId !== socket.id);
+
+    const newClient: ConnectedClient = {
+      socketId: socket.id,
+      type: data.type,
+      screenId: data.screenId
+    };
+
+    connectedClients.push(newClient);
+    console.log(`[REGISTRATION] ${data.type} registered (${data.screenId || 'N/A'}). Total: ${connectedClients.length}`);
+
+    // If it's an Android device, notify Dashboards to set UI status to ONLINE
+    if (data.type === 'android' && data.screenId) {
+      io.emit('screen_status_change', {
+        screenId: data.screenId,
+        status: 'online'
+      });
+    }
+
+    // Broadcast updated client list to all Dashboards for the "Total Screens" counter
+    io.emit('clients-updated', connectedClients);
   });
 
-  // 👈 NEW: Deployment Trigger from the React Admin Panel
-  socket.on('deployment_request', (data: { screenId: string, playlistId: string }) => {
-    console.log(`[DEPLOYMENT] Received request for Screen ${data.screenId} with Playlist ${data.playlistId}`);
 
-    const media = getFirstMediaFromPlaylist(data.playlistId);
+  // 2. Targeted Deployment (Podcast a specific JSON component to ONE device)
+  socket.on('deployment_request', async (data: { screenId: string, media: any }) => {
+    console.log(`[PODCAST] Deploying Component to Screen: ${data.screenId}`);
 
-    if (media) {
-      const targetRoom = SCREEN_ROOM_PREFIX + data.screenId;
+    // Find the socket ID belonging to the targeted Screen ID
+    const targetClient = connectedClients.find(c => c.screenId === data.screenId && c.type === 'android');
 
-      // Broadcast the media update to the specific screen's room
-      io.to(targetRoom).emit('media_update', {
-        url: media.url,
-        mediaType: media.mediaType,
-        playlistId: data.playlistId,
-        timestamp: new Date().toISOString()
-      });
-      console.log(`[DEPLOYMENT] Broadcasted ${media.mediaType} to room ${targetRoom}. URL: ${media.url}`);
+    if (targetClient) {
+      let payload = data.media;
+      if (payload.type === 'video' && payload.content && payload.content.startsWith('http://localhost')) {
+        try {
+          // Extract the filename from the URL
+          const fileName = payload.content.split('/').pop();
+          const filePath = path.join(__dirname, '../uploads', fileName);
+          if (fs.existsSync(filePath)) {
+            const fileBuffer = fs.readFileSync(filePath);
+            const base64 = fileBuffer.toString('base64');
+            payload = {
+              ...payload,
+              content: base64,
+              encoding: 'base64',
+              fileName,
+              mimeType: 'video/mp4', // or detect from file extension
+            };
+          }
+        } catch (e) {
+          console.error('Failed to read video file for broadcast:', e);
+        }
+      }
+      // Forward as-is, but use a different event for playlist JSON and design JSON
+      if (payload.type === 'playlist-json' || payload.type === 'design-json') {
+        io.to(targetClient.socketId).emit('mobile-design-json', payload);
+        console.log(`[PODCAST] Successfully relayed PLAYLIST/DESIGN JSON to socket: ${targetClient.socketId}`);
+      } else {
+        io.to(targetClient.socketId).emit('mobile-video', payload);
+        console.log(`[PODCAST] Successfully relayed VIDEO to socket: ${targetClient.socketId}`);
+      }
     } else {
-      console.warn(`[DEPLOYMENT] No media found for playlist ${data.playlistId}`);
+      console.warn(`[PODCAST] Target ${data.screenId} is not currently connected.`);
     }
   });
 
+  // 3. Broadcast to ALL devices (Emergency or Global announcements)
+  socket.on('broadcast_all', async (data: { media: any }) => {
+    console.log(`[BROADCAST] Sending component to all connected Android screens`);
+    const androidClients = connectedClients.filter(c => c.type === 'android');
+    let payload = data.media;
+    // If it's a video and the content is a local file URL, send the file as base64
+    if (payload.type === 'video' && payload.content && payload.content.startsWith('http://localhost')) {
+      try {
+        const fileName = payload.content.split('/').pop();
+        const filePath = path.join(__dirname, '../uploads', fileName);
+        if (fs.existsSync(filePath)) {
+          const fileBuffer = fs.readFileSync(filePath);
+          const base64 = fileBuffer.toString('base64');
+          payload = {
+            ...payload,
+            content: base64,
+            encoding: 'base64',
+            fileName,
+            mimeType: 'video/mp4',
+          };
+        }
+      } catch (e) {
+        console.error('Failed to read video file for broadcast:', e);
+      }
+    }
+    // If already base64, just forward as-is
+    androidClients.forEach(client => {
+      io.to(client.socketId).emit('mobile-video', payload);
+    });
+  });
+
+  // 4. Handle Disconnect
   socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
+    const disconnectedClient = connectedClients.find(c => c.socketId === socket.id);
+
+    if (disconnectedClient) {
+      console.log(`[Socket.IO] ${disconnectedClient.type} disconnected: ${socket.id}`);
+
+      // If it was an active screen, notify Dashboard to flip status to OFFLINE
+      if (disconnectedClient.type === 'android' && disconnectedClient.screenId) {
+        io.emit('screen_status_change', {
+          screenId: disconnectedClient.screenId,
+          status: 'offline'
+        });
+      }
+
+      // Remove from memory
+      connectedClients = connectedClients.filter(c => c.socketId !== socket.id);
+
+      // Update Dashboard client counters
+      io.emit('clients-updated', connectedClients);
+    }
   });
 });
 
-// Routes
+// --- EXPRESS ROUTES (Important: DO NOT REMOVE) ---
 
 /**
  * Upload media file
@@ -142,7 +212,6 @@ app.post('/api/media/upload', upload.single('file'), (req: Request, res: Respons
     const mediaId = uuidv4();
     const mediaUrl = `http://localhost:${PORT}/${req.file.filename}`;
 
-    // Track upload
     if (!userUploads.has(userId)) {
       userUploads.set(userId, []);
     }
@@ -171,8 +240,6 @@ app.post('/api/media/upload', upload.single('file'), (req: Request, res: Respons
  */
 app.delete('/api/media/:mediaId', (req: Request, res: Response) => {
   try {
-    const { mediaId } = req.params;
-    // In production, you would delete from database and filesystem
     res.status(200).json({ message: 'Media deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Delete failed' });
@@ -230,10 +297,7 @@ app.get('/api/collaboration/collaborators/:designId', (req: Request, res: Respon
     const { designId } = req.params;
     const sessionId = `session-${designId}`;
     const session = collaborativeSessions.get(sessionId);
-
-    res.status(200).json({
-      collaborators: session ? session.users : [],
-    });
+    res.status(200).json({ collaborators: session ? session.users : [] });
   } catch (error) {
     res.status(500).json({ error: 'Fetch failed' });
   }
@@ -245,37 +309,29 @@ app.get('/api/collaboration/collaborators/:designId', (req: Request, res: Respon
 app.put('/api/designs/:designId', (req: Request, res: Response) => {
   try {
     const { designId } = req.params;
-    const designData = req.body;
-
     designs.set(designId, {
-      ...designData,
+      ...req.body,
       id: designId,
       lastModified: new Date().toISOString(),
     });
-
-    res.status(200).json({
-      id: designId,
-      message: 'Design saved successfully',
-    });
+    res.status(200).json({ id: designId, message: 'Design saved successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Save failed' });
   }
 });
 
 /**
- * Share design with users
+ * Share design
  */
 app.post('/api/designs/:designId/share', (req: Request, res: Response) => {
   try {
     const { designId } = req.params;
     const { collaborators } = req.body;
-
     if (designs.has(designId)) {
       const design = designs.get(designId);
       design.collaborators = collaborators;
       design.isShared = true;
     }
-
     res.status(200).json({ message: 'Design shared successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Share failed' });
@@ -298,14 +354,14 @@ app.use((err: any, req: Request, res: Response, next: Function) => {
   });
 });
 
+// Listen on HTTP Server for Socket.IO
 httpServer.listen(SOCKET_PORT, () => {
-  console.log(`Socket.IO Server listening on *:${SOCKET_PORT}`);
+  console.log(`🚀 Socket.IO Server listening on *:${SOCKET_PORT}`);
 });
 
-// Start server
+// Start Express Server
 app.listen(PORT, () => {
-  console.log(`SignCraft Server running on http://localhost:${PORT}`);
-  console.log(`Uploads directory: ${path.join(__dirname, '../uploads')}`);
+  console.log(`✅ Express API Server running on http://localhost:${PORT}`);
 });
 
 export default app;
