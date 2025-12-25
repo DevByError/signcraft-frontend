@@ -1672,8 +1672,29 @@ const Editor: React.FC = () => {
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: 'center center',
                 transition: 'transform 0.2s ease-out',
+                borderRadius: canvasSize.width === 1080 && canvasSize.height === 1920 ? '60px' : 'unset',
+                border: canvasSize.width === 1080 && canvasSize.height === 1920 ? '12px solid #1a1a1a' : 'none',
+                boxShadow: canvasSize.width === 1080 && canvasSize.height === 1920 ? '0 0 0 8px #0a0a0a, 0 20px 60px rgba(0, 0, 0, 0.5)' : undefined,
+                position: 'relative',
               }}
             >
+              {/* Android Notch */}
+              {canvasSize.width === 1080 && canvasSize.height === 1920 && (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    top: '0',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '200px',
+                    height: '32px',
+                    backgroundColor: '#0a0a0a',
+                    borderRadius: '0 0 30px 30px',
+                    zIndex: 10,
+                  }}
+                />
+              )}
+
               {showGrid && (
                 <>
                   <div 

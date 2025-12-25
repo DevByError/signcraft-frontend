@@ -98,8 +98,8 @@ export const EditorWithAnimations: React.FC = () => {
   const handleAnimationPreview = (type: 'enter' | 'exit') => {
     if (!selectedElement?.animation) return;
 
-    const config = type === 'enter' 
-      ? selectedElement.animation.enter 
+    const config = type === 'enter'
+      ? selectedElement.animation.enter
       : selectedElement.animation.exit;
 
     if (!config) return;
@@ -156,7 +156,7 @@ export const EditorWithAnimations: React.FC = () => {
       {/* Main Content */}
       <div className="editor-main">
         {/* Canvas */}
-        <div className="canvas-area">
+        <div className="canvas-area" id="editor-canvas-area">
           <Stage width={1920} height={1080}>
             <Layer>
               {elements.map(element => (

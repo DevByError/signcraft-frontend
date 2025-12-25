@@ -404,13 +404,30 @@ export const updateDesignInFirestore = async (
  */
 export const getDesignById = async (designId: string): Promise<FirestoreDesignDocument | null> => {
   try {
-    const docSnap = await getDoc(doc(db, DESIGNS_COLLECTION, designId));
-    if (docSnap.exists()) {
-      return mapFirestoreDocToDesign(docSnap as QueryDocumentSnapshot<DocumentData>);
+    if (!designId || typeof designId !== 'string') {
+      console.warn('⚠️ [DESIGN] Invalid design ID:', designId);
+      return null;
     }
-    return null;
+
+    const docSnap = await getDoc(doc(db, DESIGNS_COLLECTION, designId));
+    
+    if (!docSnap.exists()) {
+      console.warn(`⚠️ [DESIGN] Design document not found: ${designId}`);
+      return null;
+    }
+
+    const design = mapFirestoreDocToDesign(docSnap as QueryDocumentSnapshot<DocumentData>);
+    
+    // Validate design structure
+    if (!design.metadata || !design.designJSON) {
+      console.warn(`⚠️ [DESIGN] Design missing required fields: ${designId}`);
+      return null;
+    }
+
+    console.log(`✅ [DESIGN] Design retrieved successfully: ${designId}`);
+    return design;
   } catch (error: any) {
-    console.error('Error retrieving design:', error);
+    console.error(`❌ [DESIGN] Error retrieving design ${designId}:`, error.message || error);
     return null;
   }
 };

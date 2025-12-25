@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RotateCcw } from 'lucide-react';
 import { getDesignById } from '../services/designService';
 
 interface CanvasElement {
@@ -82,6 +82,17 @@ interface DesignData {
   };
   designJSON: {
     elements: CanvasElement[];
+    timeline?: {
+      tracks?: Array<{
+        items: Array<{
+          elementId: string;
+          startTime: number;
+          duration: number;
+          properties?: any;
+        }>;
+      }>;
+      totalDuration?: number;
+    };
   };
 }
 
@@ -91,6 +102,10 @@ const Preview: React.FC = () => {
   const [design, setDesign] = useState<DesignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasTimeline, setHasTimeline] = useState(false);
+  const animationRef = useRef<number>();
 
   useEffect(() => {
     const loadDesign = async () => {
@@ -104,6 +119,13 @@ const Preview: React.FC = () => {
         if (loadedDesign) {
           setDesign(loadedDesign as DesignData);
           console.log('Design loaded:', loadedDesign);
+          
+          // Check if design has timeline data
+          const timelineExists = !!(loadedDesign as DesignData).designJSON?.timeline?.tracks?.length;
+          setHasTimeline(timelineExists);
+          if (timelineExists) {
+            setIsPlaying(true); // Auto-play timeline
+          }
         } else {
           setError('Design not found');
         }
@@ -118,57 +140,234 @@ const Preview: React.FC = () => {
     loadDesign();
   }, [designId]);
 
-  const renderElement = (element: CanvasElement) => {
-    const baseStyle: React.CSSProperties = {
-      position: 'absolute',
-      left: `${element.x}px`,
-      top: `${element.y}px`,
-      width: `${element.width}px`,
-      height: `${element.height}px`,
-      opacity: element.opacity ?? 1,
-      transform: `rotate(${element.rotation}deg)`,
-      zIndex: element.zIndex ?? 1,
-      visibility: element.visible === false ? 'hidden' : 'visible',
-      borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
-      overflow: 'hidden',
+  // Timeline playback effect - 60 FPS video-like rendering
+  useEffect(() => {
+    if (!isPlaying || !design || !hasTimeline) return;
+
+    const timeline = design.designJSON.timeline;
+    const totalDuration = timeline?.totalDuration || 5000; // Default 5 seconds
+    const fps = 60;
+    const frameInterval = 1000 / fps; // ~16.67ms per frame
+
+    let lastFrameTime = Date.now();
+    let accumulatedTime = currentTime;
+
+    const animate = () => {
+      const now = Date.now();
+      const deltaTime = now - lastFrameTime;
+
+      // Update only if enough time has passed for next frame
+      if (deltaTime >= frameInterval) {
+        accumulatedTime += deltaTime;
+        
+        // Loop back to start when reaching end
+        if (accumulatedTime >= totalDuration) {
+          accumulatedTime = 0;
+        }
+
+        setCurrentTime(accumulatedTime);
+        lastFrameTime = now;
+      }
+
+      animationRef.current = requestAnimationFrame(animate);
     };
 
-    const animationClass = getAnimationClass(element.animation);
+    animationRef.current = requestAnimationFrame(animate);
 
-    switch (element.type) {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isPlaying, design, hasTimeline]);
+
+  const togglePlayback = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const restartPlayback = () => {
+    setCurrentTime(0);
+    setIsPlaying(true);
+  };
+
+  const getElementAtTime = (element: CanvasElement): CanvasElement | null => {
+    if (!hasTimeline || !design?.designJSON.timeline) {
+      return element; // Return static element if no timeline
+    }
+
+    const timeline = design.designJSON.timeline;
+    let timelineItem: any = null;
+
+    // Find timeline item for this element
+    for (const track of timeline.tracks || []) {
+      for (const item of track.items) {
+        if (item.elementId === element.id) {
+          const itemStart = item.startTime;
+          const itemEnd = itemStart + item.duration;
+
+          // Check if current time is within this item's range
+          if (currentTime >= itemStart && currentTime < itemEnd) {
+            timelineItem = item;
+            break;
+          }
+        }
+      }
+      if (timelineItem) break;
+    }
+
+    if (!timelineItem) {
+      // Element not visible at current time
+      return null;
+    }
+
+    // Calculate interpolated properties based on time within item
+    const localTime = currentTime - timelineItem.startTime;
+    const progress = Math.min(1, localTime / timelineItem.duration);
+
+    // Start with initial state from timeline
+    const initialState = timelineItem.initialState || {};
+    const targetProps = timelineItem.properties || {};
+
+    // Interpolate numeric properties
+    const interpolate = (start: number, end: number, progress: number) => {
+      return start + (end - start) * progress;
+    };
+
+    // Build interpolated element state
+    const interpolatedElement: CanvasElement = {
+      ...element,
+      // Use initial state as base
+      x: initialState.x !== undefined ? initialState.x : element.x,
+      y: initialState.y !== undefined ? initialState.y : element.y,
+      width: initialState.width !== undefined ? initialState.width : element.width,
+      height: initialState.height !== undefined ? initialState.height : element.height,
+      rotation: initialState.rotation !== undefined ? initialState.rotation : element.rotation,
+      opacity: initialState.opacity !== undefined ? initialState.opacity : element.opacity,
+      fontSize: initialState.fontSize !== undefined ? initialState.fontSize : element.fontSize,
+    };
+
+    // Apply interpolation if properties are different
+    if (targetProps.x !== undefined && initialState.x !== undefined) {
+      interpolatedElement.x = interpolate(initialState.x, targetProps.x, progress);
+    } else if (targetProps.x !== undefined) {
+      interpolatedElement.x = targetProps.x;
+    }
+
+    if (targetProps.y !== undefined && initialState.y !== undefined) {
+      interpolatedElement.y = interpolate(initialState.y, targetProps.y, progress);
+    } else if (targetProps.y !== undefined) {
+      interpolatedElement.y = targetProps.y;
+    }
+
+    if (targetProps.width !== undefined && initialState.width !== undefined) {
+      interpolatedElement.width = interpolate(initialState.width, targetProps.width, progress);
+    } else if (targetProps.width !== undefined) {
+      interpolatedElement.width = targetProps.width;
+    }
+
+    if (targetProps.height !== undefined && initialState.height !== undefined) {
+      interpolatedElement.height = interpolate(initialState.height, targetProps.height, progress);
+    } else if (targetProps.height !== undefined) {
+      interpolatedElement.height = targetProps.height;
+    }
+
+    if (targetProps.rotation !== undefined && initialState.rotation !== undefined) {
+      interpolatedElement.rotation = interpolate(initialState.rotation, targetProps.rotation, progress);
+    } else if (targetProps.rotation !== undefined) {
+      interpolatedElement.rotation = targetProps.rotation;
+    }
+
+    if (targetProps.opacity !== undefined && initialState.opacity !== undefined) {
+      interpolatedElement.opacity = interpolate(initialState.opacity, targetProps.opacity, progress);
+    } else if (targetProps.opacity !== undefined) {
+      interpolatedElement.opacity = targetProps.opacity;
+    }
+
+    if (targetProps.fontSize !== undefined && initialState.fontSize !== undefined) {
+      interpolatedElement.fontSize = interpolate(initialState.fontSize, targetProps.fontSize, progress);
+    } else if (targetProps.fontSize !== undefined) {
+      interpolatedElement.fontSize = targetProps.fontSize;
+    }
+
+    // Apply non-interpolated properties
+    if (targetProps.color) {
+      interpolatedElement.color = targetProps.color;
+    } else if (initialState.color) {
+      interpolatedElement.color = initialState.color;
+    }
+
+    if (targetProps.backgroundColor) {
+      interpolatedElement.backgroundColor = targetProps.backgroundColor;
+    } else if (initialState.backgroundColor) {
+      interpolatedElement.backgroundColor = initialState.backgroundColor;
+    }
+
+    if (targetProps.fillColor) {
+      interpolatedElement.fillColor = targetProps.fillColor;
+    } else if (initialState.fillColor) {
+      interpolatedElement.fillColor = initialState.fillColor;
+    }
+
+    return interpolatedElement;
+  };
+
+  const renderElement = (element: CanvasElement) => {
+    const activeElement = getElementAtTime(element);
+    if (!activeElement) return null; // Don't render if not in timeline
+
+    const baseStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: `${activeElement.x}px`,
+      top: `${activeElement.y}px`,
+      width: `${activeElement.width}px`,
+      height: `${activeElement.height}px`,
+      opacity: activeElement.opacity ?? 1,
+      transform: `rotate(${activeElement.rotation}deg)`,
+      zIndex: activeElement.zIndex ?? 1,
+      visibility: activeElement.visible === false ? 'hidden' : 'visible',
+      borderRadius: activeElement.borderRadius ? `${activeElement.borderRadius}px` : undefined,
+      overflow: 'hidden',
+      // Smooth video-like transitions between frames
+      transition: hasTimeline ? 'none' : 'none', // No CSS transition, rely on RAF
+      willChange: hasTimeline ? 'transform, opacity, width, height' : 'auto', // GPU acceleration
+    };
+
+    const animationClass = getAnimationClass(activeElement.animation);
+
+    switch (activeElement.type) {
       case 'text':
         return (
           <div
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
             style={{
               ...baseStyle,
-              color: element.color || '#000000',
-              backgroundColor: element.backgroundColor,
-              fontSize: element.fontSize || 16,
-              fontWeight: element.textStyle?.bold ? 'bold' : 'normal',
-              fontStyle: element.textStyle?.italic ? 'italic' : 'normal',
-              textDecoration: element.textStyle?.underline ? 'underline' : 'none',
-              textAlign: element.textStyle?.textAlign || 'left',
-              fontFamily: element.textStyle?.fontFamily || 'Arial',
-              letterSpacing: `${element.textStyle?.letterSpacing || 0}px`,
-              lineHeight: `${element.textStyle?.lineHeight || 1.2}`,
+              color: activeElement.color || '#000000',
+              backgroundColor: activeElement.backgroundColor,
+              fontSize: activeElement.fontSize || 16,
+              fontWeight: activeElement.textStyle?.bold ? 'bold' : 'normal',
+              fontStyle: activeElement.textStyle?.italic ? 'italic' : 'normal',
+              textDecoration: activeElement.textStyle?.underline ? 'underline' : 'none',
+              textAlign: activeElement.textStyle?.textAlign || 'left',
+              fontFamily: activeElement.textStyle?.fontFamily || 'Arial',
+              letterSpacing: `${activeElement.textStyle?.letterSpacing || 0}px`,
+              lineHeight: `${activeElement.textStyle?.lineHeight || 1.2}`,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: element.textStyle?.textAlign || 'left',
+              justifyContent: activeElement.textStyle?.textAlign || 'left',
               wordWrap: 'break-word',
               overflowWrap: 'break-word',
             }}
           >
-            {element.content}
+            {activeElement.content}
           </div>
         );
 
       case 'html':
         return (
           <iframe
-            key={element.id}
-            srcDoc={element.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
+            key={activeElement.id}
+            srcDoc={activeElement.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
             className={animationClass}
             style={{
               ...baseStyle,
@@ -181,13 +380,13 @@ const Preview: React.FC = () => {
       case 'rect':
         return (
           <div
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
             style={{
               ...baseStyle,
-              backgroundColor: element.fillColor || element.backgroundColor || '#ffffff',
-              borderRadius: element.borderRadius || 0,
-              border: element.strokeColor ? `${element.strokeWidth || 1}px solid ${element.strokeColor}` : 'none',
+              backgroundColor: activeElement.fillColor || activeElement.backgroundColor || '#ffffff',
+              borderRadius: activeElement.borderRadius || 0,
+              border: activeElement.strokeColor ? `${activeElement.strokeWidth || 1}px solid ${activeElement.strokeColor}` : 'none',
             }}
           />
         );
@@ -195,24 +394,24 @@ const Preview: React.FC = () => {
       case 'circle':
         return (
           <div
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
             style={{
               ...baseStyle,
-              backgroundColor: element.fillColor || element.backgroundColor || '#ffffff',
+              backgroundColor: activeElement.fillColor || activeElement.backgroundColor || '#ffffff',
               borderRadius: '50%',
-              border: element.strokeColor ? `${element.strokeWidth || 1}px solid ${element.strokeColor}` : 'none',
+              border: activeElement.strokeColor ? `${activeElement.strokeWidth || 1}px solid ${activeElement.strokeColor}` : 'none',
             }}
           />
         );
 
       case 'video':
       case 'web-video':
-        return element.content && (element.content.startsWith('http') || element.content.startsWith('blob:')) ? (
+        return activeElement.content && (activeElement.content.startsWith('http') || activeElement.content.startsWith('blob:')) ? (
           <video 
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
-            src={element.content}
+            src={activeElement.content}
             style={{
               ...baseStyle,
               objectFit: 'cover',
@@ -225,11 +424,11 @@ const Preview: React.FC = () => {
 
       case 'gif':
       case 'web-image':
-        return element.content && element.content.startsWith('http') ? (
+        return activeElement.content && activeElement.content.startsWith('http') ? (
           <img
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
-            src={element.content}
+            src={activeElement.content}
             alt="Media"
             style={{
               ...baseStyle,
@@ -239,10 +438,10 @@ const Preview: React.FC = () => {
         ) : null;
 
       case 'instagram':
-        return element.widgetSettings?.embedCode ? (
+        return activeElement.widgetSettings?.embedCode ? (
           <iframe
-            key={element.id}
-            srcDoc={element.widgetSettings.embedCode}
+            key={activeElement.id}
+            srcDoc={activeElement.widgetSettings.embedCode}
             className={animationClass}
             style={{
               ...baseStyle,
@@ -621,9 +820,45 @@ const Preview: React.FC = () => {
 
           <div className="text-white text-sm">
             {design.metadata.canvasWidth} × {design.metadata.canvasHeight}px
+            {hasTimeline && (
+              <span className="ml-2 text-green-400">● Timeline Mode</span>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Playback Controls (only show if timeline exists) */}
+      {hasTimeline && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/90 rounded-full px-8 py-4 flex items-center gap-6 z-10 backdrop-blur-sm">
+          <button
+            onClick={togglePlayback}
+            className="text-white hover:text-green-400 transition-colors p-2 hover:bg-white/10 rounded-full"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? <Pause size={28} fill="white" /> : <Play size={28} fill="white" />}
+          </button>
+          <button
+            onClick={restartPlayback}
+            className="text-white hover:text-blue-400 transition-colors p-2 hover:bg-white/10 rounded-full"
+            title="Restart"
+          >
+            <RotateCcw size={24} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="text-white text-sm font-mono bg-white/10 px-3 py-1 rounded">
+              {(currentTime / 1000).toFixed(2)}s
+            </div>
+            <div className="text-gray-400 text-xs">/</div>
+            <div className="text-gray-300 text-sm font-mono">
+              {((design.designJSON.timeline?.totalDuration || 5000) / 1000).toFixed(2)}s
+            </div>
+          </div>
+          <div className="text-green-400 text-xs font-semibold bg-green-500/20 px-3 py-1 rounded-full flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            VIDEO MODE
+          </div>
+        </div>
+      )}
 
       {/* Canvas Display */}
       <div className="flex-1 flex items-center justify-center">

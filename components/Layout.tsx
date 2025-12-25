@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, Home } from 'lucide-react';
+import { Menu, X, LogOut, Home, Maximize2, Minimize2 } from 'lucide-react';
 // import { useAuth } from '../contexts/AuthContext'; // Authentication removed
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -25,6 +25,32 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     logout();
     navigate('/');
     setIsMenuOpen(false);
+  };
+
+  // Fullscreen toggle state and handlers
+  const [isFullscreen, setIsFullscreen] = React.useState<boolean>(false);
+
+  const syncFullscreenState = () => {
+    setIsFullscreen(!!document.fullscreenElement);
+  };
+
+  React.useEffect(() => {
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    // initial state
+    syncFullscreenState();
+    return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await (document.documentElement as HTMLElement).requestFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+      }
+    } catch (e) {
+      console.warn('Fullscreen toggle failed', e);
+    }
   };
 
   return (
@@ -186,6 +212,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <main className="flex-grow">
         {children}
       </main>
+
+      {/* Fullscreen toggle - visible on every page */}
+      <button
+        onClick={toggleFullscreen}
+        aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        className="fixed right-4 bottom-4 z-50 bg-primaryLight text-white p-3 rounded-full shadow-lg hover:bg-primary transition-colors"
+      >
+        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+      </button>
 
       {!isEditor && !isAuthPage && (
         <footer className="bg-black text-white mt-auto">

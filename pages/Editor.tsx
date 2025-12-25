@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Type, ImageIcon, Square, Video, Clock, CloudSun,
   ChevronRight, ChevronDown, ChevronUp, Search, ArrowLeft,
-  Copy, Trash2, Undo, Redo, Save,
+  Copy, Trash2, Undo, Redo, Save, X,
   AlignCenter, AlignLeft, AlignRight,
   Circle, Download, Eye, EyeOff,
   Triangle, Star, Heart, Menu, Plus, Minus, Lock, Unlock,
@@ -336,9 +336,11 @@ const GRADIENTS = [
 const Editor: React.FC = () => {
   const navigate = useNavigate();
   const { designId } = useParams<{ designId?: string }>();
+  
+  // Main state
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState(50);
   const [showSafeZone, setShowSafeZone] = useState(false);
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'templates' | 'uploads'>('design');
   const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers' | 'animation'>('properties');
@@ -363,6 +365,7 @@ const Editor: React.FC = () => {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSizeModal, setShowSizeModal] = useState(!designId); // Show size modal for new designs
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showFlutterModal, setShowFlutterModal] = useState(false);
   const [designTitle, setDesignTitle] = useState('My Design');
   const [newElementIds, setNewElementIds] = useState<Set<string>>(new Set());
   
@@ -402,9 +405,582 @@ const Editor: React.FC = () => {
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper functions for element rendering (must be defined before elementRenderers)
+  const getYouTubeEmbedUrl = (url: string): string | null => {
+    if (!url) return null;
+    
+    // Extract video ID from various YouTube URL formats
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
+      /youtube\.com\/embed\/([^&\s]+)/,
+      /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return `https://www.youtube.com/embed/${match[1]}`;
+      }
+    }
+    
+    return null;
+  };
+
+  const renderShape = (shapeType: ElementType, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
+    const svgStrokeProps = strokeWidth && strokeWidth > 0 ? { 
+      stroke: strokeColor || '#000000', 
+      strokeWidth,
+      fill: fillColor 
+    } : { fill: fillColor };
+
+    switch (shapeType) {
+      case ElementType.RECT:
+      case ElementType.SHAPE:
+        return <div className="w-full h-full" style={{ backgroundColor: fillColor, border: strokeWidth ? `${strokeWidth}px solid ${strokeColor}` : 'none' }}></div>;
+      case ElementType.CIRCLE:
+        return <div className="w-full h-full rounded-full" style={{ backgroundColor: fillColor, border: strokeWidth ? `${strokeWidth}px solid ${strokeColor}` : 'none' }}></div>;
+      case ElementType.TRIANGLE:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 90,85 10,85" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.DIAMOND:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 90,50 50,90 10,50" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.PENTAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 90,35 75,85 25,85 10,35" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.HEXAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 85,30 85,70 50,90 15,70 15,30" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.OCTAGON:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.TRAPEZOID:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="25,20 75,20 85,80 15,80" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.STAR:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="50,10 61,40 91,40 67,60 78,90 50,70 22,90 33,60 9,40 39,40" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.HEART:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <path d="M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.CRESCENT:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <path d="M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.CROSS:
+        return (
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            <polygon points="40,10 60,10 60,40 90,40 90,60 60,60 60,90 40,90 40,60 10,60 10,40 40,40" {...svgStrokeProps} />
+          </svg>
+        );
+      case ElementType.LINE:
+        return <div className="w-full h-full" style={{ backgroundColor: fillColor }}></div>;
+      default:
+        return null;
+    }
+  };
+
+  // Text element renderer function (to avoid circular reference)
+  const renderTextElement = (el: CanvasElement) => (
+    <div 
+      className="w-full h-full p-2 flex items-center justify-center overflow-hidden break-words whitespace-pre-wrap"
+      style={{
+        fontSize: el.fontSize,
+        color: el.color,
+        backgroundColor: el.backgroundColor,
+        fontWeight: el.textStyle?.bold ? 'bold' : 'normal',
+        fontStyle: el.textStyle?.italic ? 'italic' : 'normal',
+        textDecoration: el.textStyle?.underline ? 'underline' : 'none',
+        textAlign: el.textStyle?.textAlign || 'center',
+        fontFamily: el.textStyle?.fontFamily || 'Inter, sans-serif',
+      }}
+    >
+      {el.content}
+    </div>
+  );
+
+  // Element Renderer Configuration - Data-Driven Approach
+  type ElementRendererConfig = {
+    component: (el: CanvasElement) => React.ReactNode;
+    defaultContent?: string;
+    placeholder?: string;
+  };
+
+  const elementRenderers: Record<ElementType, ElementRendererConfig> = {
+    [ElementType.TEXT]: {
+      component: (el) => renderTextElement(el)
+    },
+    [ElementType.LABEL]: {
+      component: (el) => renderTextElement(el)
+    },
+    [ElementType.IMAGE]: {
+      component: (el) => (
+        <img 
+          src={el.content} 
+          alt="" 
+          className="w-full h-full object-cover pointer-events-none" 
+          style={{ borderRadius: el.borderRadius }} 
+        />
+      )
+    },
+    [ElementType.GIF]: {
+      component: (el) => elementRenderers[ElementType.IMAGE].component(el)
+    },
+    [ElementType.VIDEO]: {
+      component: (el) => el.content && (el.content.startsWith('http') || el.content.startsWith('blob:')) ? (
+        <video 
+          src={el.content} 
+          className="w-full h-full object-cover"
+          style={{ pointerEvents: 'none' }}
+          muted
+          loop
+          autoPlay={el.widgetSettings?.autoplay}
+        />
+      ) : (
+        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
+          Video (Add URL)
+        </div>
+      )
+    },
+    [ElementType.WEB_VIDEO]: {
+      component: (el) => el.content && el.content.startsWith('http') ? (
+        <iframe
+          src={el.content}
+          className="w-full h-full border-0"
+          style={{ pointerEvents: 'none' }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
+          Web Video (Add URL)
+        </div>
+      )
+    },
+    [ElementType.YOUTUBE]: {
+      component: (el) => getYouTubeEmbedUrl(el.content) ? (
+        <iframe
+          src={getYouTubeEmbedUrl(el.content) || ''}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : (
+        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
+          YouTube (Add URL)
+        </div>
+      )
+    },
+    [ElementType.TICKER]: {
+      component: (el) => (
+        <div className="w-full h-full overflow-hidden flex items-center bg-gradient-to-r from-gray-800 to-gray-900 px-3">
+          <div className="animate-marquee whitespace-nowrap" style={{ fontSize: el.fontSize, color: el.color || '#FFFFFF', fontWeight: 'bold' }}>
+            {el.content}
+          </div>
+        </div>
+      )
+    },
+    [ElementType.SLIDESHOW]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xl">
+          {el.content}
+        </div>
+      )
+    },
+    [ElementType.USTREAM]: {
+      component: (el) => el.content && el.content.startsWith('http') ? (
+        <iframe
+          src={el.content}
+          className="w-full h-full border-0"
+          style={{ pointerEvents: 'none' }}
+          allow="autoplay; fullscreen"
+        />
+      ) : (
+        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
+          Ustream (Add URL)
+        </div>
+      )
+    },
+    [ElementType.STREAMING]: {
+      component: (el) => el.content && el.content.startsWith('http') ? (
+        <iframe
+          src={el.content}
+          className="w-full h-full border-0"
+          style={{ pointerEvents: 'none' }}
+          allow="autoplay"
+        />
+      ) : (
+        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
+          Streaming (Add URL)
+        </div>
+      )
+    },
+    [ElementType.WEB_IMAGE]: {
+      component: (el) => el.content && el.content.startsWith('http') ? (
+        <img 
+          src={el.content} 
+          alt="Web Image" 
+          className="w-full h-full object-cover"
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-600">
+          Web Image (Add URL)
+        </div>
+      )
+    },
+    [ElementType.INSTAGRAM]: {
+      component: (el) => el.widgetSettings?.embedCode ? (
+        <iframe
+          srcDoc={el.widgetSettings.embedCode}
+          className="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin"
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : el.content && el.content.startsWith('http') ? (
+        <img 
+          src={el.content} 
+          alt="Instagram" 
+          className="w-full h-full object-cover"
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500 flex items-center justify-center text-white font-bold">
+          Instagram (Add URL)
+        </div>
+      )
+    },
+    [ElementType.RSS]: {
+      component: (el) => (
+        <div className="w-full h-full bg-orange-50 border border-orange-200 p-3 flex flex-col gap-2 overflow-hidden">
+          <div className="text-xs font-bold text-orange-800">{el.content}</div>
+          <div className="text-xs text-gray-600">Latest updates...</div>
+        </div>
+      )
+    },
+    [ElementType.MEDIA_RSS]: {
+      component: (el) => elementRenderers[ElementType.RSS].component(el)
+    },
+    [ElementType.WEATHER]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-sky-400 to-blue-500 p-4 text-white flex flex-col items-center justify-center gap-2">
+          <CloudSun size={48} className="mb-2" />
+          <div className="text-3xl font-bold">{el.widgetSettings?.temperature || '72'}°{el.widgetSettings?.temperatureUnit || 'F'}</div>
+          <div className="text-lg">{el.widgetSettings?.condition || 'Sunny'}</div>
+          <div className="text-sm opacity-90">{el.widgetSettings?.location || el.content || 'New York, NY'}</div>
+        </div>
+      )
+    },
+    [ElementType.WEATHER_2]: {
+      component: (el) => elementRenderers[ElementType.WEATHER].component(el)
+    },
+    [ElementType.CLOCK]: {
+      component: (el) => (
+        <div 
+          className="w-full h-full flex flex-col items-center justify-center gap-2"
+          style={{
+            backgroundColor: el.backgroundColor || '#1e293b',
+            color: el.color || '#f1f5f9',
+          }}
+        >
+          <Clock className="opacity-50" size={Math.min(el.fontSize || 24, 32)} />
+          <div 
+            className="font-bold font-mono"
+            style={{ fontSize: el.fontSize || 24 }}
+          >
+            {el.content || new Date().toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: el.widgetSettings?.timeFormat !== '24'
+            })}
+          </div>
+        </div>
+      )
+    },
+    [ElementType.TIMER]: {
+      component: (el) => (
+        <div 
+          className="w-full h-full flex flex-col items-center justify-center gap-2"
+          style={{
+            backgroundColor: el.backgroundColor || '#dc2626',
+            color: el.color || '#ffffff',
+          }}
+        >
+          <Clock className="opacity-75" size={Math.min(el.fontSize || 24, 32)} />
+          <div 
+            className="font-bold font-mono"
+            style={{ fontSize: el.fontSize || 32 }}
+          >
+            {el.content || '00:00:00'}
+          </div>
+        </div>
+      )
+    },
+    [ElementType.CALENDAR]: {
+      component: (el) => (
+        <div className="w-full h-full bg-white p-3 flex flex-col">
+          <div className="text-center font-bold text-gray-800 mb-2 pb-2 border-b border-gray-200">
+            {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </div>
+          <div className="grid grid-cols-7 gap-1 flex-1 text-xs">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+              <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
+            ))}
+            {Array.from({ length: 28 }, (_, i) => (
+              <div 
+                key={i} 
+                className={`text-center p-1 rounded ${
+                  i === new Date().getDate() - 1 
+                    ? 'bg-green-500 text-white font-bold' 
+                    : 'text-gray-700'
+                }`}
+              >
+                {i + 1}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    },
+    [ElementType.TABLE]: {
+      component: (el) => (
+        <div className="w-full h-full bg-white overflow-hidden">
+          <table className="w-full h-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-amber-500 text-white">
+                <th className="p-2 text-left border border-amber-600">Name</th>
+                <th className="p-2 text-left border border-amber-600">Status</th>
+                <th className="p-2 text-left border border-amber-600">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {['Item 1', 'Item 2', 'Item 3'].map((item, i) => (
+                <tr key={i} className="border-b border-gray-200 hover:bg-gray-50">
+                  <td className="p-2 border border-gray-200">{item}</td>
+                  <td className="p-2 border border-gray-200">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      i === 0 ? 'bg-green-100 text-green-700' : 
+                      i === 1 ? 'bg-yellow-100 text-yellow-700' : 
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {i === 0 ? 'Active' : i === 1 ? 'Pending' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="p-2 border border-gray-200 font-mono">${(Math.random() * 1000).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    },
+    [ElementType.DASHBOARDS]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-800 p-3 text-white">
+          <div className="font-bold text-sm mb-3 pb-2 border-b border-gray-700">
+            {el.content || 'Dashboard'}
+          </div>
+          <div className="grid grid-cols-2 gap-2 h-3/4">
+            <div className="bg-cyan-600 rounded-lg p-2 flex flex-col">
+              <div className="text-xs opacity-75">Views</div>
+              <div className="text-2xl font-bold mt-auto">12.5K</div>
+            </div>
+            <div className="bg-green-600 rounded-lg p-2 flex flex-col">
+              <div className="text-xs opacity-75">Revenue</div>
+              <div className="text-2xl font-bold mt-auto">$8.2K</div>
+            </div>
+            <div className="bg-purple-600 rounded-lg p-2 flex flex-col">
+              <div className="text-xs opacity-75">Users</div>
+              <div className="text-2xl font-bold mt-auto">3.4K</div>
+            </div>
+            <div className="bg-orange-600 rounded-lg p-2 flex flex-col">
+              <div className="text-xs opacity-75">Growth</div>
+              <div className="text-2xl font-bold mt-auto">+24%</div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    [ElementType.AD_SERVING]: {
+      component: (el) => el.content && el.content.startsWith('http') ? (
+        <img 
+          src={el.content} 
+          alt="Advertisement" 
+          className="w-full h-full object-cover"
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center gap-3 text-white p-4">
+          <ImageIcon size={40} />
+          <div className="text-center">
+            <div className="font-bold text-lg">Advertisement</div>
+            <div className="text-xs opacity-75 mt-1">{el.content || 'Add image URL in properties'}</div>
+          </div>
+        </div>
+      )
+    },
+    [ElementType.SMART_SWITCH]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-lime-400 to-green-500 flex flex-col items-center justify-center gap-4 p-4">
+          <div className="flex items-center gap-4">
+            <div className="text-white text-sm font-semibold">Option A</div>
+            <div className="relative w-14 h-7 bg-white rounded-full shadow-inner">
+              <div className="absolute top-1 left-1 w-5 h-5 bg-green-600 rounded-full transition-transform"></div>
+            </div>
+            <div className="text-white text-sm font-semibold">Option B</div>
+          </div>
+          <div className="text-white text-xs opacity-90">{el.content || 'Smart Switch'}</div>
+          <Settings className="text-white opacity-50" size={20} />
+        </div>
+      )
+    },
+    [ElementType.TOUCH]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-blue-300 opacity-20 animate-pulse"></div>
+          <div className="z-10 flex flex-col items-center gap-3 text-white">
+            <MousePointer2 size={32} className="animate-bounce" />
+            <span className="text-sm font-semibold">{el.content || 'Touch Zone'}</span>
+          </div>
+        </div>
+      )
+    },
+    [ElementType.FTP]: {
+      component: (el) => (
+        <div className="w-full h-full bg-teal-50 border border-teal-300 p-3 flex items-center gap-2">
+          <div className="text-teal-800 text-sm">{el.content}</div>
+        </div>
+      )
+    },
+    [ElementType.SUB_CREATIVE]: {
+      component: (el) => (
+        <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
+          {el.content}
+        </div>
+      )
+    },
+    [ElementType.EMBED]: {
+      component: (el) => el.widgetSettings?.embedCode ? (
+        <iframe
+          srcDoc={el.widgetSettings.embedCode}
+          className="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin"
+          style={{ pointerEvents: 'none' }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gray-50 border-2 border-gray-300 flex items-center justify-center text-gray-700">
+          {el.content || 'Add embed code in properties'}
+        </div>
+      )
+    },
+    [ElementType.HTML]: {
+      component: (el) => (
+        <iframe
+          srcDoc={el.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">Add HTML code in properties</div>'}
+          className="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin"
+          style={{ pointerEvents: 'none' }}
+        />
+      )
+    },
+    // Shape elements
+    [ElementType.RECT]: {
+      component: (el) => (
+        <div style={{ borderRadius: el.borderRadius, width: '100%', height: '100%' }}>
+          {renderShape(el.type, el.fillColor || '#0F172A', el.strokeColor, el.strokeWidth)}
+        </div>
+      )
+    },
+    [ElementType.CIRCLE]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.TRIANGLE]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.STAR]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.HEART]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.LINE]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.PENTAGON]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.HEXAGON]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.OCTAGON]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.DIAMOND]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.TRAPEZOID]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.CRESCENT]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.CROSS]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+    [ElementType.SHAPE]: {
+      component: (el) => elementRenderers[ElementType.RECT].component(el)
+    },
+  };
+
+  // Data-driven element renderer
+  const renderElement = (el: CanvasElement): React.ReactNode => {
+    const renderer = elementRenderers[el.type];
+    if (!renderer) {
+      return (
+        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-600">
+          Unknown Element Type
+        </div>
+      );
+    }
+    return renderer.component(el);
+  };
+
   // Timeline state (always visible like CapCut)
   const [showTimeline, setShowTimeline] = useState(true);
   const [timelineHeight, setTimelineHeight] = useState(350);
+  
+  // Canvas panning state
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [spacePressed, setSpacePressed] = useState(false);
   
   // Initialize timeline hook
   const {
@@ -450,7 +1026,7 @@ const Editor: React.FC = () => {
       if (!container) return;
 
       const containerWidth = container.clientWidth - 96; // Account for padding
-      const containerHeight = container.clientHeight - 96;
+      const containerHeight = container.clientHeight - 200; // Account for padding and timeline
       
       const scaleWidth = containerWidth / canvasSize.width;
       const scaleHeight = containerHeight / canvasSize.height;
@@ -458,17 +1034,19 @@ const Editor: React.FC = () => {
       const optimalScale = Math.min(scaleWidth, scaleHeight, 1); // Don't scale up beyond 100%
       const optimalZoom = Math.floor(optimalScale * 100);
       
-      // Only auto-adjust if canvas would overflow
-      if (canvasSize.width > containerWidth || canvasSize.height > containerHeight) {
-        setZoom(Math.max(10, optimalZoom)); // Minimum 10% zoom
-      }
+      // Always auto-adjust zoom to fit the canvas
+      setZoom(Math.max(10, Math.min(optimalZoom, 100))); // Between 10% and 100%
     };
 
-    calculateOptimalZoom();
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(calculateOptimalZoom, 100);
     window.addEventListener('resize', calculateOptimalZoom);
     
-    return () => window.removeEventListener('resize', calculateOptimalZoom);
-  }, [canvasSize, leftSidebarOpen, rightSidebarOpen]);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', calculateOptimalZoom);
+    };
+  }, [canvasSize, leftSidebarOpen, rightSidebarOpen, showTimeline]);
 
   const updateHistory = (newElements: CanvasElement[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -506,6 +1084,15 @@ const Editor: React.FC = () => {
     if (fontSize) e.dataTransfer.setData('fontSize', fontSize.toString());
     e.dataTransfer.effectAllowed = 'copy';
     setDraggingFromSidebar(true);
+  };
+
+  const handleCanvasBackgroundMouseDown = (e: React.MouseEvent) => {
+    // Start panning with Space + Click or Middle Mouse Button
+    if (spacePressed || e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
+    }
   };
 
   const handleDropOnCanvas = (e: React.DragEvent) => {
@@ -714,26 +1301,6 @@ const Editor: React.FC = () => {
     setRightSidebarOpen(true);
   };
 
-  const getYouTubeEmbedUrl = (url: string): string | null => {
-    if (!url) return null;
-    
-    // Extract video ID from various YouTube URL formats
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
-      /youtube\.com\/embed\/([^&\s]+)/,
-      /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
-    ];
-    
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match && match[1]) {
-        return `https://www.youtube.com/embed/${match[1]}`;
-      }
-    }
-    
-    return null;
-  };
-
   const getDefaultContent = (type: ElementType) => {
     switch (type) {
       // Essential
@@ -824,91 +1391,6 @@ const Editor: React.FC = () => {
     return animationMap[animation] || '';
   };
 
-  const renderShape = (shapeType: ElementType, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
-    const svgStrokeProps = strokeWidth && strokeWidth > 0 ? { 
-      stroke: strokeColor || '#000000', 
-      strokeWidth,
-      fill: fillColor 
-    } : { fill: fillColor };
-
-    switch (shapeType) {
-      case ElementType.RECT:
-      case ElementType.SHAPE:
-        return <div className="w-full h-full" style={{ backgroundColor: fillColor, border: strokeWidth ? `${strokeWidth}px solid ${strokeColor}` : 'none' }}></div>;
-      case ElementType.CIRCLE:
-        return <div className="w-full h-full rounded-full" style={{ backgroundColor: fillColor, border: strokeWidth ? `${strokeWidth}px solid ${strokeColor}` : 'none' }}></div>;
-      case ElementType.TRIANGLE:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="50,10 90,85 10,85" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.DIAMOND:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="50,10 90,50 50,90 10,50" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.PENTAGON:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="50,10 90,35 75,85 25,85 10,35" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.HEXAGON:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="50,10 85,30 85,70 50,90 15,70 15,30" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.OCTAGON:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.TRAPEZOID:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="25,20 75,20 85,80 15,80" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.STAR:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <polygon points="50,10 61,40 91,40 67,60 78,90 50,70 22,90 33,60 9,40 39,40" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.HEART:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <path d="M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.CRESCENT:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <path d="M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.CROSS:
-        return (
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <rect x="40" y="10" width="20" height="80" {...svgStrokeProps} />
-            <rect x="10" y="40" width="80" height="20" {...svgStrokeProps} />
-          </svg>
-        );
-      case ElementType.LINE:
-        return (
-          <svg viewBox="0 0 100 4" className="w-full h-full" preserveAspectRatio="none">
-            <line x1="0" y1="2" x2="100" y2="2" stroke={fillColor} strokeWidth="4" />
-          </svg>
-        );
-      default:
-        return null;
-    }
-  };
-
   const handleMouseDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const element = elements.find(el => el.id === id);
@@ -950,6 +1432,14 @@ const Editor: React.FC = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Canvas panning
+    if (isPanning) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      setCanvasPan({ x: dx, y: dy });
+      return;
+    }
+
     if (dragInfo && !resizing) {
       const scale = zoom / 100;
       const dx = (e.clientX - dragInfo.startX) / scale;
@@ -1032,6 +1522,9 @@ const Editor: React.FC = () => {
   };
 
   const handleMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
     if (dragInfo || resizing) {
       updateHistory(elements);
       
@@ -1323,6 +1816,249 @@ const Editor: React.FC = () => {
     }
   };
 
+  // Show Flutter save modal
+  const showFlutterSaveModal = () => {
+    setShowFlutterModal(true);
+  };
+
+  // Export design as Flutter-friendly JSON
+  const exportAsFlutterJSON = async (flutterTitle: string) => {
+    const flutterDesign = {
+      canvas: {
+        width: canvasSize.width,
+        height: canvasSize.height,
+        backgroundColor: canvasColor,
+      },
+      elements: elements.map(el => {
+        const baseElement: any = {
+          id: el.id,
+          type: el.type,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          rotation: (el.rotation * Math.PI) / 180, // Convert to radians
+          opacity: el.opacity,
+          zIndex: el.zIndex,
+          visible: el.visible !== undefined ? el.visible : true,
+        };
+
+        // Add type-specific properties
+        if (el.type === ElementType.TEXT || el.type === ElementType.LABEL) {
+          baseElement.text = el.content;
+          baseElement.fontSize = el.fontSize || 16;
+          baseElement.color = el.color || '#000000';
+          baseElement.fontFamily = el.textStyle?.fontFamily || 'Arial';
+          baseElement.fontWeight = el.textStyle?.bold ? 'bold' : 'normal';
+          baseElement.fontStyle = el.textStyle?.italic ? 'italic' : 'normal';
+          baseElement.textAlign = el.textStyle?.textAlign || 'left';
+          baseElement.letterSpacing = el.textStyle?.letterSpacing || 0;
+          baseElement.lineHeight = el.textStyle?.lineHeight || 1.2;
+        }
+
+        if (el.type === ElementType.IMAGE || el.type === ElementType.WEB_IMAGE) {
+          baseElement.imageUrl = el.content;
+          baseElement.fit = 'cover';
+        }
+
+        if (el.type === ElementType.VIDEO || el.type === ElementType.WEB_VIDEO) {
+          baseElement.videoUrl = el.content;
+        }
+
+        // Shape properties
+        if ([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, 
+             ElementType.HEART, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON,
+             ElementType.OCTAGON, ElementType.LINE, ElementType.TRAPEZOID, ElementType.CRESCENT,
+             ElementType.CROSS].includes(el.type)) {
+          baseElement.fillColor = el.fillColor || el.backgroundColor || '#000000';
+          baseElement.strokeColor = el.strokeColor || 'transparent';
+          baseElement.strokeWidth = el.strokeWidth || 0;
+        }
+
+        if (el.backgroundColor) {
+          baseElement.backgroundColor = el.backgroundColor;
+        }
+
+        return baseElement;
+      }),
+      animations: timeline.tracks.flatMap(track => 
+        track.items.map(item => {
+          const element = elements.find(el => el.id === item.elementId);
+          if (!element) return null;
+
+          const animation: any = {
+            elementId: item.elementId,
+            startTime: item.startTime,
+            duration: item.duration,
+            keyframes: [],
+          };
+
+          // Extract keyframes from timeline item properties
+          const props = item.properties || {};
+          const keyframeData: any = {};
+
+          // Position keyframes
+          if (props.x !== undefined || props.y !== undefined) {
+            keyframeData.position = {
+              x: props.x !== undefined ? props.x : element.x,
+              y: props.y !== undefined ? props.y : element.y,
+            };
+          }
+
+          // Scale keyframes (from width/height changes)
+          if (props.width !== undefined || props.height !== undefined) {
+            keyframeData.scale = {
+              x: props.width !== undefined ? props.width / element.width : 1.0,
+              y: props.height !== undefined ? props.height / element.height : 1.0,
+            };
+          }
+
+          // Rotation keyframe (convert to radians)
+          if (props.rotation !== undefined) {
+            keyframeData.rotation = (props.rotation * Math.PI) / 180;
+          }
+
+          // Opacity keyframe
+          if (props.opacity !== undefined) {
+            keyframeData.opacity = props.opacity;
+          }
+
+          // Color keyframes
+          if (props.color) {
+            keyframeData.color = props.color;
+          }
+          if (props.backgroundColor) {
+            keyframeData.backgroundColor = props.backgroundColor;
+          }
+          if (props.fillColor) {
+            keyframeData.fillColor = props.fillColor;
+          }
+
+          // Create keyframes at start and end
+          animation.keyframes = [
+            {
+              time: 0,
+              ...keyframeData,
+            },
+            {
+              time: item.duration,
+              ...keyframeData,
+            },
+          ];
+
+          return animation;
+        }).filter(Boolean)
+      ),
+      timeline: {
+        duration: timeline.totalDuration,
+        currentTime: timeline.currentTime,
+        fps: 60,
+      },
+    };
+
+    // Save Flutter JSON to Firebase with complete timeline
+    try {
+      // Export complete timeline with video-like animation data
+      const timelineVideoData = {
+        tracks: timeline.tracks.map(track => ({
+          id: track.id,
+          name: track.name,
+          type: track.type,
+          items: track.items.map(item => {
+            const element = elements.find(el => el.id === item.elementId);
+            return {
+              id: item.id,
+              elementId: item.elementId,
+              startTime: item.startTime,
+              duration: item.duration,
+              inPoint: item.inPoint || 0,
+              outPoint: item.outPoint || item.duration,
+              layer: item.layer,
+              // Snapshot of element properties at start
+              initialState: element ? {
+                x: element.x,
+                y: element.y,
+                width: element.width,
+                height: element.height,
+                rotation: element.rotation,
+                opacity: element.opacity,
+                color: element.color,
+                backgroundColor: element.backgroundColor,
+                fillColor: element.fillColor,
+                fontSize: element.fontSize,
+              } : {},
+              // Timeline-modified properties
+              properties: item.properties || {},
+              // Animation keyframes if any
+              animations: item.animations || [],
+            };
+          }),
+        })),
+        totalDuration: timeline.totalDuration,
+        fps: 60,
+      };
+
+      const flutterExport = {
+        metadata: {
+          title: flutterTitle,
+          description: 'Flutter-ready JSON export with animations',
+          canvasWidth: canvasSize.width,
+          canvasHeight: canvasSize.height,
+          canvasColor: canvasColor,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: 'current-user',
+          tags: ['flutter', 'export'],
+          version: 1,
+        },
+        designJSON: {
+          elements: elements.map(el => ({
+            ...el,
+            content: el.content || '',
+            visible: el.visible !== undefined ? el.visible : true,
+            locked: el.locked || false,
+          })),
+          totalElements: elements.length,
+          version: '1.0.0',
+          timeline: timelineVideoData, // Complete timeline video data
+          flutterData: flutterDesign, // Store Flutter-specific data
+        },
+      };
+
+      let result;
+      if (designId) {
+        // Update existing design with Flutter export
+        result = await updateDesignInFirestore(designId, flutterExport);
+        console.log('Flutter export saved to existing design:', designId);
+      } else {
+        // Save as new Flutter design
+        result = await saveDesignToFirebase(
+          elements,
+          {
+            title: flutterTitle,
+            description: 'Flutter-ready JSON export with animations',
+            canvasWidth: canvasSize.width,
+            canvasHeight: canvasSize.height,
+            canvasColor: canvasColor,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: 'current-user',
+            tags: ['flutter', 'export'],
+            version: 1,
+          }
+        );
+        console.log('Flutter export saved as new design');
+      }
+
+      if (result?.success) {
+        alert('Flutter JSON saved to Firebase successfully!');
+      }
+    } catch (error) {
+      console.error('Error saving Flutter JSON:', error);
+      alert('Failed to save Flutter JSON to Firebase');
+    }
+  };
+
   // Save design - opens modal for metadata entry
   const saveDesign = () => {
     setShowSaveModal(true);
@@ -1351,6 +2087,46 @@ const Editor: React.FC = () => {
         };
       });
 
+      // Export complete timeline with video-like animation data
+      const timelineVideoData = {
+        tracks: timeline.tracks.map(track => ({
+          id: track.id,
+          name: track.name,
+          type: track.type,
+          items: track.items.map(item => {
+            const element = elements.find(el => el.id === item.elementId);
+            return {
+              id: item.id,
+              elementId: item.elementId,
+              startTime: item.startTime,
+              duration: item.duration,
+              inPoint: item.inPoint || 0,
+              outPoint: item.outPoint || item.duration,
+              layer: item.layer,
+              // Snapshot of element properties at start
+              initialState: element ? {
+                x: element.x,
+                y: element.y,
+                width: element.width,
+                height: element.height,
+                rotation: element.rotation,
+                opacity: element.opacity,
+                color: element.color,
+                backgroundColor: element.backgroundColor,
+                fillColor: element.fillColor,
+                fontSize: element.fontSize,
+              } : {},
+              // Timeline-modified properties
+              properties: item.properties || {},
+              // Animation keyframes if any
+              animations: item.animations || [],
+            };
+          }),
+        })),
+        totalDuration: timeline.totalDuration,
+        fps: 60,
+      };
+
       const exportedDesign = {
         metadata: {
           title: data.title,
@@ -1368,7 +2144,7 @@ const Editor: React.FC = () => {
           elements: elementsWithDefaults,
           totalElements: elementsWithDefaults.length,
           version: '1.0.0',
-          timeline: exportTimeline(), // Include timeline state
+          timeline: timelineVideoData, // Complete timeline video data
         },
       };
 
@@ -1896,6 +2672,13 @@ const Editor: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingTextId) return;
 
+      // Handle space key for panning
+      if (e.code === 'Space' && !spacePressed) {
+        e.preventDefault();
+        setSpacePressed(true);
+        return;
+      }
+
       // Don't handle keyboard shortcuts if user is typing in an input field
       const target = e.target as HTMLElement;
       const isTypingInInput = 
@@ -1927,9 +2710,20 @@ const Editor: React.FC = () => {
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, editingTextId, historyIndex, elements]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedIds, editingTextId, historyIndex, elements, spacePressed]);
 
   return (
     <div 
@@ -2071,6 +2865,15 @@ const Editor: React.FC = () => {
           >
             <Download size={18} />
             Export
+          </button>
+
+          <button 
+            onClick={showFlutterSaveModal}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-purple-500/30 button-hover-scale"
+            title="Export as Flutter JSON"
+          >
+            <Zap size={18} />
+            Flutter
           </button>
 
           <button 
@@ -2258,8 +3061,16 @@ const Editor: React.FC = () => {
         {/* Canvas Area */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
           <div 
-            className={`flex-1 overflow-auto p-12 flex items-center justify-center transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''}`}
+            className={`flex-1 overflow-auto transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''} ${spacePressed || isPanning ? 'cursor-grab' : ''} ${isPanning ? 'cursor-grabbing' : ''}`}
             onClick={() => setSelectedIds([])}
+            onMouseDown={(e) => {
+              // Start panning with Space + Click or Middle Mouse Button
+              if (spacePressed || e.button === 1) {
+                e.preventDefault();
+                setIsPanning(true);
+                setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
+              }
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               setDraggingFromSidebar(true);
@@ -2270,6 +3081,17 @@ const Editor: React.FC = () => {
               }
             }}
             onDrop={handleDropOnCanvas}
+            onContextMenu={(e) => {
+              // Prevent context menu on right click to allow potential future use
+              if (e.button === 2) e.preventDefault();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '48px',
+              userSelect: isPanning ? 'none' : 'auto',
+            }}
           >
             <div 
               ref={canvasRef}
@@ -2278,11 +3100,9 @@ const Editor: React.FC = () => {
                 width: `${canvasSize.width}px`, 
                 height: `${canvasSize.height}px`,
                 backgroundColor: canvasColor,
-                transform: `scale(${zoom / 100})`,
+                transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoom / 100})`,
                 transformOrigin: 'center center',
-                transition: 'transform 0.2s ease-out',
-                maxWidth: '100%',
-                maxHeight: '100%',
+                transition: isPanning ? 'none' : 'transform 0.2s ease-out',
               }}
             >
               {/* Timeline Position Indicator - CapCut Style */}
@@ -2391,320 +3211,9 @@ const Editor: React.FC = () => {
                           fontFamily: el.textStyle?.fontFamily || 'Inter, sans-serif',
                         }}
                       />
-                    ) : el.type === ElementType.TEXT || el.type === ElementType.LABEL ? (
-                      <div 
-                        className="w-full h-full p-2 flex items-center justify-center overflow-hidden break-words whitespace-pre-wrap"
-                        style={{
-                          fontSize: el.fontSize,
-                          color: el.color,
-                          backgroundColor: el.backgroundColor,
-                          fontWeight: el.textStyle?.bold ? 'bold' : 'normal',
-                          fontStyle: el.textStyle?.italic ? 'italic' : 'normal',
-                          textDecoration: el.textStyle?.underline ? 'underline' : 'none',
-                          textAlign: el.textStyle?.textAlign || 'center',
-                          fontFamily: el.textStyle?.fontFamily || 'Inter, sans-serif',
-                        }}
-                      >
-                        {el.content}
-                      </div>
-                    ) : el.type === ElementType.IMAGE || el.type === ElementType.GIF ? (
-                      <img 
-                        src={el.content} 
-                        alt="" 
-                        className="w-full h-full object-cover pointer-events-none" 
-                        style={{ borderRadius: el.borderRadius }} 
-                      />
-                    ) : el.type === ElementType.TICKER ? (
-                      <div className="w-full h-full overflow-hidden flex items-center bg-gradient-to-r from-gray-800 to-gray-900 px-3">
-                        <div className="animate-marquee whitespace-nowrap" style={{ fontSize: el.fontSize, color: el.color || '#FFFFFF', fontWeight: 'bold' }}>
-                          {el.content}
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.SLIDESHOW ? (
-                      <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xl">
-                        {el.content}
-                      </div>
-                    ) : el.type === ElementType.YOUTUBE ? (
-                      getYouTubeEmbedUrl(el.content) ? (
-                        <iframe
-                          src={getYouTubeEmbedUrl(el.content) || ''}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-                          YouTube (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.VIDEO || el.type === ElementType.WEB_VIDEO ? (
-                      el.content && (el.content.startsWith('http') || el.content.startsWith('blob:')) ? (
-                        <video 
-                          src={el.content} 
-                          className="w-full h-full object-cover"
-                          style={{ pointerEvents: 'none' }}
-                          muted
-                          loop
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-                          Video (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.USTREAM ? (
-                      el.content && el.content.startsWith('http') ? (
-                        <iframe
-                          src={el.content}
-                          className="w-full h-full border-0"
-                          style={{ pointerEvents: 'none' }}
-                          allow="autoplay; fullscreen"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-                          Ustream (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.STREAMING ? (
-                      el.content && el.content.startsWith('http') ? (
-                        <iframe
-                          src={el.content}
-                          className="w-full h-full border-0"
-                          style={{ pointerEvents: 'none' }}
-                          allow="autoplay"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-                          Streaming (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.WEB_IMAGE ? (
-                      el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Web Image" 
-                          className="w-full h-full object-cover"
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-600">
-                          Web Image (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.INSTAGRAM ? (
-                      el.widgetSettings?.embedCode ? (
-                        <iframe
-                          srcDoc={el.widgetSettings.embedCode}
-                          className="w-full h-full border-0"
-                          sandbox="allow-scripts allow-same-origin"
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Instagram" 
-                          className="w-full h-full object-cover"
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500 flex items-center justify-center text-white font-bold">
-                          Instagram (Add URL)
-                        </div>
-                      )
-                    ) : el.type === ElementType.RSS || el.type === ElementType.MEDIA_RSS ? (
-                      <div className="w-full h-full bg-orange-50 border border-orange-200 p-3 flex flex-col gap-2 overflow-hidden">
-                        <div className="text-xs font-bold text-orange-800">{el.content}</div>
-                        <div className="text-xs text-gray-600">Latest updates...</div>
-                      </div>
-                    ) : el.type === ElementType.WEATHER || el.type === ElementType.WEATHER_2 ? (
-                      <div className="w-full h-full bg-gradient-to-br from-sky-400 to-blue-500 p-4 text-white flex flex-col items-center justify-center gap-2">
-                        <CloudSun size={48} className="mb-2" />
-                        <div className="text-3xl font-bold">{el.widgetSettings?.temperature || '72'}°{el.widgetSettings?.temperatureUnit || 'F'}</div>
-                        <div className="text-lg">{el.widgetSettings?.condition || 'Sunny'}</div>
-                        <div className="text-sm opacity-90">{el.widgetSettings?.location || el.content || 'New York, NY'}</div>
-                      </div>
-                    ) : el.type === ElementType.CLOCK ? (
-                      <div 
-                        className="w-full h-full flex flex-col items-center justify-center gap-2"
-                        style={{
-                          backgroundColor: el.backgroundColor || '#1e293b',
-                          color: el.color || '#f1f5f9',
-                        }}
-                      >
-                        <Clock className="opacity-50" size={Math.min(el.fontSize || 24, 32)} />
-                        <div 
-                          className="font-bold font-mono"
-                          style={{ fontSize: el.fontSize || 24 }}
-                        >
-                          {el.content || new Date().toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            hour12: el.widgetSettings?.timeFormat !== '24'
-                          })}
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.TIMER ? (
-                      <div 
-                        className="w-full h-full flex flex-col items-center justify-center gap-2"
-                        style={{
-                          backgroundColor: el.backgroundColor || '#dc2626',
-                          color: el.color || '#ffffff',
-                        }}
-                      >
-                        <Clock className="opacity-75" size={Math.min(el.fontSize || 24, 32)} />
-                        <div 
-                          className="font-bold font-mono"
-                          style={{ fontSize: el.fontSize || 32 }}
-                        >
-                          {el.content || '00:00:00'}
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.CALENDAR ? (
-                      <div className="w-full h-full bg-white p-3 flex flex-col">
-                        <div className="text-center font-bold text-gray-800 mb-2 pb-2 border-b border-gray-200">
-                          {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 flex-1 text-xs">
-                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                            <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
-                          ))}
-                          {Array.from({ length: 28 }, (_, i) => (
-                            <div 
-                              key={i} 
-                              className={`text-center p-1 rounded ${
-                                i === new Date().getDate() - 1 
-                                  ? 'bg-green-500 text-white font-bold' 
-                                  : 'text-gray-700'
-                              }`}
-                            >
-                              {i + 1}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.TABLE ? (
-                      <div className="w-full h-full bg-white overflow-hidden">
-                        <table className="w-full h-full text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-amber-500 text-white">
-                              <th className="p-2 text-left border border-amber-600">Name</th>
-                              <th className="p-2 text-left border border-amber-600">Status</th>
-                              <th className="p-2 text-left border border-amber-600">Value</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {['Item 1', 'Item 2', 'Item 3'].map((item, i) => (
-                              <tr key={i} className="border-b border-gray-200 hover:bg-gray-50">
-                                <td className="p-2 border border-gray-200">{item}</td>
-                                <td className="p-2 border border-gray-200">
-                                  <span className={`px-2 py-1 rounded text-xs ${
-                                    i === 0 ? 'bg-green-100 text-green-700' : 
-                                    i === 1 ? 'bg-yellow-100 text-yellow-700' : 
-                                    'bg-red-100 text-red-700'
-                                  }`}>
-                                    {i === 0 ? 'Active' : i === 1 ? 'Pending' : 'Inactive'}
-                                  </span>
-                                </td>
-                                <td className="p-2 border border-gray-200 font-mono">${(Math.random() * 1000).toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : el.type === ElementType.DASHBOARDS ? (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-800 p-3 text-white">
-                        <div className="font-bold text-sm mb-3 pb-2 border-b border-gray-700">
-                          {el.content || 'Dashboard'}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 h-3/4">
-                          <div className="bg-cyan-600 rounded-lg p-2 flex flex-col">
-                            <div className="text-xs opacity-75">Views</div>
-                            <div className="text-2xl font-bold mt-auto">12.5K</div>
-                          </div>
-                          <div className="bg-green-600 rounded-lg p-2 flex flex-col">
-                            <div className="text-xs opacity-75">Revenue</div>
-                            <div className="text-2xl font-bold mt-auto">$8.2K</div>
-                          </div>
-                          <div className="bg-purple-600 rounded-lg p-2 flex flex-col">
-                            <div className="text-xs opacity-75">Users</div>
-                            <div className="text-2xl font-bold mt-auto">3.4K</div>
-                          </div>
-                          <div className="bg-orange-600 rounded-lg p-2 flex flex-col">
-                            <div className="text-xs opacity-75">Growth</div>
-                            <div className="text-2xl font-bold mt-auto">+24%</div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.AD_SERVING ? (
-                      el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Advertisement" 
-                          className="w-full h-full object-cover"
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center gap-3 text-white p-4">
-                          <ImageIcon size={40} />
-                          <div className="text-center">
-                            <div className="font-bold text-lg">Advertisement</div>
-                            <div className="text-xs opacity-75 mt-1">{el.content || 'Add image URL in properties'}</div>
-                          </div>
-                        </div>
-                      )
-                    ) : el.type === ElementType.SMART_SWITCH ? (
-                      <div className="w-full h-full bg-gradient-to-br from-lime-400 to-green-500 flex flex-col items-center justify-center gap-4 p-4">
-                        <div className="flex items-center gap-4">
-                          <div className="text-white text-sm font-semibold">Option A</div>
-                          <div className="relative w-14 h-7 bg-white rounded-full shadow-inner">
-                            <div className="absolute top-1 left-1 w-5 h-5 bg-green-600 rounded-full transition-transform"></div>
-                          </div>
-                          <div className="text-white text-sm font-semibold">Option B</div>
-                        </div>
-                        <div className="text-white text-xs opacity-90">{el.content || 'Smart Switch'}</div>
-                        <Settings className="text-white opacity-50" size={20} />
-                      </div>
-                    ) : el.type === ElementType.TOUCH ? (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-blue-300 opacity-20 animate-pulse"></div>
-                        <div className="z-10 flex flex-col items-center gap-3 text-white">
-                          <MousePointer2 size={32} className="animate-bounce" />
-                          <span className="text-sm font-semibold">{el.content || 'Touch Zone'}</span>
-                        </div>
-                      </div>
-                    ) : el.type === ElementType.FTP ? (
-                      <div className="w-full h-full bg-teal-50 border border-teal-300 p-3 flex items-center gap-2">
-                        <div className="text-teal-800 text-sm">{el.content}</div>
-                      </div>
-                    ) : el.type === ElementType.SUB_CREATIVE ? (
-                      <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
-                        {el.content}
-                      </div>
-                    ) : el.type === ElementType.EMBED ? (
-                      el.widgetSettings?.embedCode ? (
-                        <iframe
-                          srcDoc={el.widgetSettings.embedCode}
-                          className="w-full h-full border-0"
-                          sandbox="allow-scripts allow-same-origin"
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-50 border-2 border-gray-300 flex items-center justify-center text-gray-700">
-                          {el.content || 'Add embed code in properties'}
-                        </div>
-                      )
-                    ) : el.type === ElementType.HTML ? (
-                      <iframe
-                        srcDoc={el.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">Add HTML code in properties</div>'}
-                        className="w-full h-full border-0"
-                        sandbox="allow-scripts allow-same-origin"
-                        style={{ pointerEvents: 'none' }}
-                      />
-                    ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS, ElementType.SHAPE].includes(el.type) ? (
-                      <div style={{ borderRadius: el.borderRadius, width: '100%', height: '100%' }}>
-                        {renderShape(el.type, el.fillColor || '#0F172A', el.strokeColor, el.strokeWidth)}
-                      </div>
-                    ) : null}
+                    ) : (
+                      renderElement(el)
+                    )}
 
                     {selectedIds.includes(el.id) && !el.locked && selectedIds.length === 1 && (
                       <>
@@ -2781,6 +3290,7 @@ const Editor: React.FC = () => {
               <button 
                 onClick={() => setZoom(Math.max(25, zoom - 25))} 
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
+                title="Zoom Out"
               >
                 <Minus size={16} />
               </button>
@@ -2790,8 +3300,17 @@ const Editor: React.FC = () => {
               <button 
                 onClick={() => setZoom(Math.min(200, zoom + 25))} 
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
+                title="Zoom In"
               >
                 <Plus size={16} />
+              </button>
+              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+              <button 
+                onClick={() => setCanvasPan({ x: 0, y: 0 })} 
+                className="p-2 hover:bg-white rounded-lg transition-all shadow-sm text-gray-600 hover:text-gray-900"
+                title="Reset Pan (Space + Drag to move canvas)"
+              >
+                <Maximize2 size={16} />
               </button>
             </div>
             <div className="text-sm text-gray-600">
@@ -4941,6 +5460,69 @@ const Editor: React.FC = () => {
         successMessage={successMessage}
         defaultTitle={designTitle}
       />
+
+      {/* Flutter Export Modal */}
+      {showFlutterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 modal-content">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-purple-600">Export to Flutter</h2>
+              <button
+                onClick={() => setShowFlutterModal(false)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Design Name
+                </label>
+                <input
+                  type="text"
+                  id="flutterTitle"
+                  placeholder="Enter Flutter design name"
+                  defaultValue={`${designTitle} (Flutter)`}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <p className="text-sm text-purple-800">
+                  <strong>Export includes:</strong>
+                  <br />• Canvas dimensions & colors
+                  <br />• All elements with absolute positions
+                  <br />• Timeline-based keyframe animations
+                  <br />• Rotation in radians, opacity, scale
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowFlutterModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const titleInput = document.getElementById('flutterTitle') as HTMLInputElement;
+                    const title = titleInput?.value.trim() || `${designTitle} (Flutter)`;
+                    setShowFlutterModal(false);
+                    exportAsFlutterJSON(title);
+                  }}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center justify-center gap-2"
+                >
+                  <Zap size={18} />
+                  Save to Firebase
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Canvas Size Selection Modal */}
       {showSizeModal && (

@@ -116,17 +116,19 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
   const navigate = useNavigate();
 
   const [playlist, setPlaylist] = useState<PlaylistDocument | null>(null);
-  const [designs, setDesigns] = useState<FirestoreDesignDocument[]>([]);
+  const [designs, setDesigns] = useState<any[]>([]); // Use any to allow timeline property
   const [displayElements, setDisplayElements] = useState<CanvasElement[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(forceAutoplay ?? true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0); // For timeline playback
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number | undefined>(undefined);
 
   // Load playlist and all designs
   useEffect(() => {
@@ -256,19 +258,52 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
     }
   }, [currentIndex, designs, playlist, onCanvasReady]);
 
-  // Slideshow auto-advance
+  // Slideshow auto-advance with timeline duration
   useEffect(() => {
     if (!isPlaying || !playlist || designs.length === 0) {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       return;
     }
 
-    const currentDesignRef = playlist.designReferences[currentIndex];
-    if (!currentDesignRef) return;
+    const currentDesign = designs[currentIndex];
+    if (!currentDesign) return;
 
-    const duration = currentDesignRef.duration * 1000; // Convert to milliseconds
-    setTimeRemaining(currentDesignRef.duration);
+    // Get duration from design's timeline, fallback to designReferences or 5 seconds
+    const timelineDuration = currentDesign.designJSON?.timeline?.totalDuration || 
+                           (playlist.designReferences[currentIndex]?.duration * 1000) || 
+                           5000;
+    const durationInSeconds = timelineDuration / 1000;
+    
+    setTimeRemaining(durationInSeconds);
+    setCurrentTime(0); // Reset timeline for new design
+
+    // Timeline video playback at 60 FPS
+    const fps = 60;
+    const frameInterval = 1000 / fps;
+    let lastFrameTime = Date.now();
+    let accumulatedTime = 0;
+
+    const animateTimeline = () => {
+      const now = Date.now();
+      const deltaTime = now - lastFrameTime;
+
+      if (deltaTime >= frameInterval) {
+        accumulatedTime += deltaTime;
+        
+        if (accumulatedTime >= timelineDuration) {
+          // Move to next design
+          setCurrentIndex(prev => (prev + 1) % playlist.designReferences.length);
+          return;
+        }
+
+        setCurrentTime(accumulatedTime);
+        lastFrameTime = now;
+      }
+
+      animationRef.current = requestAnimationFrame(animateTimeline);
+    };
 
     // Countdown timer (updates every second)
     countdownRef.current = setInterval(() => {
@@ -278,14 +313,12 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
       });
     }, 1000);
 
-    // Auto-advance timer
-    timerRef.current = setTimeout(() => {
-      setCurrentIndex(prev => (prev + 1) % playlist.designReferences.length);
-    }, duration);
+    animationRef.current = requestAnimationFrame(animateTimeline);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [currentIndex, isPlaying, playlist, designs]);
 
@@ -299,53 +332,170 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
     setCurrentIndex(prev => (prev - 1 + playlist.designReferences.length) % playlist.designReferences.length);
   };
 
-  const renderElement = (element: CanvasElement) => {
-    const baseStyle: React.CSSProperties = {
-      position: 'absolute',
-      left: `${element.x}px`,
-      top: `${element.y}px`,
-      width: `${element.width}px`,
-      height: `${element.height}px`,
-      opacity: element.opacity ?? 1,
-      transform: `rotate(${element.rotation}deg)`,
-      zIndex: element.zIndex ?? 1,
-      visibility: element.visible === false ? 'hidden' : 'visible',
-      borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
-      overflow: 'hidden',
+  const handleTogglePlay = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  // Get element state at current timeline time
+  const getElementAtTime = (element: CanvasElement): CanvasElement | null => {
+    const currentDesign = designs[currentIndex];
+    const timeline = currentDesign?.designJSON?.timeline;
+    
+    if (!timeline || !timeline.tracks) {
+      return element; // Return static element if no timeline
+    }
+
+    let timelineItem: any = null;
+
+    // Find timeline item for this element
+    for (const track of timeline.tracks) {
+      for (const item of track.items) {
+        if (item.elementId === element.id) {
+          const itemStart = item.startTime;
+          const itemEnd = itemStart + item.duration;
+
+          if (currentTime >= itemStart && currentTime < itemEnd) {
+            timelineItem = item;
+            break;
+          }
+        }
+      }
+      if (timelineItem) break;
+    }
+
+    if (!timelineItem) {
+      return null; // Element not visible at current time
+    }
+
+    // Calculate interpolated properties
+    const localTime = currentTime - timelineItem.startTime;
+    const progress = Math.min(1, localTime / timelineItem.duration);
+
+    const initialState = timelineItem.initialState || {};
+    const targetProps = timelineItem.properties || {};
+
+    const interpolate = (start: number, end: number, progress: number) => {
+      return start + (end - start) * progress;
     };
 
-    const animationClass = getAnimationClass(element.animation);
+    const interpolatedElement: CanvasElement = {
+      ...element,
+      x: initialState.x !== undefined ? initialState.x : element.x,
+      y: initialState.y !== undefined ? initialState.y : element.y,
+      width: initialState.width !== undefined ? initialState.width : element.width,
+      height: initialState.height !== undefined ? initialState.height : element.height,
+      rotation: initialState.rotation !== undefined ? initialState.rotation : element.rotation,
+      opacity: initialState.opacity !== undefined ? initialState.opacity : element.opacity,
+      fontSize: initialState.fontSize !== undefined ? initialState.fontSize : element.fontSize,
+    };
 
-    switch (element.type) {
+    // Apply interpolation
+    if (targetProps.x !== undefined && initialState.x !== undefined) {
+      interpolatedElement.x = interpolate(initialState.x, targetProps.x, progress);
+    } else if (targetProps.x !== undefined) {
+      interpolatedElement.x = targetProps.x;
+    }
+
+    if (targetProps.y !== undefined && initialState.y !== undefined) {
+      interpolatedElement.y = interpolate(initialState.y, targetProps.y, progress);
+    } else if (targetProps.y !== undefined) {
+      interpolatedElement.y = targetProps.y;
+    }
+
+    if (targetProps.width !== undefined && initialState.width !== undefined) {
+      interpolatedElement.width = interpolate(initialState.width, targetProps.width, progress);
+    } else if (targetProps.width !== undefined) {
+      interpolatedElement.width = targetProps.width;
+    }
+
+    if (targetProps.height !== undefined && initialState.height !== undefined) {
+      interpolatedElement.height = interpolate(initialState.height, targetProps.height, progress);
+    } else if (targetProps.height !== undefined) {
+      interpolatedElement.height = targetProps.height;
+    }
+
+    if (targetProps.rotation !== undefined && initialState.rotation !== undefined) {
+      interpolatedElement.rotation = interpolate(initialState.rotation, targetProps.rotation, progress);
+    } else if (targetProps.rotation !== undefined) {
+      interpolatedElement.rotation = targetProps.rotation;
+    }
+
+    if (targetProps.opacity !== undefined && initialState.opacity !== undefined) {
+      interpolatedElement.opacity = interpolate(initialState.opacity, targetProps.opacity, progress);
+    } else if (targetProps.opacity !== undefined) {
+      interpolatedElement.opacity = targetProps.opacity;
+    }
+
+    if (targetProps.fontSize !== undefined && initialState.fontSize !== undefined) {
+      interpolatedElement.fontSize = interpolate(initialState.fontSize, targetProps.fontSize, progress);
+    } else if (targetProps.fontSize !== undefined) {
+      interpolatedElement.fontSize = targetProps.fontSize;
+    }
+
+    // Apply colors
+    if (targetProps.color) interpolatedElement.color = targetProps.color;
+    else if (initialState.color) interpolatedElement.color = initialState.color;
+
+    if (targetProps.backgroundColor) interpolatedElement.backgroundColor = targetProps.backgroundColor;
+    else if (initialState.backgroundColor) interpolatedElement.backgroundColor = initialState.backgroundColor;
+
+    if (targetProps.fillColor) interpolatedElement.fillColor = targetProps.fillColor;
+    else if (initialState.fillColor) interpolatedElement.fillColor = initialState.fillColor;
+
+    return interpolatedElement;
+  };
+
+  const renderElement = (element: CanvasElement) => {
+    const activeElement = getElementAtTime(element);
+    if (!activeElement) return null; // Don't render if not in timeline
+
+    const baseStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: `${activeElement.x}px`,
+      top: `${activeElement.y}px`,
+      width: `${activeElement.width}px`,
+      height: `${activeElement.height}px`,
+      opacity: activeElement.opacity ?? 1,
+      transform: `rotate(${activeElement.rotation}deg)`,
+      zIndex: activeElement.zIndex ?? 1,
+      visibility: activeElement.visible === false ? 'hidden' : 'visible',
+      borderRadius: activeElement.borderRadius ? `${activeElement.borderRadius}px` : undefined,
+      overflow: 'hidden',
+      willChange: 'transform, opacity, width, height',
+    };
+
+    const animationClass = getAnimationClass(activeElement.animation);
+
+    switch (activeElement.type) {
       case 'text':
         return (
           <div
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
             style={{
               ...baseStyle,
-              fontSize: `${element.fontSize}px`,
-              color: element.color,
-              backgroundColor: element.backgroundColor,
-              fontWeight: element.textStyle?.bold ? 'bold' : 'normal',
-              fontStyle: element.textStyle?.italic ? 'italic' : 'normal',
-              textDecoration: element.textStyle?.underline ? 'underline' : 'none',
-              textAlign: element.textStyle?.textAlign || 'left',
-              fontFamily: element.textStyle?.fontFamily || 'Arial',
-              letterSpacing: `${element.textStyle?.letterSpacing || 0}px`,
-              lineHeight: element.textStyle?.lineHeight || 1.2,
+              fontSize: `${activeElement.fontSize}px`,
+              color: activeElement.color,
+              backgroundColor: activeElement.backgroundColor,
+              fontWeight: activeElement.textStyle?.bold ? 'bold' : 'normal',
+              fontStyle: activeElement.textStyle?.italic ? 'italic' : 'normal',
+              textDecoration: activeElement.textStyle?.underline ? 'underline' : 'none',
+              textAlign: activeElement.textStyle?.textAlign || 'left',
+              fontFamily: activeElement.textStyle?.fontFamily || 'Arial',
+              letterSpacing: `${activeElement.textStyle?.letterSpacing || 0}px`,
+              lineHeight: activeElement.textStyle?.lineHeight || 1.2,
               display: 'flex',
               alignItems: 'center',
             }}
           >
-            {element.content}
+            {activeElement.content}
           </div>
         );
       case 'html':
         return (
           <iframe
-            key={element.id}
-            srcDoc={element.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
+            key={activeElement.id}
+            srcDoc={activeElement.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
             className={animationClass}
             style={{
               ...baseStyle,
@@ -357,11 +507,11 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
 
       case 'video':
       case 'web-video':
-        return element.content && (element.content.startsWith('http') || element.content.startsWith('blob:')) ? (
+        return activeElement.content && (activeElement.content.startsWith('http') || activeElement.content.startsWith('blob:')) ? (
           <video
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
-            src={element.content}
+            src={activeElement.content}
             style={{
               ...baseStyle,
               objectFit: 'cover',
@@ -374,11 +524,11 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
 
       case 'gif':
       case 'web-image':
-        return element.content && element.content.startsWith('http') ? (
+        return activeElement.content && activeElement.content.startsWith('http') ? (
           <img
-            key={element.id}
+            key={activeElement.id}
             className={animationClass}
-            src={element.content}
+            src={activeElement.content}
             alt="Media"
             style={{
               ...baseStyle,
@@ -789,7 +939,10 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
   }
 
   const currentDesign = designs[currentIndex];
-  const currentDuration = playlist?.designReferences[currentIndex]?.duration || 5;
+  const timelineDuration = currentDesign?.designJSON?.timeline?.totalDuration || 
+                          (playlist?.designReferences[currentIndex]?.duration * 1000) || 
+                          5000;
+  const currentDuration = timelineDuration / 1000;
 
   return (
     <div className="fixed inset-0 bg-black flex flex-col">
@@ -819,7 +972,7 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
       </div>
 
       {/* Design Display */}
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+      <div className="flex-1 flex items-center justify-center relative overflow-auto">
         {currentDesign && (
           <>
             {/* Hidden canvas for export */}
@@ -830,21 +983,51 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
               }}
             />
             
-            {/* Design Container */}
+            {/* Android Device Frame */}
             <div
               style={{
-                width: `${currentDesign.metadata?.canvasWidth || 1280}px`,
-                height: `${currentDesign.metadata?.canvasHeight || 720}px`,
-                backgroundColor: currentDesign.metadata?.canvasColor || '#fff',
+                width: '550px',
+                height: '90vh',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '60px',
+                padding: '12px',
+                boxShadow: '0 0 0 12px #0a0a0a, 0 20px 60px rgba(0, 0, 0, 0.9)',
                 position: 'relative',
                 overflow: 'hidden',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8)',
-                maxWidth: '100vw',
-                maxHeight: '100vh',
-                aspectRatio: `${currentDesign.metadata?.canvasWidth || 1280} / ${currentDesign.metadata?.canvasHeight || 720}`,
               }}
             >
-              {displayElements.map(renderElement)}
+              {/* Notch */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '0',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '180px',
+                  height: '28px',
+                  backgroundColor: '#0a0a0a',
+                  borderRadius: '0 0 30px 30px',
+                  zIndex: 10,
+                }}
+              />
+              
+              {/* Design Container */}
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: currentDesign.metadata?.canvasColor || '#fff',
+                  borderRadius: '50px',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  aspectRatio: `${currentDesign.metadata?.canvasWidth || 1080} / ${currentDesign.metadata?.canvasHeight || 1920}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {displayElements.map(renderElement)}
+              </div>
             </div>
           </>
         )}

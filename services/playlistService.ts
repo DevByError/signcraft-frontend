@@ -219,6 +219,11 @@ export const getPlaylistById = async (
   playlistId: string
 ): Promise<PlaylistDocument | null> => {
   try {
+    if (!playlistId || typeof playlistId !== 'string') {
+      console.warn('⚠️ [PLAYLIST] Invalid playlist ID:', playlistId);
+      return null;
+    }
+
     const playlistRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     const playlistSnap = await getDoc(playlistRef);
 
@@ -227,12 +232,23 @@ export const getPlaylistById = async (
       return null;
     }
 
-    return {
+    const playlistData = playlistSnap.data();
+    
+    // Validate essential fields
+    if (!playlistData.designReferences || !Array.isArray(playlistData.designReferences)) {
+      console.warn('⚠️ [PLAYLIST] Invalid design references in playlist:', playlistId);
+      return null;
+    }
+
+    const result = {
       id: playlistSnap.id,
-      ...playlistSnap.data(),
+      ...playlistData,
     } as PlaylistDocument;
+
+    console.log(`✅ [PLAYLIST] Playlist retrieved successfully: ${playlistId}, ${result.designReferences.length} designs`);
+    return result;
   } catch (error: any) {
-    console.error('❌ [PLAYLIST] Error fetching playlist:', error);
+    console.error(`❌ [PLAYLIST] Error fetching playlist ${playlistId}:`, error.message || error);
     return null;
   }
 };

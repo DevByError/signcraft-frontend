@@ -1,3 +1,14 @@
+/* ===== GLOBAL LAYOUT ===== */
+/* Ensure the app and its root fill the viewport and have no default margins */
+html, body, #root, #root > * {
+  height: 100%;
+  min-height: 100%;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 /* ===== ANIMATIONS & TRANSITIONS ===== */
 
 /* ===== FEATURED ANIMATIONS ===== */

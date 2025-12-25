@@ -83,9 +83,13 @@ const PlaylistEditor: React.FC = () => {
   });
 
   const handleAddDesign = (design: FirestoreDesignDocument) => {
+    // Get duration from design timeline, fallback to 5 seconds
+    const timelineDuration = design.designJSON?.timeline?.totalDuration || 5000;
+    const durationInSeconds = timelineDuration / 1000;
+    
     const newDesign: DesignInPlaylist = {
       designId: design.id,
-      duration: 5, // Default 5 seconds
+      duration: durationInSeconds,
       order: selectedDesigns.length,
       designData: design
     };
@@ -98,12 +102,6 @@ const PlaylistEditor: React.FC = () => {
       // Reorder remaining designs
       return filtered.map((d, index) => ({ ...d, order: index }));
     });
-  };
-
-  const handleDurationChange = (designId: string, duration: number) => {
-    setSelectedDesigns(prev =>
-      prev.map(d => d.designId === designId ? { ...d, duration } : d)
-    );
   };
 
   const handleMoveUp = (index: number) => {
@@ -323,17 +321,12 @@ const PlaylistEditor: React.FC = () => {
                         <p className="text-sm text-gray-500">Order: {index + 1}</p>
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        <Clock size={16} className="text-gray-400" />
-                        <input
-                          type="number"
-                          min="1"
-                          max="60"
-                          value={design.duration}
-                          onChange={(e) => handleDurationChange(design.designId, parseInt(e.target.value) || 5)}
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
-                        />
-                        <span className="text-sm text-gray-500">s</span>
+                      <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-lg">
+                        <Clock size={16} className="text-blue-600" />
+                        <span className="text-sm font-medium text-blue-600">
+                          {design.duration.toFixed(1)}s
+                        </span>
+                        <span className="text-xs text-blue-500">(Timeline)</span>
                       </div>
                       
                       <button
