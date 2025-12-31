@@ -13,7 +13,7 @@ import {
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { useDesignSave } from '../hooks/useDesignSave';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
-import { getDesignById, updateDesignInFirestore } from '../services/designService';
+import { getDesignLocalById, updateDesignLocal } from '../services/localDesignStore';
 
 enum ElementType {
   TEXT = 'text',
@@ -232,7 +232,9 @@ const Editor: React.FC = () => {
   const [designData, setDesignData] = useState<any>(null);
   
   // Design save hook
-  const { saveDesign, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
+  const { saveDesign, isLoading: isSavingDesign, error: saveError, successMessage: hookSuccessMessage } = useDesignSave();
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_essential: true,
@@ -905,7 +907,7 @@ const Editor: React.FC = () => {
       console.log('Modifying design in Firebase:', designId);
       console.log('Exporting design data:', exportedDesign);
       
-      const result = await updateDesignInFirestore(designId, exportedDesign);
+      const result = updateDesignLocal(designId, exportedDesign as any);
 
       if (result.success) {
         setDesignTitle(data.title);
@@ -919,17 +921,26 @@ const Editor: React.FC = () => {
           designJSON: exportedDesign.designJSON,
         });
         
+        // Show success message
+        setSuccessMessage('✅ Design updated successfully!');
+        setErrorMessage(null);
+        
         // Close modal after successful save
         setTimeout(() => {
+          setSuccessMessage(null);
           setShowSaveModal(false);
-        }, 1000);
+        }, 1500);
       } else {
         console.error('❌ Failed to modify design:', result.error);
+        setErrorMessage(result.error || 'Failed to modify design');
+        setSuccessMessage(null);
         throw new Error(result.error || 'Failed to modify design in Firebase');
       }
     } catch (error) {
       console.error('❌ Error modifying design in Firebase:', error);
-      alert(`Error modifying design: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setErrorMessage(`Error: ${errorMsg}`);
+      setSuccessMessage(null);
     }
   };
 
@@ -1268,7 +1279,7 @@ const Editor: React.FC = () => {
       const loadDesign = async () => {
         try {
           console.log('Loading design:', designId);
-          const design = await getDesignById(designId);
+          const design = getDesignLocalById(designId);
           if (design) {
             console.log('Design loaded:', design);
             setDesignData(design);
@@ -1464,6 +1475,28 @@ const Editor: React.FC = () => {
           >
             <Download size={18} />
             Export
+          </button>
+
+          <button 
+            onClick={() => {
+              // Create a temporary design object with current canvas state
+              const tempDesign = {
+                id: 'live-preview',
+                name: 'Live Preview',
+                elements,
+                timelineTracks,
+                canvasWidth,
+                canvasHeight,
+                backgroundColor: canvasColor,
+                duration: 10
+              };
+              // Navigate to preview with live data
+              navigate('/preview/live', { state: { livePreview: true, designData: tempDesign } });
+            }}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-purple-500/30"
+          >
+            <Eye size={18} />
+            Preview
           </button>
 
           <button 
@@ -3862,14 +3895,42 @@ const Editor: React.FC = () => {
         {/* Save Design Modal */}
         <SaveDesignModal
           isOpen={showSaveModal}
-          onClose={() => setShowSaveModal(false)}
+          onClose={() => {
+            setShowSaveModal(false);
+            setSuccessMessage(null);
+            setErrorMessage(null);
+          }}
           onSave={handleSaveDesign}
-          isLoading={isSavingDesign}
-          error={saveError}
           successMessage={successMessage}
+          error={errorMessage}
+          isLoading={isSavingDesign}
           defaultTitle={designTitle}
           isModifying={true}
         />
+
+        {/* Toast Notification for Save Status */}
+        {successMessage && (
+          <div className="fixed top-20 right-6 z-50 animate-slideIn">
+            <div className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
+              <div className="text-2xl">✅</div>
+              <div>
+                <p className="font-semibold">{successMessage}</p>
+                <p className="text-sm text-green-100">Your changes have been saved</p>
+              </div>
+            </div>
+          </div>
+        )}
+        {errorMessage && (
+          <div className="fixed top-20 right-6 z-50 animate-slideIn">
+            <div className="bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
+              <div className="text-2xl">❌</div>
+              <div>
+                <p className="font-semibold">Save Failed</p>
+                <p className="text-sm text-red-100">{errorMessage}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Clock, GripVertical, Save, Image as ImageIcon, Search } from 'lucide-react';
-import { getPlaylistById, updatePlaylist, addDesignToPlaylist, removeDesignFromPlaylist } from '../services/playlistService';
-import { getUserDesigns } from '../services/designService';
+import { ArrowLeft, Plus, Trash2, Clock, GripVertical, Save, Image as ImageIcon, Search, RefreshCw } from 'lucide-react';
+import { 
+  getPlaylistById, 
+  updatePlaylist, 
+  addDesignToPlaylist, 
+  removeDesignFromPlaylist,
+  getPlaylistDetailsFromBackend,
+  savePlaylistToBackend,
+  syncPlaylistItemsToBackend
+} from '../services/playlistService';
+import { listDesignLocals, StoredDesign } from '../services/localDesignStore';
+import { getAllDesigns, convertBackendToLocal } from '../services/designService';
 import type { PlaylistDocument, PlaylistDesignReference } from '../services/playlistService';
-import type { FirestoreDesignDocument } from '../services/designService';
 
 interface DesignInPlaylist extends PlaylistDesignReference {
-  designData?: FirestoreDesignDocument;
+  designData?: StoredDesign;
 }
 
 const PlaylistEditor: React.FC = () => {
@@ -15,25 +23,89 @@ const PlaylistEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   
   const [playlist, setPlaylist] = useState<PlaylistDocument | null>(null);
-  const [availableDesigns, setAvailableDesigns] = useState<FirestoreDesignDocument[]>([]);
+  const [availableDesigns, setAvailableDesigns] = useState<StoredDesign[]>([]);
   const [selectedDesigns, setSelectedDesigns] = useState<DesignInPlaylist[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOnlineMode, setIsOnlineMode] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [playlistDescription, setPlaylistDescription] = useState('');
 
-  // Fetch playlist and designs
+  // Function to fetch designs
+  const fetchDesigns = async () => {
+    let designs: StoredDesign[] = [];
+    
+    // Try backend first
+    console.log('🎨 [PLAYLIST_EDITOR] Fetching designs from backend...');
+    const backendDesignsResponse = await getAllDesigns();
+    
+    if (backendDesignsResponse.success && backendDesignsResponse.data) {
+      console.log(`✅ [PLAYLIST_EDITOR] Loaded ${backendDesignsResponse.data.length} designs from backend`);
+      designs = backendDesignsResponse.data.map(convertBackendToLocal);
+    } else {
+      console.log('⚠️ [PLAYLIST_EDITOR] Backend designs unavailable, using localStorage...');
+    }
+    
+    // Merge with localStorage designs
+    const localDesigns = await listDesignLocals();
+    const localDesignIds = new Set(designs.map(d => d.id));
+    const uniqueLocalDesigns = localDesigns.filter(d => !localDesignIds.has(d.id));
+    designs = [...designs, ...uniqueLocalDesigns];
+    
+    console.log(`📦 [PLAYLIST_EDITOR] Total designs available: ${designs.length}`);
+    return designs;
+  };
+
+  // Fetch playlist and designs from backend with fallback
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch playlist
+        let playlistDoc: any = null;
+
+        // Try backend first
         if (id) {
-          const playlistDoc = await getPlaylistById(id);
+          console.log('📋 [PLAYLIST_EDITOR] Attempting to load from backend...');
+          const backendResponse = await getPlaylistDetailsFromBackend(id);
+          
+          if (backendResponse.success && backendResponse.data) {
+            console.log('✅ [PLAYLIST_EDITOR] Loaded from backend');
+            playlistDoc = backendResponse.data;
+            setIsOnlineMode(true);
+            
+            // Convert backend format to local format
+            const convertedPlaylist: PlaylistDocument = {
+              id: playlistDoc.id,
+              userId: playlistDoc.userId || 'guest-user-123',
+              userEmail: playlistDoc.userEmail || 'guest@signcraft.com',
+              name: playlistDoc.name,
+              description: playlistDoc.description || '',
+              designReferences: (playlistDoc.tblplaylistitems || []).map((item: any) => ({
+                designId: item.designId,
+                duration: item.duration,
+                order: item.slno
+              })),
+              totalDuration: 0,
+              isPublic: false,
+              createdAt: playlistDoc.createdAt || new Date().toISOString(),
+              updatedAt: playlistDoc.updatedAt || new Date().toISOString()
+            };
+            playlistDoc = convertedPlaylist;
+          } else {
+            // Fallback to localStorage
+            console.log('⚠️ [PLAYLIST_EDITOR] Backend unavailable, using localStorage...');
+            playlistDoc = await getPlaylistById(id);
+            setIsOnlineMode(false);
+            if (!backendResponse.success) {
+              setError('Using local storage (backend unavailable)');
+            }
+          }
+
           if (playlistDoc) {
             setPlaylist(playlistDoc);
             setPlaylistName(playlistDoc.name);
@@ -45,22 +117,19 @@ const PlaylistEditor: React.FC = () => {
         }
 
         // Fetch all available designs
-        const designs = await getUserDesigns(100);
+        const designs = await fetchDesigns();
         setAvailableDesigns(designs);
 
         // Load current playlist designs with their data
-        if (id) {
-          const playlistDoc = await getPlaylistById(id);
-          if (playlistDoc && playlistDoc.designReferences.length > 0) {
-            const designsInPlaylist: DesignInPlaylist[] = playlistDoc.designReferences.map(ref => {
-              const designData = designs.find(d => d.id === ref.designId);
-              return {
-                ...ref,
-                designData
-              };
-            });
-            setSelectedDesigns(designsInPlaylist);
-          }
+        if (playlistDoc && playlistDoc.designReferences && playlistDoc.designReferences.length > 0) {
+          const designsInPlaylist: DesignInPlaylist[] = playlistDoc.designReferences.map((ref: PlaylistDesignReference) => {
+            const designData = designs.find(d => d.id === ref.designId);
+            return {
+              ...ref,
+              designData
+            };
+          });
+          setSelectedDesigns(designsInPlaylist);
         }
 
         console.log('✅ [PLAYLIST_EDITOR] Loaded playlist and designs');
@@ -78,11 +147,24 @@ const PlaylistEditor: React.FC = () => {
   // Filter designs that aren't already in the playlist
   const filteredAvailableDesigns = availableDesigns.filter(design => {
     const isAlreadySelected = selectedDesigns.some(sd => sd.designId === design.id);
-    const matchesSearch = design.metadata.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (design.metadata.title || '').toLowerCase().includes(searchTerm.toLowerCase());
     return !isAlreadySelected && matchesSearch;
   });
 
-  const handleAddDesign = (design: FirestoreDesignDocument) => {
+  const handleRefreshDesigns = async () => {
+    try {
+      setRefreshing(true);
+      const designs = await fetchDesigns();
+      setAvailableDesigns(designs);
+      console.log('✅ [PLAYLIST_EDITOR] Designs refreshed');
+    } catch (err) {
+      console.error('❌ [PLAYLIST_EDITOR] Error refreshing designs:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleAddDesign = (design: StoredDesign) => {
     // Get duration from design timeline, fallback to 5 seconds
     const timelineDuration = design.designJSON?.timeline?.totalDuration || 5000;
     const durationInSeconds = timelineDuration / 1000;
@@ -136,6 +218,38 @@ const PlaylistEditor: React.FC = () => {
         order
       }));
 
+      // Try backend first if online
+      if (isOnlineMode) {
+        // Save playlist name/description
+        const nameResult = await savePlaylistToBackend({
+          id,
+          name: playlistName,
+          userID: 'guest-user-123'
+        });
+        
+        if (nameResult.success) {
+          console.log('✅ [PLAYLIST_EDITOR] Playlist name saved to backend');
+          
+          // Sync playlist items
+          const items = selectedDesigns.map(({ designId, duration, order }) => ({
+            designId,
+            slno: order,
+            duration
+          }));
+          
+          const itemsResult = await syncPlaylistItemsToBackend(id, items, 'guest-user-123');
+          
+          if (itemsResult.success) {
+            console.log('✅ [PLAYLIST_EDITOR] Playlist items synced to backend');
+          } else {
+            console.warn('⚠️ [PLAYLIST_EDITOR] Backend sync failed, saving locally only');
+          }
+        } else {
+          console.warn('⚠️ [PLAYLIST_EDITOR] Backend save failed, saving locally only');
+        }
+      }
+
+      // Always save to localStorage as well
       const result = await updatePlaylist(id, {
         name: playlistName,
         description: playlistDescription,
@@ -183,7 +297,13 @@ const PlaylistEditor: React.FC = () => {
           </button>
           
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Edit Playlist</h1>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-3xl font-bold text-gray-900">Edit Playlist</h1>
+              <div className="flex items-center gap-2 text-sm">
+                <div className={`w-2 h-2 ${isOnlineMode ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
+                <span className="text-gray-600">{isOnlineMode ? 'Online mode' : 'Offline mode'}</span>
+              </div>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -237,7 +357,25 @@ const PlaylistEditor: React.FC = () => {
           {/* Available Designs */}
           <div>
             <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Available Designs</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Available Designs</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRefreshDesigns}
+                    disabled={refreshing}
+                    className="p-2 text-gray-600 hover:text-primary hover:bg-primary/10 rounded-lg transition-all disabled:opacity-50"
+                    title="Refresh designs"
+                  >
+                    <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+                  </button>
+                  <span className={`px-2 py-1 text-xs font-medium rounded ${isOnlineMode ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    {isOnlineMode ? '🟢 Backend' : '🟡 Local'}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {availableDesigns.length} total
+                  </span>
+                </div>
+              </div>
               
               <div className="mb-4">
                 <div className="relative">
@@ -254,9 +392,22 @@ const PlaylistEditor: React.FC = () => {
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {filteredAvailableDesigns.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    {searchTerm ? 'No designs found matching your search' : 'No available designs'}
-                  </p>
+                  <div className="text-center py-8">
+                    {availableDesigns.length === 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-gray-500">No designs available</p>
+                        <p className="text-sm text-gray-400">Create designs in the Editor first</p>
+                        <button
+                          onClick={() => navigate('/editor')}
+                          className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryDark transition-colors"
+                        >
+                          Go to Editor
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">No designs found matching your search</p>
+                    )}
+                  </div>
                 ) : (
                   filteredAvailableDesigns.map(design => (
                     <div

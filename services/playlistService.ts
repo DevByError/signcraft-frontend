@@ -5,20 +5,23 @@
  * They reference design IDs only - NO data duplication
  */
 
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  getDoc,
-  getDocs,
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from './firebaseService';
+// API base URL for backend integration
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// UI-only: localStorage-backed playlists (no Firebase)
+const STORAGE_KEY = 'signcraft:playlists';
+const readAll = (): any[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+const writeAll = (arr: any[]) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch {}
+};
 
 // ==================== TypeScript Interfaces ====================
 
@@ -44,8 +47,8 @@ export interface PlaylistDocument {
   designReferences: PlaylistDesignReference[]; // Array of design references
   totalDuration: number;                   // Total duration in seconds (calculated)
   isPublic: boolean;                       // Visibility flag
-  createdAt: Timestamp;                    // Creation timestamp
-  updatedAt: Timestamp;                    // Last update timestamp
+  createdAt: string;                       // ISO timestamp
+  updatedAt: string;                       // ISO timestamp
 }
 
 /**
@@ -72,7 +75,7 @@ export interface PlaylistWithDesigns {
   updatedAt: string;
 }
 
-const PLAYLISTS_COLLECTION = 'playlists';
+// No collections; using a single local array under STORAGE_KEY
 
 // ==================== Helper Functions ====================
 
@@ -101,7 +104,7 @@ export const createPlaylist = async (
 ): Promise<{ success: boolean; playlistId?: string; error?: string }> => {
   try {
     const currentUser = getCurrentUser();
-    const now = Timestamp.now();
+    const now = new Date().toISOString();
 
     const playlistData: Omit<PlaylistDocument, 'id'> = {
       userId: currentUser.uid,
@@ -115,13 +118,14 @@ export const createPlaylist = async (
       updatedAt: now,
     };
 
-    const docRef = await addDoc(
-      collection(db, PLAYLISTS_COLLECTION),
-      playlistData
-    );
+    const playlists = readAll();
+    const id = Math.random().toString(36).slice(2, 10);
+    const record = { id, ...playlistData } as any;
+    playlists.push(record);
+    writeAll(playlists);
 
     console.log('✅ [PLAYLIST] Created playlist:', {
-      id: docRef.id,
+      id,
       name,
       designs: designReferences.length,
       duration: playlistData.totalDuration,
@@ -129,7 +133,7 @@ export const createPlaylist = async (
 
     return {
       success: true,
-      playlistId: docRef.id,
+      playlistId: id,
     };
   } catch (error: any) {
     console.error('❌ [PLAYLIST] Error creating playlist:', error);
@@ -153,11 +157,12 @@ export const updatePlaylist = async (
   }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const playlistRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
-    
-    const updateData: any = {
-      updatedAt: Timestamp.now(),
-    };
+    const playlists = readAll();
+    const idx = playlists.findIndex((p: any) => p.id === playlistId);
+    if (idx < 0) {
+      return { success: false, error: 'Playlist not found' };
+    }
+    const updateData: any = { ...playlists[idx], updatedAt: new Date().toISOString() };
 
     if (updates.name !== undefined) {
       updateData.name = updates.name.trim();
@@ -176,7 +181,8 @@ export const updatePlaylist = async (
       updateData.isPublic = updates.isPublic;
     }
 
-    await updateDoc(playlistRef, updateData);
+    playlists[idx] = updateData;
+    writeAll(playlists);
 
     console.log('✅ [PLAYLIST] Updated playlist:', playlistId);
 
@@ -197,8 +203,9 @@ export const deletePlaylist = async (
   playlistId: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const playlistRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
-    await deleteDoc(playlistRef);
+    const playlists = readAll();
+    const next = playlists.filter((p: any) => p.id !== playlistId);
+    writeAll(next);
 
     console.log('✅ [PLAYLIST] Deleted playlist:', playlistId);
 
@@ -219,34 +226,9 @@ export const getPlaylistById = async (
   playlistId: string
 ): Promise<PlaylistDocument | null> => {
   try {
-    if (!playlistId || typeof playlistId !== 'string') {
-      console.warn('⚠️ [PLAYLIST] Invalid playlist ID:', playlistId);
-      return null;
-    }
-
-    const playlistRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
-    const playlistSnap = await getDoc(playlistRef);
-
-    if (!playlistSnap.exists()) {
-      console.warn('⚠️ [PLAYLIST] Playlist not found:', playlistId);
-      return null;
-    }
-
-    const playlistData = playlistSnap.data();
-    
-    // Validate essential fields
-    if (!playlistData.designReferences || !Array.isArray(playlistData.designReferences)) {
-      console.warn('⚠️ [PLAYLIST] Invalid design references in playlist:', playlistId);
-      return null;
-    }
-
-    const result = {
-      id: playlistSnap.id,
-      ...playlistData,
-    } as PlaylistDocument;
-
-    console.log(`✅ [PLAYLIST] Playlist retrieved successfully: ${playlistId}, ${result.designReferences.length} designs`);
-    return result;
+    const playlists = readAll();
+    const found = playlists.find((p: any) => p.id === playlistId);
+    return found || null;
   } catch (error: any) {
     console.error(`❌ [PLAYLIST] Error fetching playlist ${playlistId}:`, error.message || error);
     return null;
@@ -261,31 +243,10 @@ export const getUserPlaylists = async (
 ): Promise<PlaylistDocument[]> => {
   try {
     const currentUser = getCurrentUser();
-
-    const q = query(
-      collection(db, PLAYLISTS_COLLECTION),
-      where('userId', '==', currentUser.uid)
-      // Note: orderBy removed to avoid composite index requirement
-      // We'll sort in memory instead
-    );
-
-    const querySnapshot = await getDocs(q);
-    
-    const playlists: PlaylistDocument[] = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    } as PlaylistDocument));
-
-    // Sort by updatedAt in memory (newest first)
-    playlists.sort((a, b) => {
-      const timeA = a.updatedAt?.toMillis?.() || 0;
-      const timeB = b.updatedAt?.toMillis?.() || 0;
-      return timeB - timeA;
-    });
-
-    console.log(`✅ [PLAYLIST] Fetched ${playlists.length} playlists for user`);
-
-    return playlists;
+    const all = readAll();
+    const mine = all.filter((p: any) => p.userId === currentUser.uid);
+    mine.sort((a: any, b: any) => Date.parse(b.updatedAt || '') - Date.parse(a.updatedAt || ''));
+    return mine.slice(0, limitCount);
   } catch (error: any) {
     console.error('❌ [PLAYLIST] Error fetching user playlists:', error);
     throw error;
@@ -299,22 +260,10 @@ export const getPublicPlaylists = async (
   limitCount: number = 50
 ): Promise<PlaylistDocument[]> => {
   try {
-    const q = query(
-      collection(db, PLAYLISTS_COLLECTION),
-      where('isPublic', '==', true),
-      orderBy('updatedAt', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    
-    const playlists: PlaylistDocument[] = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    } as PlaylistDocument));
-
-    console.log(`✅ [PLAYLIST] Fetched ${playlists.length} public playlists`);
-
-    return playlists;
+    const all = readAll();
+    const pubs = all.filter((p: any) => p.isPublic);
+    pubs.sort((a: any, b: any) => Date.parse(b.updatedAt || '') - Date.parse(a.updatedAt || ''));
+    return pubs.slice(0, limitCount);
   } catch (error: any) {
     console.error('❌ [PLAYLIST] Error fetching public playlists:', error);
     throw error;
@@ -444,3 +393,170 @@ export const reorderPlaylistDesigns = async (
     };
   }
 };
+
+// ==================== Backend API Integration ====================
+
+/**
+ * Get all playlists from backend
+ */
+export const getPlaylistsFromBackend = async (): Promise<{
+  success: boolean;
+  data?: any[];
+  msg?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/design/getplaylists`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [PLAYLIST_BACKEND] Fetched playlists:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [PLAYLIST_BACKEND] Error fetching playlists:', error);
+    return {
+      success: false,
+      msg: error instanceof Error ? error.message : 'Failed to fetch playlists',
+    };
+  }
+};
+
+/**
+ * Get playlist details with designs from backend
+ */
+export const getPlaylistDetailsFromBackend = async (id: string): Promise<{
+  success: boolean;
+  data?: any;
+  msg?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/design/getplaylistdetails?id=${id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [PLAYLIST_BACKEND] Fetched playlist details:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [PLAYLIST_BACKEND] Error fetching playlist details:', error);
+    return {
+      success: false,
+      msg: error instanceof Error ? error.message : 'Failed to fetch playlist details',
+    };
+  }
+};
+
+/**
+ * Save playlist (name and description) to backend
+ */
+export const savePlaylistToBackend = async (data: {
+  id?: string;
+  name: string;
+  userID?: string;
+}): Promise<{
+  success: boolean;
+  data?: any;
+  msg?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/design/postsaveplaylist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [PLAYLIST_BACKEND] Saved playlist:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [PLAYLIST_BACKEND] Error saving playlist:', error);
+    return {
+      success: false,
+      msg: error instanceof Error ? error.message : 'Failed to save playlist',
+    };
+  }
+};
+
+/**
+ * Sync playlist items (add/remove/reorder designs) to backend
+ */
+export const syncPlaylistItemsToBackend = async (
+  playlistId: string,
+  items: Array<{ designId: string; slno: number; duration: number }>,
+  userID?: string
+): Promise<{
+  success: boolean;
+  msg?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/design/postsyncplaylistitems`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ playlistId, items, userID }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [PLAYLIST_BACKEND] Synced playlist items:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [PLAYLIST_BACKEND] Error syncing playlist items:', error);
+    return {
+      success: false,
+      msg: error instanceof Error ? error.message : 'Failed to sync playlist items',
+    };
+  }
+};
+
+/**
+ * Delete playlist from backend
+ */
+export const deletePlaylistFromBackend = async (id: string): Promise<{
+  success: boolean;
+  msg?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/design/postdelplaylist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ [PLAYLIST_BACKEND] Deleted playlist:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ [PLAYLIST_BACKEND] Error deleting playlist:', error);
+    return {
+      success: false,
+      msg: error instanceof Error ? error.message : 'Failed to delete playlist',
+    };
+  }
+};
+

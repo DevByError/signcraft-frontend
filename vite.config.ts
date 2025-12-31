@@ -8,11 +8,25 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3001,
         host: '0.0.0.0',
+        proxy: {
+          '/design': {
+            target: env.VITE_API_URL || 'http://localhost:5000',
+            changeOrigin: true,
+          },
+          '/accounts': {
+            target: env.VITE_API_URL || 'http://localhost:5000',
+            changeOrigin: true,
+          },
+          '/general': {
+            target: env.VITE_API_URL || 'http://localhost:5000',
+            changeOrigin: true,
+          },
+        },
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY),
         'process.env.VITE_FIREBASE_API_KEY': JSON.stringify(env.VITE_FIREBASE_API_KEY),
         'process.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.VITE_FIREBASE_AUTH_DOMAIN),
         'process.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(env.VITE_FIREBASE_PROJECT_ID),

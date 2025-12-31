@@ -8,12 +8,13 @@ import {
   Circle, Download, Eye, EyeOff,
   Triangle, Star, Heart, Menu, Plus, Minus, Lock, Unlock,
   Layers, Palette, Settings, Grid3x3, Layout, Maximize2,
-  RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap
+  RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap,
+  CheckCircle, AlertCircle
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
-import { useDesignSave } from '../hooks/useDesignSave';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
-import { getDesignById, updateDesignInFirestore } from '../services/designService';
+import { getDesignLocalById, saveDesignLocal, updateDesignLocal } from '../services/localDesignStore';
+import { saveDesign as saveDesignAPI, getDesignById, convertBackendToLocal } from '../services/designService';
 import TimelineCapCut from '../components/TimelineCapCut';
 import { useTimeline } from '../hooks/useTimeline';
 import * as timelineService from '../services/timelineService';
@@ -212,6 +213,7 @@ interface CanvasElement {
     letterSpacing: number;
     lineHeight: number;
   };
+    assetId?: string; // link to AssetManager asset
 }
 
 // Templates
@@ -335,7 +337,10 @@ const GRADIENTS = [
 
 const Editor: React.FC = () => {
   const navigate = useNavigate();
-  const { designId } = useParams<{ designId?: string }>();
+  const { designId: urlDesignId } = useParams<{ designId?: string }>();
+  
+  // Design ID state (can be updated when saving new designs)
+  const [designId, setDesignId] = useState<string | undefined>(urlDesignId);
   
   // Main state
   const [elements, setElements] = useState<CanvasElement[]>([]);
@@ -365,12 +370,13 @@ const Editor: React.FC = () => {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSizeModal, setShowSizeModal] = useState(!designId); // Show size modal for new designs
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showFlutterModal, setShowFlutterModal] = useState(false);
   const [designTitle, setDesignTitle] = useState('My Design');
   const [newElementIds, setNewElementIds] = useState<Set<string>>(new Set());
   
-  // Design save hook
-  const { saveDesign: saveDesignToFirebase, isLoading: isSavingDesign, error: saveError, successMessage } = useDesignSave();
+  // Local save state (UI-only)
+  const [isSavingDesign, setIsSavingDesign] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_essential: true,
@@ -1816,249 +1822,6 @@ const Editor: React.FC = () => {
     }
   };
 
-  // Show Flutter save modal
-  const showFlutterSaveModal = () => {
-    setShowFlutterModal(true);
-  };
-
-  // Export design as Flutter-friendly JSON
-  const exportAsFlutterJSON = async (flutterTitle: string) => {
-    const flutterDesign = {
-      canvas: {
-        width: canvasSize.width,
-        height: canvasSize.height,
-        backgroundColor: canvasColor,
-      },
-      elements: elements.map(el => {
-        const baseElement: any = {
-          id: el.id,
-          type: el.type,
-          x: el.x,
-          y: el.y,
-          width: el.width,
-          height: el.height,
-          rotation: (el.rotation * Math.PI) / 180, // Convert to radians
-          opacity: el.opacity,
-          zIndex: el.zIndex,
-          visible: el.visible !== undefined ? el.visible : true,
-        };
-
-        // Add type-specific properties
-        if (el.type === ElementType.TEXT || el.type === ElementType.LABEL) {
-          baseElement.text = el.content;
-          baseElement.fontSize = el.fontSize || 16;
-          baseElement.color = el.color || '#000000';
-          baseElement.fontFamily = el.textStyle?.fontFamily || 'Arial';
-          baseElement.fontWeight = el.textStyle?.bold ? 'bold' : 'normal';
-          baseElement.fontStyle = el.textStyle?.italic ? 'italic' : 'normal';
-          baseElement.textAlign = el.textStyle?.textAlign || 'left';
-          baseElement.letterSpacing = el.textStyle?.letterSpacing || 0;
-          baseElement.lineHeight = el.textStyle?.lineHeight || 1.2;
-        }
-
-        if (el.type === ElementType.IMAGE || el.type === ElementType.WEB_IMAGE) {
-          baseElement.imageUrl = el.content;
-          baseElement.fit = 'cover';
-        }
-
-        if (el.type === ElementType.VIDEO || el.type === ElementType.WEB_VIDEO) {
-          baseElement.videoUrl = el.content;
-        }
-
-        // Shape properties
-        if ([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, 
-             ElementType.HEART, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON,
-             ElementType.OCTAGON, ElementType.LINE, ElementType.TRAPEZOID, ElementType.CRESCENT,
-             ElementType.CROSS].includes(el.type)) {
-          baseElement.fillColor = el.fillColor || el.backgroundColor || '#000000';
-          baseElement.strokeColor = el.strokeColor || 'transparent';
-          baseElement.strokeWidth = el.strokeWidth || 0;
-        }
-
-        if (el.backgroundColor) {
-          baseElement.backgroundColor = el.backgroundColor;
-        }
-
-        return baseElement;
-      }),
-      animations: timeline.tracks.flatMap(track => 
-        track.items.map(item => {
-          const element = elements.find(el => el.id === item.elementId);
-          if (!element) return null;
-
-          const animation: any = {
-            elementId: item.elementId,
-            startTime: item.startTime,
-            duration: item.duration,
-            keyframes: [],
-          };
-
-          // Extract keyframes from timeline item properties
-          const props = item.properties || {};
-          const keyframeData: any = {};
-
-          // Position keyframes
-          if (props.x !== undefined || props.y !== undefined) {
-            keyframeData.position = {
-              x: props.x !== undefined ? props.x : element.x,
-              y: props.y !== undefined ? props.y : element.y,
-            };
-          }
-
-          // Scale keyframes (from width/height changes)
-          if (props.width !== undefined || props.height !== undefined) {
-            keyframeData.scale = {
-              x: props.width !== undefined ? props.width / element.width : 1.0,
-              y: props.height !== undefined ? props.height / element.height : 1.0,
-            };
-          }
-
-          // Rotation keyframe (convert to radians)
-          if (props.rotation !== undefined) {
-            keyframeData.rotation = (props.rotation * Math.PI) / 180;
-          }
-
-          // Opacity keyframe
-          if (props.opacity !== undefined) {
-            keyframeData.opacity = props.opacity;
-          }
-
-          // Color keyframes
-          if (props.color) {
-            keyframeData.color = props.color;
-          }
-          if (props.backgroundColor) {
-            keyframeData.backgroundColor = props.backgroundColor;
-          }
-          if (props.fillColor) {
-            keyframeData.fillColor = props.fillColor;
-          }
-
-          // Create keyframes at start and end
-          animation.keyframes = [
-            {
-              time: 0,
-              ...keyframeData,
-            },
-            {
-              time: item.duration,
-              ...keyframeData,
-            },
-          ];
-
-          return animation;
-        }).filter(Boolean)
-      ),
-      timeline: {
-        duration: timeline.totalDuration,
-        currentTime: timeline.currentTime,
-        fps: 60,
-      },
-    };
-
-    // Save Flutter JSON to Firebase with complete timeline
-    try {
-      // Export complete timeline with video-like animation data
-      const timelineVideoData = {
-        tracks: timeline.tracks.map(track => ({
-          id: track.id,
-          name: track.name,
-          type: track.type,
-          items: track.items.map(item => {
-            const element = elements.find(el => el.id === item.elementId);
-            return {
-              id: item.id,
-              elementId: item.elementId,
-              startTime: item.startTime,
-              duration: item.duration,
-              inPoint: item.inPoint || 0,
-              outPoint: item.outPoint || item.duration,
-              layer: item.layer,
-              // Snapshot of element properties at start
-              initialState: element ? {
-                x: element.x,
-                y: element.y,
-                width: element.width,
-                height: element.height,
-                rotation: element.rotation,
-                opacity: element.opacity,
-                color: element.color,
-                backgroundColor: element.backgroundColor,
-                fillColor: element.fillColor,
-                fontSize: element.fontSize,
-              } : {},
-              // Timeline-modified properties
-              properties: item.properties || {},
-              // Animation keyframes if any
-              animations: item.animations || [],
-            };
-          }),
-        })),
-        totalDuration: timeline.totalDuration,
-        fps: 60,
-      };
-
-      const flutterExport = {
-        metadata: {
-          title: flutterTitle,
-          description: 'Flutter-ready JSON export with animations',
-          canvasWidth: canvasSize.width,
-          canvasHeight: canvasSize.height,
-          canvasColor: canvasColor,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: 'current-user',
-          tags: ['flutter', 'export'],
-          version: 1,
-        },
-        designJSON: {
-          elements: elements.map(el => ({
-            ...el,
-            content: el.content || '',
-            visible: el.visible !== undefined ? el.visible : true,
-            locked: el.locked || false,
-          })),
-          totalElements: elements.length,
-          version: '1.0.0',
-          timeline: timelineVideoData, // Complete timeline video data
-          flutterData: flutterDesign, // Store Flutter-specific data
-        },
-      };
-
-      let result;
-      if (designId) {
-        // Update existing design with Flutter export
-        result = await updateDesignInFirestore(designId, flutterExport);
-        console.log('Flutter export saved to existing design:', designId);
-      } else {
-        // Save as new Flutter design
-        result = await saveDesignToFirebase(
-          elements,
-          {
-            title: flutterTitle,
-            description: 'Flutter-ready JSON export with animations',
-            canvasWidth: canvasSize.width,
-            canvasHeight: canvasSize.height,
-            canvasColor: canvasColor,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            createdBy: 'current-user',
-            tags: ['flutter', 'export'],
-            version: 1,
-          }
-        );
-        console.log('Flutter export saved as new design');
-      }
-
-      if (result?.success) {
-        alert('Flutter JSON saved to Firebase successfully!');
-      }
-    } catch (error) {
-      console.error('Error saving Flutter JSON:', error);
-      alert('Failed to save Flutter JSON to Firebase');
-    }
-  };
-
   // Save design - opens modal for metadata entry
   const saveDesign = () => {
     setShowSaveModal(true);
@@ -2130,14 +1893,12 @@ const Editor: React.FC = () => {
       const exportedDesign = {
         metadata: {
           title: data.title,
-          description: data.description,
           canvasWidth: canvasSize.width,
           canvasHeight: canvasSize.height,
           canvasColor: canvasColor,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdBy: 'current-user',
-          tags: data.tags,
           version: 1,
         },
         designJSON: {
@@ -2148,35 +1909,56 @@ const Editor: React.FC = () => {
         },
       };
 
-      let result;
+      let result: { success: boolean; designId?: string; data?: any };
 
       if (designId) {
-        // Update existing design
-        console.log('Updating design:', designId);
-        result = await updateDesignInFirestore(designId, exportedDesign);
+        // Update existing design - try backend first, fallback to local
+        console.log('Updating design (backend):', designId);
+        const backendResult = await saveDesignAPI({
+          id: designId,
+          title: data.title,
+          canvasData: elementsWithDefaults,
+          timelineData: timelineVideoData,
+          userID: 'guest-user-123', // TODO: Get from auth context
+        });
+
+        if (backendResult.success) {
+          result = { 
+            success: true, 
+            designId: backendResult.data?.id || designId,
+            data: backendResult.data 
+          };
+          setSuccessMessage('Saved to backend');
+        } else {
+          // Fallback to local storage
+          console.log('Backend failed, saving locally:', backendResult.msg);
+          result = updateDesignLocal(designId, exportedDesign as any);
+          setSuccessMessage('Saved locally (backend unavailable)');
+        }
       } else {
-        // Create new design
-        console.log('Creating new design');
-        result = await saveDesignToFirebase(
-          elementsWithDefaults,
-          {
-            title: data.title,
-            description: data.description,
-            canvasWidth: canvasSize.width,
-            canvasHeight: canvasSize.height,
-            canvasColor: canvasColor,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            createdBy: 'current-user',
-            tags: data.tags,
-            version: 1,
-          },
-          {
-            isPublic: data.isPublic,
-            tags: data.tags,
-            description: data.description,
-          }
-        );
+        // Create new design - try backend first, fallback to local
+        console.log('Creating new design (backend)');
+        const backendResult = await saveDesignAPI({
+          title: data.title,
+          canvasData: elementsWithDefaults,
+          timelineData: timelineVideoData,
+          userID: 'guest-user-123', // TODO: Get from auth context
+        });
+
+        if (backendResult.success && backendResult.data?.id) {
+          result = { 
+            success: true, 
+            designId: backendResult.data.id,
+            data: backendResult.data 
+          };
+          setDesignId(backendResult.data.id); // Update the designId state
+          setSuccessMessage('Saved to backend');
+        } else {
+          // Fallback to local storage
+          console.log('Backend failed, saving locally:', backendResult.msg);
+          result = saveDesignLocal(exportedDesign as any);
+          setSuccessMessage('Saved locally (backend unavailable)');
+        }
       }
 
       if (result.success) {
@@ -2184,11 +1966,18 @@ const Editor: React.FC = () => {
         console.log(designId ? 'Design updated successfully' : 'Design saved successfully');
         // Close modal after successful save
         setTimeout(() => {
+          setSuccessMessage(null);
           setShowSaveModal(false);
-        }, 2000);
+        }, 1500);
+      } else {
+        // Handle save failure
+        console.error('Failed to save design:', result);
+        alert('❌ Failed to save design. Please try again.');
       }
     } catch (error) {
       console.error('Error saving design:', error);
+      alert(`❌ Error saving design: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setSuccessMessage(null);
     }
   };
 
@@ -2524,13 +2313,26 @@ const Editor: React.FC = () => {
     // Timeline will auto-sync all elements via useEffect
   };
 
-  // Load design from Firebase if designId is provided
+  // Load design from backend or local store if designId is provided
   useEffect(() => {
     if (designId) {
       const loadDesign = async () => {
         try {
           console.log('Loading design:', designId);
-          const design = await getDesignById(designId);
+          
+          // Try to load from backend first
+          const backendResult = await getDesignById(designId);
+          let design = null;
+          
+          if (backendResult.success && backendResult.data) {
+            console.log('Design loaded from backend:', backendResult.data);
+            design = convertBackendToLocal(backendResult.data);
+          } else {
+            // Fallback to local storage
+            console.log('Backend failed, loading from local storage...');
+            design = getDesignLocalById(designId);
+          }
+          
           if (design) {
             console.log('Design loaded:', design);
             setDesignTitle(design.metadata.title);
@@ -2570,6 +2372,8 @@ const Editor: React.FC = () => {
             setElements(loadedElements);
             setHistory([loadedElements]);
             setHistoryIndex(0);
+          } else {
+            console.error('Design not found:', designId);
           }
         } catch (error) {
           console.error('Failed to load design:', error);
@@ -2860,20 +2664,54 @@ const Editor: React.FC = () => {
           </button>
           
           <button 
+            onClick={() => {
+              // Create a temporary design for live preview
+              const previewDesign = {
+                id: 'temp-preview-' + Date.now(),
+                metadata: {
+                  title: designTitle || 'Untitled Design',
+                  description: '',
+                  canvasWidth: canvasSize.width,
+                  canvasHeight: canvasSize.height,
+                  canvasColor: canvasColor,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                },
+                designJSON: {
+                  elements: elements,
+                  timeline: {
+                    tracks: timeline.tracks.map(track => ({
+                      ...track,
+                      items: track.items.map(item => ({
+                        ...item,
+                        properties: item.properties || {}
+                      }))
+                    })),
+                    totalDuration: timeline.totalDuration
+                  }
+                }
+              };
+              
+              // Navigate to preview with live data
+              navigate(`/preview/live`, { 
+                state: { 
+                  livePreview: true, 
+                  designData: previewDesign 
+                } 
+              });
+            }}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-purple-500/30 button-hover-scale"
+          >
+            <Eye size={18} />
+            Preview
+          </button>
+          
+          <button 
             onClick={exportAsImage}
             className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-500/30 button-hover-scale"
           >
             <Download size={18} />
             Export
-          </button>
-
-          <button 
-            onClick={showFlutterSaveModal}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-purple-500/30 button-hover-scale"
-            title="Export as Flutter JSON"
-          >
-            <Zap size={18} />
-            Flutter
           </button>
 
           <button 
@@ -5461,69 +5299,6 @@ const Editor: React.FC = () => {
         defaultTitle={designTitle}
       />
 
-      {/* Flutter Export Modal */}
-      {showFlutterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4 modal-content">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-purple-600">Export to Flutter</h2>
-              <button
-                onClick={() => setShowFlutterModal(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Design Name
-                </label>
-                <input
-                  type="text"
-                  id="flutterTitle"
-                  placeholder="Enter Flutter design name"
-                  defaultValue={`${designTitle} (Flutter)`}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                <p className="text-sm text-purple-800">
-                  <strong>Export includes:</strong>
-                  <br />• Canvas dimensions & colors
-                  <br />• All elements with absolute positions
-                  <br />• Timeline-based keyframe animations
-                  <br />• Rotation in radians, opacity, scale
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowFlutterModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    const titleInput = document.getElementById('flutterTitle') as HTMLInputElement;
-                    const title = titleInput?.value.trim() || `${designTitle} (Flutter)`;
-                    setShowFlutterModal(false);
-                    exportAsFlutterJSON(title);
-                  }}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center justify-center gap-2"
-                >
-                  <Zap size={18} />
-                  Save to Firebase
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Canvas Size Selection Modal */}
       {showSizeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -5601,6 +5376,19 @@ const Editor: React.FC = () => {
                 <div>• HD: 1280 × 720</div>
                 <div>• Portrait HD: 1080 × 1920</div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification for Save Status */}
+      {successMessage && (
+        <div className="fixed top-20 right-6 z-50 animate-slideIn">
+          <div className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
+            <CheckCircle size={24} className="flex-shrink-0" />
+            <div>
+              <p className="font-semibold">{successMessage}</p>
+              <p className="text-sm text-green-100">Your design has been saved</p>
             </div>
           </div>
         </div>

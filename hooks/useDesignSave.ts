@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { ExportedDesignData, serializeCanvasDesign, CanvasElementData, DesignMetadataData } from '../services/canvasExportService';
-import { saveDesignToFirestore, updateDesignInFirestore, SaveDesignResponse, SaveDesignOptions } from '../services/designService';
+import { saveDesignLocal, updateDesignLocal, SaveResponse } from '../services/localDesignStore';
 
 interface UseDesignSaveState {
   isLoading: boolean;
@@ -36,7 +36,7 @@ export const useDesignSave = () => {
       elements: CanvasElementData[],
       metadata: DesignMetadataData,
       options?: SaveDesignOptions
-    ): Promise<SaveDesignResponse> => {
+    ): Promise<SaveResponse> => {
       setState(prev => ({
         ...prev,
         isLoading: true,
@@ -48,8 +48,11 @@ export const useDesignSave = () => {
         // Serialize design
         const exportedDesign = serializeCanvasDesign(elements, metadata);
 
-        // Save to Firestore
-        const response = await saveDesignToFirestore(exportedDesign, options);
+        // Save locally
+        const response = saveDesignLocal({
+          metadata: exportedDesign.metadata as any,
+          designJSON: exportedDesign.designJSON,
+        });
 
         if (response.success) {
           setState(prev => ({
@@ -87,7 +90,7 @@ export const useDesignSave = () => {
         return {
           success: false,
           error: errorMessage,
-        };
+        } as SaveResponse;
       }
     },
     []
@@ -104,7 +107,7 @@ export const useDesignSave = () => {
       designId: string,
       elements: CanvasElementData[],
       metadata: DesignMetadataData
-    ): Promise<SaveDesignResponse> => {
+    ): Promise<SaveResponse> => {
       setState(prev => ({
         ...prev,
         isLoading: true,
@@ -114,7 +117,10 @@ export const useDesignSave = () => {
 
       try {
         const exportedDesign = serializeCanvasDesign(elements, metadata);
-        const response = await updateDesignInFirestore(designId, exportedDesign);
+        const response = updateDesignLocal(designId, {
+          metadata: exportedDesign.metadata as any,
+          designJSON: exportedDesign.designJSON,
+        });
 
         if (response.success) {
           setState(prev => ({
@@ -150,7 +156,7 @@ export const useDesignSave = () => {
         return {
           success: false,
           error: errorMessage,
-        };
+        } as SaveResponse;
       }
     },
     []

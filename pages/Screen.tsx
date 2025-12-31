@@ -15,7 +15,7 @@ import {
   ScreenDocument
 } from '../services/screenService';
 import { getUserPlaylists, getPlaylistById, PlaylistDocument } from '../services/playlistService';
-import { getDesignById } from '../services/designService';
+import { getDesignLocalById } from '../services/localDesignStore';
 import websocketService, { WebSocketMessage } from '../services/websocketService';
 import { blobToBase64 } from '../utils/animationHelpers';
 
@@ -138,7 +138,7 @@ const ScheduleScreen: React.FC = () => {
       const designRefs = playlist.designReferences || [];
       const fullDesigns = [];
       for (const ref of designRefs) {
-        const design = await getDesignById(ref.designId);
+        const design = await getDesignLocalById(ref.designId);
         if (design) {
           fullDesigns.push({
             ...ref,

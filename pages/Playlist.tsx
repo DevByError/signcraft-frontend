@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Edit2, Search, PlayCircle, AlertCircle, Copy, Clock, Image } from 'lucide-react';
-import { getUserDesigns } from '../services/designService';
+import { ArrowLeft, Plus, Trash2, Edit2, Search, PlayCircle, AlertCircle, Copy, Clock, Image, RefreshCw } from 'lucide-react';
+import { listDesignLocals } from '../services/localDesignStore';
 import { 
   getUserPlaylists, 
   createPlaylist, 
   deletePlaylist, 
   duplicatePlaylist,
-  PlaylistDocument 
+  PlaylistDocument,
+  getPlaylistsFromBackend,
+  savePlaylistToBackend,
+  deletePlaylistFromBackend
 } from '../services/playlistService';
 
 interface PlaylistItem {
@@ -27,47 +30,92 @@ const SchedulePlaylist: React.FC = () => {
   const [newPlaylistDescription, setNewPlaylistDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnlineMode, setIsOnlineMode] = useState(false);
   
   const [playlists, setPlaylists] = useState<PlaylistItem[]>([]);
   const [availableDesignCount, setAvailableDesignCount] = useState(0);
 
-  // Fetch playlists from Firebase (NOT designs!)
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
+  // Fetch playlists from backend with localStorage fallback
+  const fetchData = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
         setLoading(true);
-        setError(null);
-        console.log('📋 [PLAYLIST] Fetching playlists from Firebase...');
+      }
+      setError(null);
+      console.log('📋 [PLAYLIST] Attempting to load from backend...');
+      
+      // Try backend first
+      const backendResponse = await getPlaylistsFromBackend();
+      let playlistsData: any[] = [];
+      
+      if (backendResponse.success && backendResponse.data) {
+        console.log(`✅ [PLAYLIST] Loaded ${backendResponse.data.length} playlists from backend`);
+        playlistsData = backendResponse.data;
+        setIsOnlineMode(true);
+      } else {
+        // Fallback to localStorage
+        console.log('⚠️ [PLAYLIST] Backend unavailable, using localStorage...');
+        playlistsData = await getUserPlaylists(100);
+        setIsOnlineMode(false);
+        if (!backendResponse.success) {
+          setError('Using local storage (backend unavailable)');
+        }
+      }
+      
+      // Fetch available designs count
+      const designs = await listDesignLocals();
+      setAvailableDesignCount(designs.length);
+      console.log(`✅ [PLAYLIST] Found ${designs.length} available designs`);
+      
+      // Convert backend data to UI format
+      const playlistItems: PlaylistItem[] = playlistsData.map(playlist => {
+        // Backend format has different structure
+        const itemCount = playlist.tblplaylistitems?.length || playlist.designReferences?.length || 0;
+        const totalDuration = playlist.totalDuration || 0;
         
-        // Fetch user's playlists from 'playlists' collection
-        const playlistsData = await getUserPlaylists(100);
-        console.log(`✅ [PLAYLIST] Fetched ${playlistsData.length} playlists`);
-        
-        // Fetch available designs count for display
-        const designs = await getUserDesigns(1000);
-        setAvailableDesignCount(designs.length);
-        console.log(`✅ [PLAYLIST] Found ${designs.length} available designs`);
-        
-        // Convert to UI format
-        const playlistItems: PlaylistItem[] = playlistsData.map(playlist => ({
+        return {
+          id: playlist.id,
+          name: playlist.name,
+          itemCount,
+          totalDuration,
+          lastModified: playlist.updatedAt || new Date().toISOString(),
+          description: playlist.description || 'No description',
+        };
+      });
+      
+      setPlaylists(playlistItems);
+    } catch (err) {
+      console.error('❌ [PLAYLIST] Error fetching data:', err);
+      setError(`Failed to load playlists: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      
+      // Final fallback to localStorage
+      try {
+        const localPlaylists = await getUserPlaylists(100);
+        const playlistItems: PlaylistItem[] = localPlaylists.map(playlist => ({
           id: playlist.id,
           name: playlist.name,
           itemCount: playlist.designReferences.length,
           totalDuration: playlist.totalDuration,
-          lastModified: playlist.updatedAt.toDate().toLocaleDateString(),
+          lastModified: (typeof (playlist as any).updatedAt === 'string')
+            ? (playlist as any).updatedAt
+            : new Date((playlist as any).updatedAt?.toMillis?.() ?? Date.now()).toISOString(),
           description: playlist.description || 'No description',
         }));
-        
         setPlaylists(playlistItems);
-      } catch (err) {
-        console.error('❌ [PLAYLIST] Error fetching data:', err);
-        setError(`Failed to load playlists: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setIsOnlineMode(false);
+      } catch (localErr) {
         setPlaylists([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -84,21 +132,43 @@ const SchedulePlaylist: React.FC = () => {
     try {
       console.log('📋 [PLAYLIST] Creating new playlist:', newPlaylistName);
       
-      const result = await createPlaylist(
-        newPlaylistName,
-        newPlaylistDescription,
-        [], // Start with empty playlist - user will add designs in editor
-        false
-      );
+      let playlistId: string | undefined;
       
-      if (result.success && result.playlistId) {
-        console.log('✅ [PLAYLIST] Created successfully:', result.playlistId);
+      // Try backend first if online
+      if (isOnlineMode) {
+        const backendResult = await savePlaylistToBackend({
+          name: newPlaylistName,
+          userID: 'guest-user-123'
+        });
         
+        if (backendResult.success && backendResult.data?.id) {
+          playlistId = backendResult.data.id;
+          console.log('✅ [PLAYLIST] Created on backend:', playlistId);
+        } else {
+          console.warn('⚠️ [PLAYLIST] Backend create failed, using localStorage');
+        }
+      }
+      
+      // Fallback to localStorage or if backend failed
+      if (!playlistId) {
+        const result = await createPlaylist(
+          newPlaylistName,
+          newPlaylistDescription,
+          [],
+          false
+        );
+        
+        if (result.success && result.playlistId) {
+          playlistId = result.playlistId;
+          console.log('✅ [PLAYLIST] Created locally:', playlistId);
+        }
+      }
+      
+      if (playlistId) {
         // Navigate to playlist editor to add designs
-        navigate(`/playlist/edit/${result.playlistId}`);
+        navigate(`/playlist/edit/${playlistId}`);
       } else {
-        console.error('❌ [PLAYLIST] Failed to create:', result.error);
-        setError(result.error || 'Failed to create playlist');
+        setError('Failed to create playlist');
       }
     } catch (err) {
       console.error('❌ [PLAYLIST] Error creating playlist:', err);
@@ -112,6 +182,18 @@ const SchedulePlaylist: React.FC = () => {
     if (window.confirm(`Are you sure you want to delete "${playlistName}"? This action cannot be undone.`)) {
       try {
         console.log('🗑️ [PLAYLIST] Deleting playlist:', id);
+        
+        // Try backend first if online
+        if (isOnlineMode) {
+          const backendResult = await deletePlaylistFromBackend(id);
+          if (backendResult.success) {
+            console.log('✅ [PLAYLIST] Deleted from backend');
+          } else {
+            console.warn('⚠️ [PLAYLIST] Backend delete failed, deleting locally only');
+          }
+        }
+        
+        // Always delete from localStorage as well
         const result = await deletePlaylist(id);
         
         if (result.success) {
@@ -176,16 +258,28 @@ const SchedulePlaylist: React.FC = () => {
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Playlists</h1>
               <p className="text-gray-600">
                 Create slideshows from your designs • {availableDesignCount} designs available
+                {isOnlineMode && <span className="text-green-600 ml-2">• Connected to backend</span>}
+                {!isOnlineMode && <span className="text-yellow-600 ml-2">• Offline mode</span>}
               </p>
             </div>
             
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-            >
-              <Plus size={20} />
-              New Slideshow
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => fetchData(true)}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <button
+                onClick={() => setShowCreateForm(!showCreateForm)}
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
+              >
+                <Plus size={20} />
+                New Slideshow
+              </button>
+            </div>
           </div>
         </div>
 
@@ -302,7 +396,7 @@ const SchedulePlaylist: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-gray-600">Playlists Collection</span>
+                <span className="text-gray-600">Local Playlists</span>
               </div>
             </div>
           </div>
@@ -312,13 +406,13 @@ const SchedulePlaylist: React.FC = () => {
         {loading ? (
           <div className="bg-white rounded-xl shadow-lg p-16 text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Loading Designs</h3>
-            <p className="text-gray-600">Fetching your designs from Firebase...</p>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Loading Playlists</h3>
+            <p className="text-gray-600">Loading your playlists from local storage...</p>
           </div>
         ) : error ? (
           <div className="bg-white rounded-xl shadow-lg p-16 text-center border-2 border-red-200">
             <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Error Loading Designs</h3>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Error Loading Playlists</h3>
             <p className="text-gray-600 mb-6">{error}</p>
             <button
               onClick={() => window.location.reload()}

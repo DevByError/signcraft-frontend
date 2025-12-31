@@ -8,9 +8,6 @@ import { X, AlertCircle, CheckCircle } from 'lucide-react';
 
 export interface SaveDesignModalData {
   title: string;
-  description: string;
-  isPublic: boolean;
-  tags: string[];
 }
 
 interface SaveDesignModalProps {
@@ -36,16 +33,12 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<SaveDesignModalData>({
     title: defaultTitle,
-    description: '',
-    isPublic: false,
-    tags: [],
   });
 
   // Update form title when defaultTitle changes (important for modify mode)
   React.useEffect(() => {
     setFormData(prev => ({ ...prev, title: defaultTitle }));
   }, [defaultTitle]);
-  const [tagInput, setTagInput] = useState('');
 
   if (!isOpen) return null;
 
@@ -124,86 +117,6 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
             {isModifying && (
               <p className="text-xs text-gray-500 mt-1">Design name is fetched from Firebase</p>
             )}
-          </div>
-
-          {/* Description Input */}
-          <div className="property-section-expand" style={{ animationDelay: '0.1s' }}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              disabled={isLoading}
-              placeholder="Optional description"
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 resize-none input-focus-animation transition-colors-smooth"
-            />
-          </div>
-
-          {/* Tags Input */}
-          <div className="property-section-expand" style={{ animationDelay: '0.2s' }}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tags
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyPress={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                disabled={isLoading}
-                placeholder="Add tag and press Enter"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 input-focus-animation transition-colors-smooth"
-              />
-              <button
-                onClick={addTag}
-                disabled={isLoading || !tagInput.trim()}
-                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 button-hover-scale"
-              >
-                Add
-              </button>
-            </div>
-            {formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.tags.map((tag, idx) => (
-                  <span
-                    key={tag}
-                    className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1 stagger-item transition-smooth"
-                    style={{ animationDelay: `${idx * 0.05}s` }}
-                  >
-                    {tag}
-                    <button
-                      onClick={() => removeTag(tag)}
-                      disabled={isLoading}
-                      className="text-blue-700 hover:text-blue-900 disabled:opacity-50 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Public Toggle */}
-          <div className="flex items-center gap-3 property-section-expand" style={{ animationDelay: '0.3s' }}>
-            <input
-              type="checkbox"
-              id="isPublic"
-              checked={formData.isPublic}
-              onChange={e => setFormData(prev => ({ ...prev, isPublic: e.target.checked }))}
-              disabled={isLoading}
-              className="w-4 h-4 cursor-pointer"
-            />
-            <label htmlFor="isPublic" className="text-sm text-gray-700 cursor-pointer">
-              Make this design public (shareable with others)
-            </label>
           </div>
         </div>
 

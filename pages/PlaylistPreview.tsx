@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Pause, SkipForward, SkipBack } from 'lucide-react';
 import { getPlaylistById } from '../services/playlistService';
-import { getDesignById } from '../services/designService';
+import { getDesignLocalById } from '../services/localDesignStore';
 import type { PlaylistDocument } from '../services/playlistService';
-import type { FirestoreDesignDocument } from '../services/designService';
+import type { StoredDesign } from '../services/localDesignStore';
 
 interface CanvasElement {
   id: string;
@@ -148,9 +148,9 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
         setPlaylist(playlistDoc);
 
         // Load all designs referenced in the playlist
-        const loadedDesigns: FirestoreDesignDocument[] = [];
+        const loadedDesigns: StoredDesign[] = [];
         for (const ref of playlistDoc.designReferences) {
-          const design = await getDesignById(ref.designId);
+          const design = await getDesignLocalById(ref.designId);
           if (design) {
             loadedDesigns.push(design);
           }

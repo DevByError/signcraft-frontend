@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle, RefreshCw } from 'lucide-react';
-import { getUserDesigns, deleteDesignFromFirestore } from '../services/designService';
+import { listDesignLocals, deleteDesignLocal } from '../services/localDesignStore';
+import { getAllDesigns, deleteDesign, convertBackendToLocal } from '../services/designService';
 
 interface Creative {
   id: string;
@@ -21,8 +22,9 @@ const ScheduleCreative: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnlineMode, setIsOnlineMode] = useState(false);
 
-  // Fetch creatives from Firebase (extracted for reusability)
+  // Fetch creatives from backend with localStorage fallback
   const fetchCreatives = async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -31,13 +33,30 @@ const ScheduleCreative: React.FC = () => {
         setLoading(true);
       }
       setError(null);
-      console.log('🎨 [CREATIVE] Fetching designs from Firebase...');
       
-      const designs = await getUserDesigns(100); // Fetch up to 100 designs
-      console.log(`✅ [CREATIVE] Fetched ${designs.length} designs from Firebase`);
+      console.log('🎨 [CREATIVE] Attempting to load designs from backend...');
       
-      // Convert Firebase designs to Creative format
-      const convertedCreatives: Creative[] = designs.map(design => {
+      // Try to fetch from backend first
+      const response = await getAllDesigns();
+      
+      let designs: any[] = [];
+      
+      if (response.success && response.data) {
+        console.log(`✅ [CREATIVE] Loaded ${response.data.length} designs from backend`);
+        designs = response.data.map(convertBackendToLocal);
+        setIsOnlineMode(true);
+      } else {
+        // Fallback to local storage if backend fails
+        console.log('⚠️ [CREATIVE] Backend failed, using local storage...');
+        designs = listDesignLocals();
+        setIsOnlineMode(false);
+        setError('Using local storage (backend unavailable)');
+      }
+      
+      console.log(`✅ [CREATIVE] Loaded ${designs.length} designs`);
+      
+      // Convert designs to Creative format
+      const convertedCreatives: Creative[] = designs.slice(0, 100).map(design => {
         // Generate thumbnail color based on design title
         const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
         const colorIndex = design.id.charCodeAt(0) % colors.length;
@@ -57,9 +76,31 @@ const ScheduleCreative: React.FC = () => {
       setLastUpdated(new Date());
       console.log(`✅ [CREATIVE] Converted ${convertedCreatives.length} creatives for display`);
     } catch (err) {
-      console.error('❌ [CREATIVE] Error fetching designs:', err);
+      console.error('❌ [CREATIVE] Error loading designs:', err);
       setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setCreatives([]);
+      
+      // Final fallback to localStorage on error
+      try {
+        const localDesigns = listDesignLocals();
+        const convertedCreatives: Creative[] = localDesigns.slice(0, 100).map(design => {
+          const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
+          const colorIndex = design.id.charCodeAt(0) % colors.length;
+          const thumbnailColor = colors[colorIndex];
+          
+          return {
+            id: design.id,
+            name: design.metadata.title || 'Untitled Design',
+            thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.metadata.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${design.designJSON.elements.length} elements%3C/text%3E%3C/svg%3E`,
+            createdDate: design.metadata.createdAt,
+            duration: design.designJSON.elements.length * 5,
+            size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
+          };
+        });
+        setCreatives(convertedCreatives);
+        setIsOnlineMode(false);
+      } catch (localErr) {
+        setCreatives([]);
+      }
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -81,9 +122,21 @@ const ScheduleCreative: React.FC = () => {
     if (window.confirm(`Are you sure you want to delete "${creativeName}"? This action cannot be undone.`)) {
       try {
         console.log(`🗑️ [CREATIVE] Deleting design: ${id}`);
-        await deleteDesignFromFirestore(id);
+        
+        if (isOnlineMode) {
+          // Delete from backend
+          const response = await deleteDesign(id);
+          if (response.success) {
+            console.log('✅ [CREATIVE] Design deleted from backend');
+          } else {
+            console.warn('⚠️ [CREATIVE] Backend delete failed, deleting locally only');
+          }
+        }
+        
+        // Always delete from localStorage as well
+        deleteDesignLocal(id);
         setCreatives(prev => prev.filter(c => c.id !== id));
-        console.log('✅ [CREATIVE] Design deleted successfully from Firebase');
+        console.log('✅ [CREATIVE] Design deleted');
       } catch (err) {
         console.error('❌ [CREATIVE] Error deleting design:', err);
         setError(`Failed to delete creative: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -208,8 +261,8 @@ const ScheduleCreative: React.FC = () => {
                 )}
               </div>
               <div className="flex items-center gap-2 text-sm">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-gray-600">Connected to Firebase</span>
+                <div className={`w-2 h-2 ${isOnlineMode ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
+                <span className="text-gray-600">{isOnlineMode ? 'Online mode' : 'Offline mode'}</span>
               </div>
             </div>
           </div>
@@ -232,7 +285,7 @@ const ScheduleCreative: React.FC = () => {
             <div className="flex justify-center mb-4">
               <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <p className="text-gray-600">Loading creatives from Firebase...</p>
+            <p className="text-gray-600">Loading local creatives...</p>
           </div>
         )}
 

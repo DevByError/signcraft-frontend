@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Pause, RotateCcw } from 'lucide-react';
-import { getDesignById } from '../services/designService';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Play, Pause, RotateCcw, RefreshCw } from 'lucide-react';
+import { getDesignLocalById } from '../services/localDesignStore';
+import { getDesignById, convertBackendToLocal } from '../services/designService';
 
 interface CanvasElement {
   id: string;
@@ -96,32 +97,95 @@ interface DesignData {
   };
 }
 
+// Location state type for live preview from editor
+interface PreviewLocationState {
+  livePreview?: boolean;
+  designData?: DesignData;
+}
+
 const Preview: React.FC = () => {
   const { designId } = useParams<{ designId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as PreviewLocationState;
+  
   const [design, setDesign] = useState<DesignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasTimeline, setHasTimeline] = useState(false);
+  const [isLivePreview, setIsLivePreview] = useState(false);
+  const [isOnlineMode, setIsOnlineMode] = useState(false);
   const animationRef = useRef<number>();
+
+  // Listen for live updates from editor
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'live-preview-update' && isLivePreview && designId) {
+        console.log('🔴 [PREVIEW] Received live update from editor');
+        const updatedDesign = getDesignLocalById(designId);
+        if (updatedDesign) {
+          setDesign(updatedDesign as DesignData);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isLivePreview, designId]);
 
   useEffect(() => {
     const loadDesign = async () => {
       try {
-        if (!designId) {
-          setError('No design ID provided');
+        // Check if this is a live preview from editor
+        if (locationState?.livePreview && locationState?.designData) {
+          console.log('🔴 [PREVIEW] Live preview mode - using editor data');
+          setDesign(locationState.designData);
+          setIsLivePreview(true);
+          setIsOnlineMode(false);
+          
+          const timelineExists = !!locationState.designData.designJSON?.timeline?.tracks?.length;
+          setHasTimeline(timelineExists);
+          if (timelineExists) {
+            setIsPlaying(true);
+          }
+          setLoading(false);
           return;
         }
-        console.log('Loading design for preview:', designId);
-        const loadedDesign = await getDesignById(designId);
+
+        if (!designId) {
+          setError('No design ID provided');
+          setLoading(false);
+          return;
+        }
+
+        console.log('📋 [PREVIEW] Loading saved design:', designId);
+        
+        // Try backend first
+        const backendResponse = await getDesignById(designId);
+        let loadedDesign: DesignData | null = null;
+        
+        if (backendResponse.success && backendResponse.data) {
+          console.log('✅ [PREVIEW] Loaded from backend');
+          loadedDesign = convertBackendToLocal(backendResponse.data) as DesignData;
+          setIsOnlineMode(true);
+        } else {
+          // Fallback to localStorage
+          console.log('⚠️ [PREVIEW] Backend unavailable, using localStorage...');
+          const localDesign = await getDesignLocalById(designId);
+          if (localDesign) {
+            loadedDesign = localDesign as DesignData;
+            setIsOnlineMode(false);
+          }
+        }
+
         if (loadedDesign) {
-          setDesign(loadedDesign as DesignData);
-          console.log('Design loaded:', loadedDesign);
+          setDesign(loadedDesign);
+          console.log('✅ [PREVIEW] Design loaded:', loadedDesign.metadata.title);
           
           // Check if design has timeline data
-          const timelineExists = !!(loadedDesign as DesignData).designJSON?.timeline?.tracks?.length;
+          const timelineExists = !!loadedDesign.designJSON?.timeline?.tracks?.length;
           setHasTimeline(timelineExists);
           if (timelineExists) {
             setIsPlaying(true); // Auto-play timeline
@@ -130,15 +194,30 @@ const Preview: React.FC = () => {
           setError('Design not found');
         }
       } catch (err) {
-        console.error('Failed to load design:', err);
+        console.error('❌ [PREVIEW] Failed to load design:', err);
         setError(`Failed to load design: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        
+        // Final fallback to localStorage
+        if (designId) {
+          try {
+            const localDesign = await getDesignLocalById(designId);
+            if (localDesign) {
+              setDesign(localDesign as DesignData);
+              setIsOnlineMode(false);
+              const timelineExists = !!(localDesign as DesignData).designJSON?.timeline?.tracks?.length;
+              setHasTimeline(timelineExists);
+              if (timelineExists) setIsPlaying(true);
+              setError(null);
+            }
+          } catch {}
+        }
       } finally {
         setLoading(false);
       }
     };
 
     loadDesign();
-  }, [designId]);
+  }, [designId, locationState]);
 
   // Timeline playback effect - 60 FPS video-like rendering
   useEffect(() => {
@@ -815,14 +894,37 @@ const Preview: React.FC = () => {
           
           <div className="text-white text-center">
             <h2 className="text-xl font-bold">{design.metadata.title}</h2>
-            <p className="text-sm text-gray-300">{design.metadata.description}</p>
+            <p className="text-sm text-gray-300">
+              {design.metadata.description}
+              {isLivePreview && (
+                <span className="ml-2 text-red-400">● LIVE PREVIEW</span>
+              )}
+              {!isLivePreview && isOnlineMode && (
+                <span className="ml-2 text-green-400">● Backend</span>
+              )}
+              {!isLivePreview && !isOnlineMode && (
+                <span className="ml-2 text-yellow-400">● Local</span>
+              )}
+            </p>
           </div>
 
-          <div className="text-white text-sm">
-            {design.metadata.canvasWidth} × {design.metadata.canvasHeight}px
-            {hasTimeline && (
-              <span className="ml-2 text-green-400">● Timeline Mode</span>
+          <div className="text-white text-sm flex items-center gap-3">
+            {!isLivePreview && (
+              <button
+                onClick={() => window.location.reload()}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                title="Reload preview"
+              >
+                <RefreshCw size={16} />
+                Reload
+              </button>
             )}
+            <div>
+              {design.metadata.canvasWidth} × {design.metadata.canvasHeight}px
+              {hasTimeline && (
+                <span className="ml-2 text-green-400">● Timeline</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserDesigns } from '../services/designService';
+import { listDesignLocals } from '../services/localDesignStore';
+import { getAllDesigns, convertBackendToLocal } from '../services/designService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -17,23 +18,52 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('📊 [DASHBOARD] Fetching user designs from Firebase...');
+        console.log('📊 [DASHBOARD] Loading designs from backend...');
 
-        // Fetch recent designs for display (6 most recent)
-        const recentDesigns = await getUserDesigns(6);
-        setDesigns(recentDesigns);
+        // Try to fetch from backend first
+        const response = await getAllDesigns();
         
-        // Fetch total count for stats
-        const allDesigns = await getUserDesigns(1000); // Get all designs for count
-        setTotalDesignCount(allDesigns.length);
-        
-        console.log('✅ [DASHBOARD] Loaded:', {
-          recentDesigns: recentDesigns.length,
-          totalDesigns: allDesigns.length,
-        });
+        if (response.success && response.data) {
+          // Convert backend designs to local format for display
+          const backendDesigns = response.data.map(convertBackendToLocal);
+          const recentDesigns = backendDesigns.slice(0, 6);
+          setDesigns(recentDesigns);
+          setTotalDesignCount(backendDesigns.length);
+          
+          console.log('✅ [DASHBOARD] Loaded from backend:', {
+            recentDesigns: recentDesigns.length,
+            totalDesigns: backendDesigns.length,
+          });
+        } else {
+          // Fallback to local storage if backend fails
+          console.log('⚠️ [DASHBOARD] Backend failed, using local storage...');
+          const localDesigns = listDesignLocals();
+          const recentDesigns = localDesigns.slice(0, 6);
+          setDesigns(recentDesigns);
+          setTotalDesignCount(localDesigns.length);
+          
+          console.log('✅ [DASHBOARD] Loaded from local:', {
+            recentDesigns: recentDesigns.length,
+            totalDesigns: localDesigns.length,
+          });
+          
+          if (!response.success) {
+            setError(`Using local storage: ${response.msg || 'Backend unavailable'}`);
+          }
+        }
       } catch (err) {
         console.error('❌ [DASHBOARD] Error fetching data:', err);
-        setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        
+        // Fallback to local storage on error
+        try {
+          const localDesigns = listDesignLocals();
+          const recentDesigns = localDesigns.slice(0, 6);
+          setDesigns(recentDesigns);
+          setTotalDesignCount(localDesigns.length);
+          setError('Using local storage (backend unavailable)');
+        } catch (localErr) {
+          setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
       } finally {
         setLoading(false);
       }
