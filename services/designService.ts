@@ -103,12 +103,32 @@ export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> 
  * Save a new design or update existing one
  * Backend verifies user identity via Cookie Token
  */
+// export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
+//   try {
+//     const response = await api.post('/design/postsavedesign', designData);
+//     console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
+//     return response.data;
+//   } catch (error: any) {
+//     console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
+//     throw error;
+//   }
+// };
+/**
+ * Save a new design or update existing one
+ */
 export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
   try {
     const response = await api.post('/design/postsavedesign', designData);
     console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
     return response.data;
   } catch (error: any) {
+    // ✅ FIX: If it's a Auth error, DO NOT log it. 
+    // The global modal is about to appear, so we keep the console clean.
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      throw error;
+    }
+
+    // Only log real errors (like 500 or Network Error)
     console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
     throw error;
   }
