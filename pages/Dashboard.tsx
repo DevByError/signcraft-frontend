@@ -22,14 +22,14 @@ const Dashboard: React.FC = () => {
 
         // Fetch from backend only
         const response = await getAllDesigns();
-        
+
         if (response.success && response.data) {
           // Convert backend designs to local format for display
           const backendDesigns = response.data.map(convertBackendToLocal);
           const recentDesigns = backendDesigns.slice(0, 6);
           setDesigns(recentDesigns);
           setTotalDesignCount(backendDesigns.length);
-          
+
           console.log('✅ [DASHBOARD] Loaded from backend:', {
             recentDesigns: recentDesigns.length,
             totalDesigns: backendDesigns.length,
@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleEditDesign = (designId: string) => {
-    navigate(`/modify/${designId}`);
+    navigate(`/editor/${designId}`);
   };
 
   const handlePreviewDesign = (creativeId: string) => {
@@ -154,7 +154,7 @@ const Dashboard: React.FC = () => {
         <div className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-primary">Recent Designs</h2>
-            <Link 
+            <Link
               to="/templates"
               className="text-primary hover:text-primaryLight font-medium transition-colors underline text-sm"
             >
@@ -189,11 +189,11 @@ const Dashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {designs.map((design) => (
-                <div 
-                  key={design.id} 
+                <div
+                  key={design.id}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all group"
                 >
-                  <div 
+                  <div
                     className="h-40 bg-gray-200 relative overflow-hidden cursor-pointer"
                     onClick={() => handleEditDesign(design.id)}
                   >
@@ -238,7 +238,7 @@ const Dashboard: React.FC = () => {
         {/* Schedule Management Section */}
         <div className="mb-12">
           <h2 className="text-2xl font-bold text-primary mb-8">Schedule Management</h2>
-          
+
           {/* Schedule Management Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow">
@@ -252,7 +252,7 @@ const Dashboard: React.FC = () => {
                 Upload and manage your design files. Create beautiful displays with our editor or import your own assets.
               </p>
               <p className="text-3xl font-bold text-blue-600 mb-4">{loading ? '-' : totalDesignCount}</p>
-              <button 
+              <button
                 onClick={() => navigate('/creative')}
                 className="text-blue-600 font-semibold hover:text-blue-700 transition-colors"
               >
@@ -271,7 +271,7 @@ const Dashboard: React.FC = () => {
                 Group your creatives into playlists for organized content delivery. Create rotations and sequences.
               </p>
               <p className="text-3xl font-bold text-purple-600 mb-4">3</p>
-              <button 
+              <button
                 onClick={() => navigate('/playlist')}
                 className="text-purple-600 font-semibold hover:text-purple-700 transition-colors"
               >
@@ -290,7 +290,7 @@ const Dashboard: React.FC = () => {
                 Monitor and manage your physical display devices. Track online status and current playback.
               </p>
               <p className="text-3xl font-bold text-orange-600 mb-4">5</p>
-              <button 
+              <button
                 onClick={() => navigate('/screen')}
                 className="text-orange-600 font-semibold hover:text-orange-700 transition-colors"
               >
@@ -358,7 +358,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        
+
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Play, Pause, RotateCcw, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RotateCcw, RefreshCw, CloudSun, Clock, ImageIcon, Layout, FileText, Settings, Grid3x3, MousePointer2 } from 'lucide-react';
 import { getDesignLocalById } from '../services/localDesignStore';
 import { getDesignById, convertBackendToLocal } from '../services/designService';
 
+// --- Interfaces ---
 interface CanvasElement {
   id: string;
   type: string;
@@ -37,41 +38,6 @@ interface CanvasElement {
   widgetSettings?: any;
 }
 
-// Animation helper function
-const getAnimationClass = (animation?: string) => {
-  if (!animation) return '';
-  
-  const animationMap: Record<string, string> = {
-    'Shake Zoom': 'animate-shake-zoom', 'Whip Slide': 'animate-whip-slide', 'Old TV': 'animate-old-tv', 'Chroma Wave': 'animate-chroma-wave',
-    'Brush': 'animate-brush', 'Ink': 'animate-ink', 'Digital': 'animate-digital', 'Spray Paint': 'animate-spray-paint', 'Sketch': 'animate-sketch', 'Gradient': 'animate-gradient',
-    'Rise': 'animate-rise', 'Pan': 'animate-pan', 'Fade': 'animate-fade', 'Pop': 'animate-pop', 'Wipe': 'animate-wipe', 'Blur': 'animate-blur', 'Succession': 'animate-succession', 'Breathe': 'animate-breathe', 'Baseline': 'animate-baseline', 'Drift': 'animate-drift', 'Tectonic': 'animate-tectonic', 'Tumble': 'animate-tumble', 'Neon': 'animate-neon', 'Scrapbook': 'animate-scrapbook', 'Stomp': 'animate-stomp',
-    'Rotate': 'animate-rotate-effect', 'Flicker': 'animate-flicker', 'Pulse': 'animate-pulse-effect', 'Wiggle': 'animate-wiggle-effect',
-  };
-  
-  return animationMap[animation] || '';
-}
-
-// YouTube URL to embed URL converter
-const getYouTubeEmbedUrl = (url: string): string | null => {
-  if (!url) return null;
-  
-  // Extract video ID from various YouTube URL formats
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
-    /youtube\.com\/embed\/([^&\s]+)/,
-    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
-  ];
-  
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) {
-      return `https://www.youtube.com/embed/${match[1]}`;
-    }
-  }
-  
-  return null;
-};
-
 interface DesignData {
   id: string;
   metadata: {
@@ -89,7 +55,8 @@ interface DesignData {
           elementId: string;
           startTime: number;
           duration: number;
-          properties?: any;
+          initialState?: Partial<CanvasElement>;
+          properties?: Partial<CanvasElement>;
         }>;
       }>;
       totalDuration?: number;
@@ -97,18 +64,69 @@ interface DesignData {
   };
 }
 
-// Location state type for live preview from editor
 interface PreviewLocationState {
   livePreview?: boolean;
   designData?: DesignData;
 }
+
+// --- Helpers ---
+
+// Animation class helper
+const getAnimationClass = (animation?: string) => {
+  if (!animation) return '';
+  const animationMap: Record<string, string> = {
+    'Shake Zoom': 'animate-shake-zoom', 'Whip Slide': 'animate-whip-slide', 'Old TV': 'animate-old-tv', 'Chroma Wave': 'animate-chroma-wave',
+    'Brush': 'animate-brush', 'Ink': 'animate-ink', 'Digital': 'animate-digital', 'Spray Paint': 'animate-spray-paint', 'Sketch': 'animate-sketch', 'Gradient': 'animate-gradient',
+    'Rise': 'animate-rise', 'Pan': 'animate-pan', 'Fade': 'animate-fade', 'Pop': 'animate-pop', 'Wipe': 'animate-wipe', 'Blur': 'animate-blur', 'Succession': 'animate-succession', 'Breathe': 'animate-breathe', 'Baseline': 'animate-baseline', 'Drift': 'animate-drift', 'Tectonic': 'animate-tectonic', 'Tumble': 'animate-tumble', 'Neon': 'animate-neon', 'Scrapbook': 'animate-scrapbook', 'Stomp': 'animate-stomp',
+    'Rotate': 'animate-rotate-effect', 'Flicker': 'animate-flicker', 'Pulse': 'animate-pulse-effect', 'Wiggle': 'animate-wiggle-effect',
+  };
+  return animationMap[animation] || '';
+};
+
+// YouTube URL Converter
+const getYouTubeEmbedUrl = (url: string): string | null => {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
+    /youtube\.com\/embed\/([^&\s]+)/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return `https://www.youtube.com/embed/${match[1]}?autoplay=1&mute=1&loop=1&playlist=${match[1]}`;
+    }
+  }
+  return null;
+};
+
+// ✅ HELPER: Safely convert any object to DesignData structure
+const safeMapToDesignData = (source: any): DesignData => {
+  const metadata = source.metadata || {};
+  const designJSON = source.designJSON || {};
+
+  return {
+    id: source.id || 'unknown',
+    metadata: {
+      title: metadata.title || 'Untitled',
+      description: metadata.description || '',
+      canvasWidth: Number(metadata.canvasWidth) || 1920,
+      canvasHeight: Number(metadata.canvasHeight) || 1080,
+      canvasColor: metadata.canvasColor || '#ffffff',
+    },
+    designJSON: {
+      elements: Array.isArray(designJSON.elements) ? designJSON.elements : [],
+      timeline: designJSON.timeline
+    }
+  };
+};
 
 const Preview: React.FC = () => {
   const { designId } = useParams<{ designId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as PreviewLocationState;
-  
+
   const [design, setDesign] = useState<DesignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,39 +135,26 @@ const Preview: React.FC = () => {
   const [hasTimeline, setHasTimeline] = useState(false);
   const [isLivePreview, setIsLivePreview] = useState(false);
   const [isOnlineMode, setIsOnlineMode] = useState(false);
-  const animationRef = useRef<number>();
 
-  // Listen for live updates from editor
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'live-preview-update' && isLivePreview && designId) {
-        console.log('🔴 [PREVIEW] Received live update from editor');
-        const updatedDesign = getDesignLocalById(designId);
-        if (updatedDesign) {
-          setDesign(updatedDesign as DesignData);
-        }
-      }
-    };
+  // ✅ FIXED: Initialize useRef with null to satisfy TypeScript
+  const animationRef = useRef<number | null>(null);
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [isLivePreview, designId]);
-
+  // --- 1. Load Design Logic ---
   useEffect(() => {
     const loadDesign = async () => {
       try {
-        // Check if this is a live preview from editor
+        setLoading(true);
+
+        // A. Live Preview (Passed from Editor)
         if (locationState?.livePreview && locationState?.designData) {
-          console.log('🔴 [PREVIEW] Live preview mode - using editor data');
-          setDesign(locationState.designData);
+          console.log('🔴 [PREVIEW] Live preview mode');
+          const safeDesign = safeMapToDesignData(locationState.designData);
+          setDesign(safeDesign);
           setIsLivePreview(true);
           setIsOnlineMode(false);
-          
-          const timelineExists = !!locationState.designData.designJSON?.timeline?.tracks?.length;
+          const timelineExists = !!safeDesign.designJSON?.timeline?.tracks?.length;
           setHasTimeline(timelineExists);
-          if (timelineExists) {
-            setIsPlaying(true);
-          }
+          if (timelineExists) setIsPlaying(true);
           setLoading(false);
           return;
         }
@@ -160,58 +165,47 @@ const Preview: React.FC = () => {
           return;
         }
 
-        console.log('📋 [PREVIEW] Loading saved design:', designId);
-        
-        // Try backend first
-        const backendResponse = await getDesignById(designId);
-        let loadedDesign: DesignData | null = null;
-        
-        if (backendResponse.success && backendResponse.data) {
-          console.log('✅ [PREVIEW] Loaded from backend');
-          loadedDesign = convertBackendToLocal(backendResponse.data) as DesignData;
-          setIsOnlineMode(true);
-        } else {
-          // Fallback to localStorage
-          console.log('⚠️ [PREVIEW] Backend unavailable, using localStorage...');
-          const localDesign = await getDesignLocalById(designId);
-          if (localDesign) {
-            loadedDesign = localDesign as DesignData;
-            setIsOnlineMode(false);
+        // B. Fetch from Backend
+        try {
+          const backendResponse = await getDesignById(designId);
+          if (backendResponse.success && backendResponse.data) {
+            console.log('✅ [PREVIEW] Loaded from backend');
+            const converted = convertBackendToLocal(backendResponse.data);
+            const safeDesign = safeMapToDesignData(converted);
+
+            setDesign(safeDesign);
+            setIsOnlineMode(true);
+            const timelineExists = !!safeDesign.designJSON?.timeline?.tracks?.length;
+            setHasTimeline(timelineExists);
+            if (timelineExists) setIsPlaying(true);
+            setLoading(false);
+            return;
           }
+        } catch (err) {
+          console.warn('⚠️ [PREVIEW] Backend load failed, trying local...', err);
         }
 
-        if (loadedDesign) {
-          setDesign(loadedDesign);
-          console.log('✅ [PREVIEW] Design loaded:', loadedDesign.metadata.title);
-          
-          // Check if design has timeline data
-          const timelineExists = !!loadedDesign.designJSON?.timeline?.tracks?.length;
+        // C. Fallback to Local Storage
+        const localDesign = await getDesignLocalById(designId);
+
+        if (localDesign) {
+          console.log('📂 [PREVIEW] Loaded from local storage');
+          const safeDesign = safeMapToDesignData(localDesign);
+
+          setDesign(safeDesign);
+          setIsOnlineMode(false);
+          const timelineExists = !!safeDesign.designJSON?.timeline?.tracks?.length;
           setHasTimeline(timelineExists);
-          if (timelineExists) {
-            setIsPlaying(true); // Auto-play timeline
-          }
-        } else {
-          setError('Design not found');
+          if (timelineExists) setIsPlaying(true);
+          setLoading(false);
+          return;
         }
+
+        throw new Error('Design not found');
+
       } catch (err) {
-        console.error('❌ [PREVIEW] Failed to load design:', err);
-        setError(`Failed to load design: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        
-        // Final fallback to localStorage
-        if (designId) {
-          try {
-            const localDesign = await getDesignLocalById(designId);
-            if (localDesign) {
-              setDesign(localDesign as DesignData);
-              setIsOnlineMode(false);
-              const timelineExists = !!(localDesign as DesignData).designJSON?.timeline?.tracks?.length;
-              setHasTimeline(timelineExists);
-              if (timelineExists) setIsPlaying(true);
-              setError(null);
-            }
-          } catch {}
-        }
-      } finally {
+        console.error('❌ [PREVIEW] Error:', err);
+        setError(`Failed to load: ${err instanceof Error ? err.message : 'Unknown error'}`);
         setLoading(false);
       }
     };
@@ -219,14 +213,14 @@ const Preview: React.FC = () => {
     loadDesign();
   }, [designId, locationState]);
 
-  // Timeline playback effect - 60 FPS video-like rendering
+  // --- 2. Animation Loop (60 FPS) ---
   useEffect(() => {
     if (!isPlaying || !design || !hasTimeline) return;
 
     const timeline = design.designJSON.timeline;
-    const totalDuration = timeline?.totalDuration || 5000; // Default 5 seconds
+    const totalDuration = timeline?.totalDuration || 5000;
     const fps = 60;
-    const frameInterval = 1000 / fps; // ~16.67ms per frame
+    const frameInterval = 1000 / fps;
 
     let lastFrameTime = Date.now();
     let accumulatedTime = currentTime;
@@ -235,57 +229,38 @@ const Preview: React.FC = () => {
       const now = Date.now();
       const deltaTime = now - lastFrameTime;
 
-      // Update only if enough time has passed for next frame
       if (deltaTime >= frameInterval) {
         accumulatedTime += deltaTime;
-        
-        // Loop back to start when reaching end
-        if (accumulatedTime >= totalDuration) {
-          accumulatedTime = 0;
-        }
-
+        if (accumulatedTime >= totalDuration) accumulatedTime = 0; // Loop
         setCurrentTime(accumulatedTime);
         lastFrameTime = now;
       }
-
       animationRef.current = requestAnimationFrame(animate);
     };
 
     animationRef.current = requestAnimationFrame(animate);
-
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
       }
     };
   }, [isPlaying, design, hasTimeline]);
 
-  const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const togglePlayback = () => setIsPlaying(!isPlaying);
+  const restartPlayback = () => { setCurrentTime(0); setIsPlaying(true); };
 
-  const restartPlayback = () => {
-    setCurrentTime(0);
-    setIsPlaying(true);
-  };
-
+  // --- 3. Property Interpolation Logic ---
   const getElementAtTime = (element: CanvasElement): CanvasElement | null => {
-    if (!hasTimeline || !design?.designJSON.timeline) {
-      return element; // Return static element if no timeline
-    }
+    if (!hasTimeline || !design?.designJSON.timeline) return element;
 
     const timeline = design.designJSON.timeline;
     let timelineItem: any = null;
 
-    // Find timeline item for this element
+    // Find active timeline item
     for (const track of timeline.tracks || []) {
       for (const item of track.items) {
         if (item.elementId === element.id) {
-          const itemStart = item.startTime;
-          const itemEnd = itemStart + item.duration;
-
-          // Check if current time is within this item's range
-          if (currentTime >= itemStart && currentTime < itemEnd) {
+          if (currentTime >= item.startTime && currentTime < item.startTime + item.duration) {
             timelineItem = item;
             break;
           }
@@ -294,569 +269,302 @@ const Preview: React.FC = () => {
       if (timelineItem) break;
     }
 
-    if (!timelineItem) {
-      // Element not visible at current time
-      return null;
-    }
+    if (!timelineItem) return null; // Hide if not in timeline segment
 
-    // Calculate interpolated properties based on time within item
+    // Interpolation math
     const localTime = currentTime - timelineItem.startTime;
-    const progress = Math.min(1, localTime / timelineItem.duration);
+    const progress = Math.min(1, Math.max(0, localTime / timelineItem.duration));
+    const startState = timelineItem.initialState || {};
+    const endState = timelineItem.properties || {};
 
-    // Start with initial state from timeline
-    const initialState = timelineItem.initialState || {};
-    const targetProps = timelineItem.properties || {};
+    const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 
-    // Interpolate numeric properties
-    const interpolate = (start: number, end: number, progress: number) => {
-      return start + (end - start) * progress;
-    };
+    const newEl = { ...element };
 
-    // Build interpolated element state
-    const interpolatedElement: CanvasElement = {
-      ...element,
-      // Use initial state as base
-      x: initialState.x !== undefined ? initialState.x : element.x,
-      y: initialState.y !== undefined ? initialState.y : element.y,
-      width: initialState.width !== undefined ? initialState.width : element.width,
-      height: initialState.height !== undefined ? initialState.height : element.height,
-      rotation: initialState.rotation !== undefined ? initialState.rotation : element.rotation,
-      opacity: initialState.opacity !== undefined ? initialState.opacity : element.opacity,
-      fontSize: initialState.fontSize !== undefined ? initialState.fontSize : element.fontSize,
-    };
+    // Numeric properties to interpolate
+    const props = ['x', 'y', 'width', 'height', 'rotation', 'opacity', 'fontSize', 'borderRadius'];
 
-    // Apply interpolation if properties are different
-    if (targetProps.x !== undefined && initialState.x !== undefined) {
-      interpolatedElement.x = interpolate(initialState.x, targetProps.x, progress);
-    } else if (targetProps.x !== undefined) {
-      interpolatedElement.x = targetProps.x;
-    }
+    props.forEach(prop => {
+      const startVal = startState[prop] ?? element[prop as keyof CanvasElement] ?? 0;
+      const endVal = endState[prop] ?? element[prop as keyof CanvasElement] ?? startVal;
 
-    if (targetProps.y !== undefined && initialState.y !== undefined) {
-      interpolatedElement.y = interpolate(initialState.y, targetProps.y, progress);
-    } else if (targetProps.y !== undefined) {
-      interpolatedElement.y = targetProps.y;
-    }
+      if (typeof startVal === 'number' && typeof endVal === 'number') {
+        (newEl as any)[prop] = lerp(startVal, endVal, progress);
+      }
+    });
 
-    if (targetProps.width !== undefined && initialState.width !== undefined) {
-      interpolatedElement.width = interpolate(initialState.width, targetProps.width, progress);
-    } else if (targetProps.width !== undefined) {
-      interpolatedElement.width = targetProps.width;
-    }
+    // Color properties (non-interpolated for now, just switch)
+    if (endState.color) newEl.color = endState.color;
+    if (endState.backgroundColor) newEl.backgroundColor = endState.backgroundColor;
+    if (endState.fillColor) newEl.fillColor = endState.fillColor;
 
-    if (targetProps.height !== undefined && initialState.height !== undefined) {
-      interpolatedElement.height = interpolate(initialState.height, targetProps.height, progress);
-    } else if (targetProps.height !== undefined) {
-      interpolatedElement.height = targetProps.height;
-    }
-
-    if (targetProps.rotation !== undefined && initialState.rotation !== undefined) {
-      interpolatedElement.rotation = interpolate(initialState.rotation, targetProps.rotation, progress);
-    } else if (targetProps.rotation !== undefined) {
-      interpolatedElement.rotation = targetProps.rotation;
-    }
-
-    if (targetProps.opacity !== undefined && initialState.opacity !== undefined) {
-      interpolatedElement.opacity = interpolate(initialState.opacity, targetProps.opacity, progress);
-    } else if (targetProps.opacity !== undefined) {
-      interpolatedElement.opacity = targetProps.opacity;
-    }
-
-    if (targetProps.fontSize !== undefined && initialState.fontSize !== undefined) {
-      interpolatedElement.fontSize = interpolate(initialState.fontSize, targetProps.fontSize, progress);
-    } else if (targetProps.fontSize !== undefined) {
-      interpolatedElement.fontSize = targetProps.fontSize;
-    }
-
-    // Apply non-interpolated properties
-    if (targetProps.color) {
-      interpolatedElement.color = targetProps.color;
-    } else if (initialState.color) {
-      interpolatedElement.color = initialState.color;
-    }
-
-    if (targetProps.backgroundColor) {
-      interpolatedElement.backgroundColor = targetProps.backgroundColor;
-    } else if (initialState.backgroundColor) {
-      interpolatedElement.backgroundColor = initialState.backgroundColor;
-    }
-
-    if (targetProps.fillColor) {
-      interpolatedElement.fillColor = targetProps.fillColor;
-    } else if (initialState.fillColor) {
-      interpolatedElement.fillColor = initialState.fillColor;
-    }
-
-    return interpolatedElement;
+    return newEl;
   };
 
+  // --- 4. Renderers ---
   const renderElement = (element: CanvasElement) => {
     const activeElement = getElementAtTime(element);
-    if (!activeElement) return null; // Don't render if not in timeline
+    if (!activeElement) return null;
 
-    const baseStyle: React.CSSProperties = {
+    const style: React.CSSProperties = {
       position: 'absolute',
       left: `${activeElement.x}px`,
       top: `${activeElement.y}px`,
       width: `${activeElement.width}px`,
       height: `${activeElement.height}px`,
-      opacity: activeElement.opacity ?? 1,
+      opacity: activeElement.opacity,
       transform: `rotate(${activeElement.rotation}deg)`,
-      zIndex: activeElement.zIndex ?? 1,
-      visibility: activeElement.visible === false ? 'hidden' : 'visible',
+      zIndex: activeElement.zIndex,
       borderRadius: activeElement.borderRadius ? `${activeElement.borderRadius}px` : undefined,
       overflow: 'hidden',
-      // Smooth video-like transitions between frames
-      transition: hasTimeline ? 'none' : 'none', // No CSS transition, rely on RAF
-      willChange: hasTimeline ? 'transform, opacity, width, height' : 'auto', // GPU acceleration
+      willChange: hasTimeline ? 'transform, opacity, left, top' : 'auto',
     };
 
-    const animationClass = getAnimationClass(activeElement.animation);
+    const animClass = getAnimationClass(activeElement.animation);
 
     switch (activeElement.type) {
       case 'text':
+      case 'label':
         return (
-          <div
-            key={activeElement.id}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              color: activeElement.color || '#000000',
-              backgroundColor: activeElement.backgroundColor,
-              fontSize: activeElement.fontSize || 16,
-              fontWeight: activeElement.textStyle?.bold ? 'bold' : 'normal',
-              fontStyle: activeElement.textStyle?.italic ? 'italic' : 'normal',
-              textDecoration: activeElement.textStyle?.underline ? 'underline' : 'none',
-              textAlign: activeElement.textStyle?.textAlign || 'left',
-              fontFamily: activeElement.textStyle?.fontFamily || 'Arial',
-              letterSpacing: `${activeElement.textStyle?.letterSpacing || 0}px`,
-              lineHeight: `${activeElement.textStyle?.lineHeight || 1.2}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: activeElement.textStyle?.textAlign || 'left',
-              wordWrap: 'break-word',
-              overflowWrap: 'break-word',
-            }}
-          >
+          <div key={activeElement.id} className={animClass} style={{
+            ...style,
+            color: activeElement.color,
+            backgroundColor: activeElement.backgroundColor,
+            fontSize: activeElement.fontSize,
+            fontWeight: activeElement.textStyle?.bold ? 'bold' : 'normal',
+            fontStyle: activeElement.textStyle?.italic ? 'italic' : 'normal',
+            textDecoration: activeElement.textStyle?.underline ? 'underline' : 'none',
+            fontFamily: activeElement.textStyle?.fontFamily || 'Arial',
+            textAlign: activeElement.textStyle?.textAlign || 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+          }}>
             {activeElement.content}
           </div>
         );
 
-      case 'html':
+      case 'image':
+      case 'gif':
+      case 'web_image':
         return (
-          <iframe
-            key={activeElement.id}
-            srcDoc={activeElement.content || '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No HTML content</div>'}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              border: 'none',
-            }}
-            sandbox="allow-scripts allow-same-origin"
-          />
-        );
-
-      case 'rect':
-        return (
-          <div
-            key={activeElement.id}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              backgroundColor: activeElement.fillColor || activeElement.backgroundColor || '#ffffff',
-              borderRadius: activeElement.borderRadius || 0,
-              border: activeElement.strokeColor ? `${activeElement.strokeWidth || 1}px solid ${activeElement.strokeColor}` : 'none',
-            }}
-          />
-        );
-
-      case 'circle':
-        return (
-          <div
-            key={activeElement.id}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              backgroundColor: activeElement.fillColor || activeElement.backgroundColor || '#ffffff',
-              borderRadius: '50%',
-              border: activeElement.strokeColor ? `${activeElement.strokeWidth || 1}px solid ${activeElement.strokeColor}` : 'none',
-            }}
-          />
+          <img key={activeElement.id} src={activeElement.content} className={animClass} style={{ ...style, objectFit: activeElement.widgetSettings?.fitMode || 'cover' }} alt="" />
         );
 
       case 'video':
       case 'web_video':
-        return activeElement.content && (activeElement.content.startsWith('http') || activeElement.content.startsWith('blob:')) ? (
-          <video 
-            key={activeElement.id}
-            className={animationClass}
-            src={activeElement.content}
-            style={{
-              ...baseStyle,
-              objectFit: 'cover',
-            }}
-            muted
-            loop
-            autoPlay
-          />
+        return (
+          <video key={activeElement.id} src={activeElement.content} className={animClass} style={{ ...style, objectFit: 'cover' }} muted loop autoPlay playsInline />
+        );
+
+      case 'youtube':
+        const ytUrl = getYouTubeEmbedUrl(activeElement.content);
+        return ytUrl ? (
+          <iframe key={activeElement.id} src={ytUrl} className={animClass} style={{ ...style, border: 'none' }} allow="autoplay; encrypted-media" />
         ) : null;
 
-      case 'gif':
-      case 'web_image':
-        return activeElement.content && activeElement.content.startsWith('http') ? (
-          <img
-            key={activeElement.id}
-            className={animationClass}
-            src={activeElement.content}
-            alt="Media"
-            style={{
-              ...baseStyle,
-              objectFit: 'cover',
-            }}
-          />
-        ) : null;
+      case 'rect':
+        return <div key={activeElement.id} className={animClass} style={{ ...style, backgroundColor: activeElement.fillColor || '#4ECDC4', border: `${activeElement.strokeWidth || 0}px solid ${activeElement.strokeColor || 'transparent'}` }} />;
 
-      case 'instagram':
-        return activeElement.widgetSettings?.embedCode ? (
-          <iframe
-            key={activeElement.id}
-            srcDoc={activeElement.widgetSettings.embedCode}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              border: 'none',
-            }}
-            sandbox="allow-scripts allow-same-origin"
-          />
-        ) : element.content && element.content.startsWith('http') ? (
-          <img
-            key={element.id}
-            className={animationClass}
-            src={element.content}
-            alt="Instagram"
-            style={{
-              ...baseStyle,
-              objectFit: 'cover',
-            }}
-          />
-        ) : null;
-
-      case 'ustream':
-      case 'streaming':
-        return element.content && element.content.startsWith('http') ? (
-          <iframe
-            key={element.id}
-            src={element.content}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              border: 'none',
-            }}
-            allow="autoplay; fullscreen"
-          />
-        ) : null;
+      case 'circle':
+        return <div key={activeElement.id} className={animClass} style={{ ...style, backgroundColor: activeElement.fillColor || '#4ECDC4', borderRadius: '50%', border: `${activeElement.strokeWidth || 0}px solid ${activeElement.strokeColor || 'transparent'}` }} />;
 
       case 'ticker':
         return (
-          <div
-            key={element.id}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: element.backgroundColor || '#1e293b',
-              color: element.color || '#ffffff',
-            }}
-          >
-            <div className="animate-marquee whitespace-nowrap" style={{ fontSize: element.fontSize }}>
-              {element.content}
+          <div key={activeElement.id} className={animClass} style={{ ...style, backgroundColor: activeElement.backgroundColor || '#1e293b', color: activeElement.color || '#fff', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <div className="animate-marquee px-4" style={{ fontSize: activeElement.fontSize }}>{activeElement.content}</div>
+          </div>
+        );
+
+      // Shape Renderers (SVG)
+      case 'triangle':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="50,10 90,85 10,85" fill={activeElement.fillColor} stroke={activeElement.strokeColor} strokeWidth={activeElement.strokeWidth} /></svg>;
+
+      case 'star':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="50,10 61,40 91,40 67,60 78,90 50,70 22,90 33,60 9,40 39,40" fill={activeElement.fillColor} /></svg>;
+
+      case 'heart':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><path d="M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z" fill={activeElement.fillColor} /></svg>;
+
+      case 'pentagon':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="50,10 90,35 75,85 25,85 10,35" fill={activeElement.fillColor} /></svg>;
+
+      case 'hexagon':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="50,10 85,30 85,70 50,90 15,70 15,30" fill={activeElement.fillColor} /></svg>;
+
+      case 'octagon':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30" fill={activeElement.fillColor} /></svg>;
+
+      case 'diamond':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="50,10 90,50 50,90 10,50" fill={activeElement.fillColor} /></svg>;
+
+      case 'trapezoid':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="25,20 75,20 85,80 15,80" fill={activeElement.fillColor} /></svg>;
+
+      case 'crescent':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><path d="M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z" fill={activeElement.fillColor} /></svg>;
+
+      case 'cross':
+        return <svg key={activeElement.id} viewBox="0 0 100 100" style={style} className={animClass}><polygon points="40,10 60,10 60,40 90,40 90,60 60,60 60,90 40,90 40,60 10,60 10,40 40,40" fill={activeElement.fillColor} /></svg>;
+
+      case 'line':
+        return <div key={activeElement.id} style={{ ...style, backgroundColor: activeElement.fillColor, height: '4px' }} className={animClass} />;
+
+      // --- Advanced Widgets (Visual Representations) ---
+      case 'weather':
+      case 'weather_2':
+        return (
+          <div key={activeElement.id} style={{ ...style, background: 'linear-gradient(to bottom right, #38bdf8, #3b82f6)', color: 'white', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            <CloudSun size={48} className="mb-2" />
+            <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{activeElement.widgetSettings?.temperature || '72'}°{activeElement.widgetSettings?.temperatureUnit || 'F'}</div>
+            <div style={{ fontSize: '1.2em' }}>{activeElement.widgetSettings?.condition || 'Sunny'}</div>
+            <div style={{ opacity: 0.8 }}>{activeElement.widgetSettings?.location || 'New York, NY'}</div>
+          </div>
+        );
+
+      case 'clock':
+        return (
+          <div key={activeElement.id} style={{ ...style, background: activeElement.backgroundColor || '#1e293b', color: activeElement.color || 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={32} style={{ opacity: 0.5, marginBottom: 8 }} />
+            <div style={{ fontSize: activeElement.fontSize, fontFamily: 'monospace', fontWeight: 'bold' }}>12:45 PM</div>
+          </div>
+        );
+
+      case 'timer':
+        return (
+          <div key={activeElement.id} style={{ ...style, background: activeElement.backgroundColor || '#dc2626', color: activeElement.color || 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={32} style={{ opacity: 0.5, marginBottom: 8 }} />
+            <div style={{ fontSize: activeElement.fontSize || 32, fontFamily: 'monospace', fontWeight: 'bold' }}>00:00:00</div>
+          </div>
+        );
+
+      case 'rss':
+      case 'media_rss':
+        return (
+          <div key={activeElement.id} style={{ ...style, background: '#fff7ed', border: '1px solid #fdba74', padding: '12px', overflow: 'hidden' }}>
+            <div style={{ fontWeight: 'bold', color: '#9a3412', marginBottom: '8px' }}>{activeElement.content || 'RSS Feed'}</div>
+            <div style={{ fontSize: '0.9em', color: '#4b5563' }}>
+              • Breaking News Item 1<br />
+              • Latest update regarding market<br />
+              • Weather forecast for tomorrow
             </div>
           </div>
         );
 
-      case 'embed':
-        return element.widgetSettings?.embedCode ? (
-          <iframe
-            key={element.id}
-            srcDoc={element.widgetSettings.embedCode}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              border: 'none',
-            }}
-            sandbox="allow-scripts allow-same-origin"
-          />
-        ) : null;
-
-      case 'youtube':
-        const youtubeEmbedUrl = getYouTubeEmbedUrl(element.content);
-        return youtubeEmbedUrl ? (
-          <iframe
-            key={element.id}
-            className={animationClass}
-            src={youtubeEmbedUrl}
-            style={{
-              ...baseStyle,
-              border: 'none',
-            }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <div
-            key={element.id}
-            className={animationClass}
-            style={{
-              ...baseStyle,
-              backgroundColor: '#000',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            YouTube
+      case 'calendar':
+        return (
+          <div key={activeElement.id} style={{ ...style, background: 'white', display: 'flex', flexDirection: 'column', padding: '12px' }}>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '4px' }}>
+              {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', fontSize: '0.8em', textAlign: 'center' }}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} style={{ color: '#888' }}>{d}</div>)}
+              {Array.from({ length: 28 }).map((_, i) => (
+                <div key={i} style={{ padding: '2px', background: i === 14 ? '#22c55e' : 'transparent', color: i === 14 ? 'white' : '#333', borderRadius: '4px' }}>{i + 1}</div>
+              ))}
+            </div>
           </div>
         );
 
-      case 'image':
+      case 'table':
         return (
-          <img
-            key={element.id}
-            className={animationClass}
-            src={element.content}
-            alt="Design element"
-            style={{
-              ...baseStyle,
-              objectFit: 'cover',
-              borderRadius: element.borderRadius || 0,
-            }}
-          />
+          <div key={activeElement.id} style={{ ...style, background: 'white', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: '#f59e0b', color: 'white', padding: '8px', fontWeight: 'bold', fontSize: '0.8em' }}>
+              <div>Name</div><div>Status</div><div>Value</div>
+            </div>
+            {[1, 2, 3].map(i => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '8px', borderBottom: '1px solid #f3f4f6', fontSize: '0.8em', color: '#374151' }}>
+                <div>Item {i}</div>
+                <div>{i === 1 ? 'Active' : 'Pending'}</div>
+                <div>${(i * 120).toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
         );
 
-      case 'triangle':
+      case 'dashboards':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="50,10 90,85 10,85"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: '#1f2937', color: 'white', padding: '12px' }}>
+            <div style={{ fontWeight: 'bold', marginBottom: '10px', borderBottom: '1px solid #374151', paddingBottom: '5px' }}>{activeElement.content || 'Dashboard'}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ background: '#0891b2', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.7em', opacity: 0.8 }}>Views</div>
+                <div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>12.5K</div>
+              </div>
+              <div style={{ background: '#16a34a', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.7em', opacity: 0.8 }}>Rev</div>
+                <div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>$8.2K</div>
+              </div>
+              <div style={{ background: '#9333ea', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.7em', opacity: 0.8 }}>Users</div>
+                <div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>3.4K</div>
+              </div>
+              <div style={{ background: '#ea580c', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '0.7em', opacity: 0.8 }}>Growth</div>
+                <div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>+24%</div>
+              </div>
+            </div>
+          </div>
         );
 
-      case 'star':
+      case 'ad_serving':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="50,10 61,40 91,40 67,60 78,90 50,70 22,90 33,60 9,40 39,40"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: 'linear-gradient(to bottom right, #d946ef, #ec4899)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '10px' }}>
+            <ImageIcon size={32} style={{ marginBottom: '8px' }} />
+            <div style={{ fontWeight: 'bold' }}>Advertisement</div>
+            <div style={{ fontSize: '0.8em', opacity: 0.8 }}>Space Available</div>
+          </div>
         );
 
-      case 'heart':
+      case 'smart_switch':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <path
-              d="M50,85 C25,70 10,55 10,40 C10,25 20,15 30,15 C40,15 50,25 50,25 C50,25 60,15 70,15 C80,15 90,25 90,40 C90,55 75,70 50,85 Z"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: 'linear-gradient(to bottom right, #a3e635, #22c55e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.8em' }}>A</span>
+              <div style={{ width: '30px', height: '16px', background: 'rgba(255,255,255,0.3)', borderRadius: '10px', position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '2px', top: '2px', width: '12px', height: '12px', background: 'white', borderRadius: '50%' }} />
+              </div>
+              <span style={{ fontSize: '0.8em' }}>B</span>
+            </div>
+            <div style={{ fontSize: '0.8em', fontWeight: 'bold' }}>Smart Content</div>
+          </div>
         );
 
-      case 'pentagon':
+      case 'touch':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="50,10 90,35 75,85 25,85 10,35"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: 'linear-gradient(to bottom right, #60a5fa, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+            <MousePointer2 size={32} className="animate-bounce" />
+            <span style={{ marginLeft: '8px', fontWeight: 'bold' }}>Touch</span>
+          </div>
         );
 
-      case 'hexagon':
+      case 'ftp':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="50,10 85,30 85,70 50,90 15,70 15,30"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: '#f0fdfa', border: '1px solid #5eead4', padding: '10px', display: 'flex', alignItems: 'center', color: '#115e59' }}>
+            <FileText size={20} style={{ marginRight: '8px' }} />
+            <span style={{ fontSize: '0.9em' }}>{activeElement.content || 'FTP Source'}</span>
+          </div>
         );
 
-      case 'octagon':
+      case 'sub_creative':
         return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="30,10 70,10 90,30 90,70 70,90 30,90 10,70 10,30"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
-        );
-
-      case 'diamond':
-        return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="50,10 90,50 50,90 10,50"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
-        );
-
-      case 'trapezoid':
-        return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <polygon
-              points="25,20 75,20 85,80 15,80"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
-        );
-
-      case 'crescent':
-        return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <path
-              d="M 50 20 A 30 30 0 0 1 50 80 A 24 24 0 0 0 50 26 A 24 24 0 0 0 50 20 Z"
-              fill={element.fillColor || '#ffffff'}
-              stroke={element.strokeColor}
-              strokeWidth={element.strokeWidth || 0}
-            />
-          </svg>
-        );
-
-      case 'cross':
-        return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 100"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <rect x="40" y="10" width="20" height="80" fill={element.fillColor || '#ffffff'} stroke={element.strokeColor} strokeWidth={element.strokeWidth || 0} />
-            <rect x="10" y="40" width="80" height="20" fill={element.fillColor || '#ffffff'} stroke={element.strokeColor} strokeWidth={element.strokeWidth || 0} />
-          </svg>
-        );
-
-      case 'line':
-        return (
-          <svg
-            key={element.id}
-            viewBox="0 0 100 4"
-            preserveAspectRatio="none"
-            style={{
-              ...baseStyle,
-              overflow: 'visible',
-            }}
-          >
-            <line x1="0" y1="2" x2="100" y2="2" stroke={element.fillColor || '#000000'} strokeWidth="4" />
-          </svg>
+          <div key={activeElement.id} style={{ ...style, background: 'linear-gradient(to bottom right, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
+            {activeElement.content || 'Sub Creative'}
+          </div>
         );
 
       default:
-        return (
-          <div
-            key={element.id}
-            style={{
-              ...baseStyle,
-              backgroundColor: element.fillColor || '#cccccc',
-            }}
-          />
-        );
+        // Generic fallback for shapes or unknown types
+        return <div key={activeElement.id} style={{ ...style, backgroundColor: activeElement.fillColor || activeElement.backgroundColor || '#ccc' }} />;
     }
   };
 
+  // --- 5. Render UI ---
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-          <h3 className="text-2xl font-semibold text-white mb-2">Loading Preview</h3>
-          <p className="text-gray-400">Loading your design...</p>
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4 mx-auto"></div>
+          <h3 className="text-xl">Loading Preview...</h3>
         </div>
       </div>
     );
@@ -864,119 +572,69 @@ const Preview: React.FC = () => {
 
   if (error || !design) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <h3 className="text-2xl font-semibold text-white mb-2">Error</h3>
-          <p className="text-gray-400 mb-6">{error || 'Design not found'}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-          >
-            Go Back
-          </button>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white text-center">
+        <div>
+          <h3 className="text-2xl font-bold mb-2">Error Loading Design</h3>
+          <p className="text-gray-400 mb-6">{error}</p>
+          <button onClick={() => navigate(-1)} className="px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">Go Back</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col">
-      {/* Top Control Bar */}
-      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 z-10">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
-          >
-            <ArrowLeft size={20} />
-            Exit Preview
+    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
+      {/* Top Bar */}
+      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 z-50 flex justify-between items-center text-white pointer-events-none">
+        <div className="pointer-events-auto">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 hover:text-gray-300 bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">
+            <ArrowLeft size={18} /> Back
           </button>
-          
-          <div className="text-white text-center">
-            <h2 className="text-xl font-bold">{design.metadata.title}</h2>
-            <p className="text-sm text-gray-300">
-              {design.metadata.description}
-              {isLivePreview && (
-                <span className="ml-2 text-red-400">● LIVE PREVIEW</span>
-              )}
-              {!isLivePreview && isOnlineMode && (
-                <span className="ml-2 text-green-400">● Backend</span>
-              )}
-              {!isLivePreview && !isOnlineMode && (
-                <span className="ml-2 text-yellow-400">● Local</span>
-              )}
-            </p>
+        </div>
+        <div className="text-center">
+          <h2 className="font-bold text-lg drop-shadow-md">{design.metadata.title}</h2>
+          <div className="text-xs opacity-70 flex items-center justify-center gap-2">
+            {design.metadata.canvasWidth}x{design.metadata.canvasHeight}
+            {isLivePreview ? <span className="text-red-400 font-bold">• LIVE</span> : <span className="text-green-400">• SAVED</span>}
           </div>
-
-          <div className="text-white text-sm flex items-center gap-3">
-            {!isLivePreview && (
-              <button
-                onClick={() => window.location.reload()}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                title="Reload preview"
-              >
-                <RefreshCw size={16} />
-                Reload
-              </button>
-            )}
-            <div>
-              {design.metadata.canvasWidth} × {design.metadata.canvasHeight}px
-              {hasTimeline && (
-                <span className="ml-2 text-green-400">● Timeline</span>
-              )}
-            </div>
-          </div>
+        </div>
+        <div className="pointer-events-auto">
+          {!isLivePreview && <button onClick={() => window.location.reload()} className="p-2 hover:bg-white/10 rounded-full"><RefreshCw size={18} /></button>}
         </div>
       </div>
 
-      {/* Playback Controls (only show if timeline exists) */}
+      {/* Playback Controls */}
       {hasTimeline && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/90 rounded-full px-8 py-4 flex items-center gap-6 z-10 backdrop-blur-sm">
-          <button
-            onClick={togglePlayback}
-            className="text-white hover:text-green-400 transition-colors p-2 hover:bg-white/10 rounded-full"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? <Pause size={28} fill="white" /> : <Play size={28} fill="white" />}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-md rounded-full px-6 py-3 border border-white/10 flex items-center gap-4 text-white shadow-2xl">
+          <button onClick={togglePlayback} className="hover:text-green-400 transition-colors">
+            {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
           </button>
-          <button
-            onClick={restartPlayback}
-            className="text-white hover:text-blue-400 transition-colors p-2 hover:bg-white/10 rounded-full"
-            title="Restart"
-          >
-            <RotateCcw size={24} />
+          <div className="text-xs font-mono tracking-wider">
+            {(currentTime / 1000).toFixed(1)}s / {((design.designJSON.timeline?.totalDuration || 5000) / 1000).toFixed(1)}s
+          </div>
+          <button onClick={restartPlayback} className="hover:text-blue-400 transition-colors">
+            <RotateCcw size={20} />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="text-white text-sm font-mono bg-white/10 px-3 py-1 rounded">
-              {(currentTime / 1000).toFixed(2)}s
-            </div>
-            <div className="text-gray-400 text-xs">/</div>
-            <div className="text-gray-300 text-sm font-mono">
-              {((design.designJSON.timeline?.totalDuration || 5000) / 1000).toFixed(2)}s
-            </div>
-          </div>
-          <div className="text-green-400 text-xs font-semibold bg-green-500/20 px-3 py-1 rounded-full flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            VIDEO MODE
-          </div>
         </div>
       )}
 
-      {/* Canvas Display */}
-      <div className="flex-1 flex items-center justify-center">
-        <div
-          style={{
-            width: `${design.metadata.canvasWidth}px`,
-            height: `${design.metadata.canvasHeight}px`,
-            backgroundColor: design.metadata.canvasColor,
-            position: 'relative',
-            maxWidth: '100vw',
-            maxHeight: '100vh',
-            objectFit: 'contain',
-          }}
-        >
-          {/* Render all elements */}
-          {design.designJSON.elements.map(element => renderElement(element))}
+      {/* Main Canvas Area */}
+      <div className="flex-1 flex items-center justify-center bg-gray-900 w-full h-full relative">
+        <div style={{
+          width: design.metadata.canvasWidth,
+          height: design.metadata.canvasHeight,
+          backgroundColor: design.metadata.canvasColor,
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 0 50px rgba(0,0,0,0.5)',
+          // Scale to fit viewport
+          transform: `scale(${Math.min(
+            (window.innerWidth - 40) / design.metadata.canvasWidth,
+            (window.innerHeight - 40) / design.metadata.canvasHeight
+          )})`,
+          transformOrigin: 'center center',
+        }}>
+          {design.designJSON.elements.map(el => renderElement(el))}
         </div>
       </div>
     </div>

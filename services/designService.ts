@@ -103,16 +103,7 @@ export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> 
  * Save a new design or update existing one
  * Backend verifies user identity via Cookie Token
  */
-// export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
-//   try {
-//     const response = await api.post('/design/postsavedesign', designData);
-//     console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
-//     return response.data;
-//   } catch (error: any) {
-//     console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
-//     throw error;
-//   }
-// };
+
 /**
  * Save a new design or update existing one
  */
