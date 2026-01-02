@@ -8,20 +8,9 @@
 // API base URL for backend integration
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-// UI-only: localStorage-backed playlists (no Firebase)
-const STORAGE_KEY = 'signcraft:playlists';
-const readAll = (): any[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-};
-const writeAll = (arr: any[]) => {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch {}
-};
+import authService from './authService';
+
+// Local storage removed - use backend API only
 
 // ==================== TypeScript Interfaces ====================
 
@@ -80,11 +69,9 @@ export interface PlaylistWithDesigns {
 // ==================== Helper Functions ====================
 
 const getCurrentUser = () => {
-  // Always use guest user (no authentication)
-  return {
-    uid: 'guest-user-123',
-    email: 'guest@signcraft.com',
-  };
+  const u = authService.getUser();
+  if (u && u.id) return { uid: u.id, email: u.email || '' };
+  return { uid: 'guest-user-123', email: 'guest@signcraft.com' };
 };
 
 const calculateTotalDuration = (references: PlaylistDesignReference[]): number => {
@@ -405,10 +392,9 @@ export const getPlaylistsFromBackend = async (): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getplaylists`, {
+    const response = await authService.authFetch(`${API_BASE}/design/getplaylists`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -436,10 +422,9 @@ export const getPlaylistDetailsFromBackend = async (id: string): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getplaylistdetails?id=${id}`, {
+    const response = await authService.authFetch(`${API_BASE}/design/getplaylistdetails?id=${id}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -464,17 +449,18 @@ export const getPlaylistDetailsFromBackend = async (id: string): Promise<{
 export const savePlaylistToBackend = async (data: {
   id?: string;
   name: string;
+  description?: string;
   userID?: string;
+  userId?: string;
 }): Promise<{
   success: boolean;
   data?: any;
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postsaveplaylist`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postsaveplaylist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(data),
     });
 
@@ -506,10 +492,9 @@ export const syncPlaylistItemsToBackend = async (
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postsyncplaylistitems`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postsyncplaylistitems`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ playlistId, items, userID }),
     });
 
@@ -537,10 +522,9 @@ export const deletePlaylistFromBackend = async (id: string): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postdelplaylist`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postdelplaylist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ id }),
     });
 

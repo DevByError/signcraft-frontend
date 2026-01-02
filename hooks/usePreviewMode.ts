@@ -5,7 +5,7 @@
  */
 
 import { animationEngine } from '../services/animationService';
-import { CanvasElement } from '../types';
+import { CanvasElement } from '../types/canvas';
 
 interface PlaybackOptions {
   /** Loop the animation sequence */

@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { AnimationPresetGallery } from '../components/AnimationPresetGallery';
 import { applyPreset } from '../constants/animationPresets';
-import { CanvasElement, ElementType } from '../types';
+import { CanvasElement, ElementType } from '../types/canvas';
 
 export function AnimationGalleryExample() {
   const [elements, setElements] = useState<CanvasElement[]>([

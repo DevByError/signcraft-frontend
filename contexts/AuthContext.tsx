@@ -1,64 +1,94 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types';
+import * as authService from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, name: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ success: boolean; msg?: string }>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize with localStorage data if available
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('signcraft_user');
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return {
-          id: 'guest-user-123',
-          name: 'Guest Designer',
-          email: 'guest@signcraft.com'
-        };
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize with null - user will be fetched from backend if needed
+  const [user, setUser] = useState<User | null>(null);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; msg?: string }> => {
+    setIsLoading(true);
+    console.log('🔑 [AUTH_CONTEXT] Login attempt for:', email);
+
+    try {
+      const response = await authService.login({ email, password });
+
+      if (response.success && response.data) {
+        // Decode JWT token to extract user info
+        if (response.data.authtoken) {
+          try {
+            const tokenPayload = JSON.parse(atob(response.data.authtoken.split('.')[1]));
+            console.log('🔓 [AUTH_CONTEXT] Token decoded:', {
+              userId: tokenPayload.userId,
+              email: tokenPayload.email,
+              username: tokenPayload.username,
+              role: tokenPayload.role
+            });
+
+            const newUser: User = {
+              id: tokenPayload.userId || 'unknown',
+              email: tokenPayload.email || email,
+              name: tokenPayload.username || 'User',
+            };
+            setUser(newUser);
+            console.log('✅ [AUTH_CONTEXT] User authenticated:', newUser);
+          } catch (decodeError) {
+            console.error('❌ [AUTH_CONTEXT] Failed to decode token:', decodeError);
+            // Fallback user object
+            setUser({
+              id: response.data.userId || 'unknown',
+              email: response.data.email || email,
+              name: response.data.username || 'User',
+            });
+          }
+        }
+
+        return { success: true };
+      } else {
+        const errorMsg = typeof response.data?.msg === 'string'
+          ? response.data.msg
+          : Array.isArray(response.data?.msg)
+            ? response.data.msg.join(', ')
+            : 'Login failed';
+        console.error('❌ [AUTH_CONTEXT] Login failed:', errorMsg);
+        return { success: false, msg: errorMsg };
       }
+    } catch (error) {
+      console.error('❌ [AUTH_CONTEXT] Exception during login:', error);
+      return {
+        success: false,
+        msg: error instanceof Error ? error.message : 'Login failed'
+      };
+    } finally {
+      setIsLoading(false);
     }
-    return {
-      id: 'guest-user-123',
-      name: 'Guest Designer',
-      email: 'guest@signcraft.com'
-    };
-  });
-
-  // Persist user to localStorage
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('signcraft_user', JSON.stringify(user));
-    }
-  }, [user]);
-
-  const login = (email: string, name: string) => {
-    const newUser = {
-      id: Math.random().toString(36).substr(2, 9),
-      email,
-      name,
-    };
-    setUser(newUser);
   };
 
-  const logout = () => {
-    setUser({
-      id: 'guest-user-123',
-      name: 'Guest Designer',
-      email: 'guest@signcraft.com'
-    });
-    localStorage.removeItem('signcraft_user');
+  const logout = async (): Promise<void> => {
+    setIsLoading(true);
+    try {
+      await authService.logout();
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

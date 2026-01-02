@@ -1,5 +1,5 @@
-// Local design store for offline persistence
-// Uses localStorage under the key namespace 'signcraft:designs'
+// localDesignStore.ts
+// Local design store - Deprecated, but functions still exist for frontend compatibility
 
 export interface StoredDesignMetadata {
   title: string;
@@ -18,70 +18,62 @@ export interface StoredDesign {
   designJSON: any;
 }
 
-const NAMESPACE = 'signcraft:designs';
-
-const readAll = (): Record<string, StoredDesign> => {
-  try {
-    const raw = localStorage.getItem(NAMESPACE);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeAll = (data: Record<string, StoredDesign>) => {
-  localStorage.setItem(NAMESPACE, JSON.stringify(data));
-};
-
-const makeId = (): string => Math.random().toString(36).slice(2, 10);
-
 export interface SaveResponse {
   success: boolean;
   designId?: string;
   error?: string;
 }
 
-export const saveDesignLocal = (design: Omit<StoredDesign, 'id'>): SaveResponse => {
+// --- Helper: read all designs from localStorage ---
+export async function readAll(): Promise<StoredDesign[]> {
+  const raw = localStorage.getItem('designs');
+  return raw ? JSON.parse(raw) : [];
+}
+
+// --- Save a new design locally ---
+export const saveDesignLocal = async (design: Omit<StoredDesign, 'id'>): Promise<SaveResponse> => {
   try {
-    const all = readAll();
-    const id = makeId();
-    const record: StoredDesign = { id, ...design } as StoredDesign;
-    all[id] = record;
-    writeAll(all);
-    return { success: true, designId: id };
-  } catch (e: any) {
-    return { success: false, error: e?.message || 'Failed to save locally' };
+    const all = await readAll();
+    const newDesign: StoredDesign = { ...design, id: crypto.randomUUID() };
+    all.push(newDesign);
+    localStorage.setItem('designs', JSON.stringify(all));
+    return { success: true, designId: newDesign.id };
+  } catch (err) {
+    console.error('saveDesignLocal error:', err);
+    return { success: false, error: 'Failed to save locally' };
   }
 };
 
-export const updateDesignLocal = (id: string, design: Omit<StoredDesign, 'id'>): SaveResponse => {
+// --- Update an existing design locally ---
+export const updateDesignLocal = async (id: string, design: Omit<StoredDesign, 'id'>): Promise<SaveResponse> => {
   try {
-    const all = readAll();
-    if (!all[id]) {
-      return { success: false, error: 'Design not found' };
-    }
-    all[id] = { id, ...design } as StoredDesign;
-    writeAll(all);
+    const all = await readAll();
+    const index = all.findIndex(d => d.id === id);
+    if (index === -1) return { success: false, error: 'Design not found' };
+    all[index] = { ...design, id };
+    localStorage.setItem('designs', JSON.stringify(all));
     return { success: true, designId: id };
-  } catch (e: any) {
-    return { success: false, error: e?.message || 'Failed to update locally' };
+  } catch (err) {
+    console.error('updateDesignLocal error:', err);
+    return { success: false, error: 'Failed to update locally' };
   }
 };
 
-export const getDesignLocalById = (id: string): StoredDesign | null => {
-  const all = readAll();
-  return all[id] || null;
+// --- Get design by ID ---
+export const getDesignLocalById = async (id: string): Promise<StoredDesign | null> => {
+  const all = await readAll();
+  return all.find(d => d.id === id) || null;
 };
 
-export const listDesignLocals = (): StoredDesign[] => {
-  const all = readAll();
-  return Object.values(all).sort((a, b) => (b.metadata.updatedAt || '').localeCompare(a.metadata.updatedAt || ''));
+// --- List all designs ---
+export const listDesignLocals = async (): Promise<StoredDesign[]> => {
+  return await readAll();
 };
 
-export const deleteDesignLocal = (id: string): boolean => {
-  const all = readAll();
-  if (!all[id]) return false;
-  delete all[id];
-  writeAll(all);
-  return true;
+// --- Delete design locally ---
+export const deleteDesignLocal = async (id: string): Promise<StoredDesign[]> => {
+  const all = await readAll();
+  const filtered = all.filter(d => d.id !== id);
+  localStorage.setItem('designs', JSON.stringify(filtered));
+  return filtered;
 };

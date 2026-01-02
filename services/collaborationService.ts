@@ -1,6 +1,7 @@
 import { CollaborativeSession, Design } from '../types';
+import authService from './authService';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 /**
  * Create or join a collaborative session
@@ -10,7 +11,7 @@ const API_BASE = 'http://localhost:5000/api';
  */
 export async function createOrJoinSession(designId: string, userId: string): Promise<CollaborativeSession> {
   try {
-    const response = await fetch(`${API_BASE}/collaboration/session`, {
+    const response = await authService.authFetch(`${API_BASE}/collaboration/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ designId, userId }),
@@ -33,7 +34,10 @@ export async function createOrJoinSession(designId: string, userId: string): Pro
  */
 export async function getCollaborators(designId: string): Promise<string[]> {
   try {
-    const response = await fetch(`${API_BASE}/collaboration/collaborators/${designId}`);
+    const response = await authService.authFetch(`${API_BASE}/collaboration/collaborators/${designId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
 
     if (!response.ok) {
       throw new Error(`Fetch failed: ${response.statusText}`);
@@ -54,7 +58,7 @@ export async function getCollaborators(designId: string): Promise<string[]> {
  */
 export async function saveDesign(design: Design, userId: string): Promise<Design> {
   try {
-    const response = await fetch(`${API_BASE}/designs/${design.id}`, {
+    const response = await authService.authFetch(`${API_BASE}/designs/${design.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -82,7 +86,7 @@ export async function saveDesign(design: Design, userId: string): Promise<Design
  */
 export async function shareDesign(designId: string, userIds: string[]): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE}/designs/${designId}/share`, {
+    const response = await authService.authFetch(`${API_BASE}/designs/${designId}/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ collaborators: userIds }),

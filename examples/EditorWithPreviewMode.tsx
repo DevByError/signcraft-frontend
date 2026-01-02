@@ -11,11 +11,10 @@
 import React, { useState } from 'react';
 import { Stage, Layer, Text, Rect } from 'react-konva';
 import { Eye, Edit3 } from 'lucide-react';
-import { ElementType } from '../types';
+import { ElementType, CanvasElement } from '../types/canvas';
 import { AnimationPanel } from '../components/AnimationPanel';
 import { PreviewModeControls, PreviewModeBanner } from '../components/PreviewMode';
 import { usePreviewMode } from '../hooks/usePreviewMode';
-import { CanvasElement } from '../types';
 
 export const EditorWithPreviewMode: React.FC = () => {
   const [elements, setElements] = useState<CanvasElement[]>([]);

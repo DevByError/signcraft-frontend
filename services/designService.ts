@@ -1,9 +1,7 @@
-// Design service for backend API integration
-// Connects to signcraft-backend design controller
+// src/services/designService.ts
+import api from '../utils/api'; // ✅ Centralized API with Interceptors
 
-// API base URL - configurable via environment variable
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
+// --- Interfaces (Kept exactly as they were) ---
 export interface DesignMetadata {
   title: string;
   canvasWidth: number;
@@ -18,8 +16,8 @@ export interface DesignMetadata {
 export interface DesignData {
   id?: string;
   title: string;
-  canvasData: any; // Canvas elements
-  timelineData?: any; // Timeline/animation data
+  canvasData: any;
+  timelineData?: any;
   userId?: string;
   videoUrl?: string;
   videoSize?: string;
@@ -68,31 +66,20 @@ export interface ExportVideoResponse {
   msg?: string;
 }
 
+// --- API Functions ---
+
 /**
  * Get all active designs from backend
+ * Interceptor handles 401/403 automatically.
  */
 export const getAllDesigns = async (): Promise<GetDesignsResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getalldesigns`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include', // Include cookies for authentication
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error('❌ [DESIGN_SERVICE] Error fetching designs:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to fetch designs',
-    };
+    const response = await api.get('/design/getalldesigns');
+    return response.data;
+  } catch (error: any) {
+    // We re-throw the error so the Component stops its loading spinner.
+    // The Global Modal will handle the UI if it's an Auth error.
+    throw error;
   }
 };
 
@@ -101,85 +88,43 @@ export const getAllDesigns = async (): Promise<GetDesignsResponse> => {
  */
 export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getdesignbyid?id=${id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
+    // Uses query parameter ?id=...
+    const response = await api.get(`/design/getdesignbyid`, {
+      params: { id }
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
+    return response.data;
+  } catch (error: any) {
     console.error('❌ [DESIGN_SERVICE] Error fetching design:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to fetch design',
-    };
+    throw error;
   }
 };
 
 /**
  * Save a new design or update existing one
+ * Backend verifies user identity via Cookie Token
  */
-export const saveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
+export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postsavedesign`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(designData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('✅ [DESIGN_SERVICE] Design saved:', result);
-    return result;
-  } catch (error) {
+    const response = await api.post('/design/postsavedesign', designData);
+    console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
+    return response.data;
+  } catch (error: any) {
     console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to save design',
-    };
+    throw error;
   }
 };
 
 /**
- * Delete a design (soft delete - sets sts to false)
+ * Delete a design
+ * Backend checks ownership via Cookie Token + Design ID
  */
 export const deleteDesign = async (id: string): Promise<DeleteDesignResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postdeldesign`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ id }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
+    const response = await api.post('/design/postdeldesign', { id });
+    return response.data;
+  } catch (error: any) {
     console.error('❌ [DESIGN_SERVICE] Error deleting design:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to delete design',
-    };
+    throw error;
   }
 };
 
@@ -188,29 +133,15 @@ export const deleteDesign = async (id: string): Promise<DeleteDesignResponse> =>
  */
 export const exportDesignVideo = async (id: string): Promise<ExportVideoResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postexportvideo`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ id }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
+    const response = await api.post('/design/exportvideo', { id });
+    return response.data;
+  } catch (error: any) {
     console.error('❌ [DESIGN_SERVICE] Error exporting video:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to export video',
-    };
+    throw error;
   }
 };
+
+// --- Helper Functions (Pure Logic, No API) ---
 
 /**
  * Helper function to convert local design format to backend format
@@ -233,7 +164,7 @@ export const convertBackendToLocal = (backendDesign: DesignData): any => {
     id: backendDesign.id,
     metadata: {
       title: backendDesign.title,
-      canvasWidth: 1920, // Default values - can be extracted from canvasData if stored
+      canvasWidth: 1920,
       canvasHeight: 1080,
       canvasColor: '#ffffff',
       createdAt: backendDesign.createdAt || new Date().toISOString(),
@@ -249,3 +180,8 @@ export const convertBackendToLocal = (backendDesign: DesignData): any => {
     },
   };
 };
+
+/**
+ * Alias for backward compatibility
+ */
+export const saveDesign = postsaveDesign;

@@ -5,7 +5,7 @@
 
 // ==================== Types ====================
 export type {
-  AnimationType,
+  Animation,
   EasingType,
   TriggerType,
   AnimationConfig,

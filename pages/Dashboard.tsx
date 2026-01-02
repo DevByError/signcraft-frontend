@@ -20,7 +20,7 @@ const Dashboard: React.FC = () => {
         setError(null);
         console.log('📊 [DASHBOARD] Loading designs from backend...');
 
-        // Try to fetch from backend first
+        // Fetch from backend only
         const response = await getAllDesigns();
         
         if (response.success && response.data) {
@@ -35,35 +35,16 @@ const Dashboard: React.FC = () => {
             totalDesigns: backendDesigns.length,
           });
         } else {
-          // Fallback to local storage if backend fails
-          console.log('⚠️ [DASHBOARD] Backend failed, using local storage...');
-          const localDesigns = listDesignLocals();
-          const recentDesigns = localDesigns.slice(0, 6);
-          setDesigns(recentDesigns);
-          setTotalDesignCount(localDesigns.length);
-          
-          console.log('✅ [DASHBOARD] Loaded from local:', {
-            recentDesigns: recentDesigns.length,
-            totalDesigns: localDesigns.length,
-          });
-          
-          if (!response.success) {
-            setError(`Using local storage: ${response.msg || 'Backend unavailable'}`);
-          }
+          console.error('❌ [DASHBOARD] Backend failed:', response.msg);
+          setDesigns([]);
+          setTotalDesignCount(0);
+          setError('Failed to load designs. Please ensure backend is running.');
         }
       } catch (err) {
         console.error('❌ [DASHBOARD] Error fetching data:', err);
-        
-        // Fallback to local storage on error
-        try {
-          const localDesigns = listDesignLocals();
-          const recentDesigns = localDesigns.slice(0, 6);
-          setDesigns(recentDesigns);
-          setTotalDesignCount(localDesigns.length);
-          setError('Using local storage (backend unavailable)');
-        } catch (localErr) {
-          setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
+        setDesigns([]);
+        setTotalDesignCount(0);
+        setError(`Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoading(false);
       }
@@ -377,14 +358,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="bg-gradient-to-r from-primary to-primaryLight rounded-lg shadow-md p-8 text-white text-center">
-          <h2 className="text-2xl font-bold mb-3">Ready to grow?</h2>
-          <p className="mb-6 text-white/90">Upgrade your plan to manage more screens and designs</p>
-          <button className="bg-vanilla text-primary hover:bg-yellow-100 px-6 py-2 rounded-lg font-bold transition-colors">
-            Upgrade Plan
-          </button>
-        </div>
+        
       </div>
     </div>
   );

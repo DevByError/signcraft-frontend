@@ -11,7 +11,7 @@ import {
   TimelineState,
 } from '../types/timeline';
 import * as timelineService from '../services/timelineService';
-import { CanvasElement } from '../types';
+import { CanvasElement } from '../types/canvas';
 
 interface UseTimelineOptions {
   designId: string;

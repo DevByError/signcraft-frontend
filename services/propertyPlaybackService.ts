@@ -9,7 +9,7 @@
  * 4. Clips only render when active (startTime <= time <= startTime + duration)
  */
 
-import { CanvasElement } from '../types';
+import { CanvasElement } from '../types/canvas';
 import { TimelineItem, Timeline } from '../types/timeline';
 import * as timelineService from './timelineService';
 import * as animationEngine from './animationEngine';
@@ -299,7 +299,7 @@ export function validateElementProperties(element: CanvasElement): CanvasElement
 export function ensureElementDefaults(element: Partial<CanvasElement>): CanvasElement {
   return {
     id: element.id || `element-${Date.now()}`,
-    type: element.type || 'RECT' as any,
+    type: element.type || 'rect' as any,
     content: element.content || '',
     x: element.x ?? 0,
     y: element.y ?? 0,

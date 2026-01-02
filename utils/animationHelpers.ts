@@ -11,8 +11,11 @@ export function blobToBase64(blob: Blob): Promise<string> {
  * Helper functions for working with animations
  */
 
-import { AnimationType, AnimationConfig, ElementAnimation, EasingType } from '../types/animation';
-import { CanvasElement } from '../types';
+import { Animation, AnimationConfig, ElementAnimation, EasingType } from '../types/animation';
+import { CanvasElement } from '../types/canvas';
+
+// Type for animation preset names (different from Animation objects)
+type AnimationType = 'fadeIn' | 'slideInLeft' | 'slideInRight' | 'slideInUp' | 'slideInDown' | 'scaleIn' | 'rotateIn' | 'flipIn' | 'zoomIn' | 'rollIn' | 'fadeOut' | 'slideOutLeft' | 'slideOutRight' | 'slideOutUp' | 'slideOutDown' | 'scaleOut' | 'rotateOut' | 'flipOut' | 'zoomOut' | 'rollOut' | 'pulse' | 'bounce' | 'shake' | 'wiggle' | 'flash' | 'swing' | 'tada' | 'heartbeat' | string;
 
 // ==================== Animation Creation Helpers ====================
 
@@ -22,7 +25,7 @@ import { CanvasElement } from '../types';
 export function createAnimation(
   type: AnimationType,
   duration: number = 500,
-  easing: EasingType = 'ease-out'
+  easing: EasingType = 'easeOut'
 ): AnimationConfig {
   return {
     type,
@@ -63,7 +66,7 @@ export function createLoopingAnimation(
       type,
       duration,
       delay: 0,
-      easing: 'ease-in-out',
+      easing: 'easeInOut',
       repeat: -1, // Infinite
       repeatDelay,
     },
@@ -280,13 +283,13 @@ export function importAnimations(
  */
 export function getRecommendedAnimation(elementType: string): AnimationType {
   const recommendations: Record<string, AnimationType> = {
-    TEXT: 'fadeIn',
-    RECT: 'scaleIn',
-    CIRCLE: 'scaleIn',
-    IMAGE: 'fadeIn',
-    STAR: 'rotateIn',
-    HEART: 'pulse',
-    VIDEO: 'fadeIn',
+    text: 'fadeIn',
+    rect: 'scaleIn',
+    circle: 'scaleIn',
+    image: 'fadeIn',
+    star: 'rotateIn',
+    heart: 'pulse',
+    video: 'fadeIn',
   };
 
   return recommendations[elementType] || 'fadeIn';
@@ -295,44 +298,44 @@ export function getRecommendedAnimation(elementType: string): AnimationType {
 /**
  * Get recommended easing based on animation type
  */
-export function getRecommendedEasing(animationType: AnimationType): EasingType {
+export function getRecommendedEasing(animationType: string): EasingType {
   const easingMap: Record<string, EasingType> = {
     // Entrance animations - ease out
-    fadeIn: 'ease-out',
-    slideInLeft: 'power2.out',
-    slideInRight: 'power2.out',
-    slideInUp: 'power2.out',
-    slideInDown: 'power2.out',
-    scaleIn: 'back.out',
-    rotateIn: 'power3.out',
-    flipIn: 'back.out',
-    zoomIn: 'power3.out',
-    rollIn: 'power2.out',
+    fadeIn: 'easeOut',
+    slideInLeft: 'easeOutQuad',
+    slideInRight: 'easeOutQuad',
+    slideInUp: 'easeOutQuad',
+    slideInDown: 'easeOutQuad',
+    scaleIn: 'easeOutCubic',
+    rotateIn: 'easeOutCubic',
+    flipIn: 'easeOutCubic',
+    zoomIn: 'easeOutCubic',
+    rollIn: 'easeOutQuad',
 
     // Exit animations - ease in
-    fadeOut: 'ease-in',
-    slideOutLeft: 'power2.in',
-    slideOutRight: 'power2.in',
-    slideOutUp: 'power2.in',
-    slideOutDown: 'power2.in',
-    scaleOut: 'back.in',
-    rotateOut: 'power3.in',
-    flipOut: 'back.in',
-    zoomOut: 'power3.in',
-    rollOut: 'power2.in',
+    fadeOut: 'easeIn',
+    slideOutLeft: 'easeInQuad',
+    slideOutRight: 'easeInQuad',
+    slideOutUp: 'easeInQuad',
+    slideOutDown: 'easeInQuad',
+    scaleOut: 'easeInCubic',
+    rotateOut: 'easeInCubic',
+    flipOut: 'easeInCubic',
+    zoomOut: 'easeInCubic',
+    rollOut: 'easeInQuad',
 
     // Attention animations - ease in-out
-    pulse: 'ease-in-out',
-    bounce: 'bounce.out',
+    pulse: 'easeInOut',
+    bounce: 'easeOutCubic',
     shake: 'linear',
-    wiggle: 'ease-in-out',
+    wiggle: 'easeInOut',
     flash: 'linear',
-    swing: 'ease-in-out',
-    tada: 'ease-out',
-    heartbeat: 'ease-in-out',
+    swing: 'easeInOut',
+    tada: 'easeOut',
+    heartbeat: 'easeInOut',
   };
 
-  return easingMap[animationType] || 'ease-out';
+  return easingMap[animationType] || 'easeOut';
 }
 
 // ==================== Animation Performance ====================
@@ -415,7 +418,7 @@ export function createBillboardLoop(
       type: enterType,
       duration,
       delay: 0,
-      easing: 'power4.out',
+      easing: 'easeOutCubic',
       repeat: -1,
       repeatDelay: displayTime,
     },
@@ -467,7 +470,7 @@ export function createReducedMotionAnimation(
   config: AnimationConfig
 ): AnimationConfig {
   // For reduced motion, only use fade animations
-  const reducedType: AnimationType = config.type.includes('Out') ? 'fadeOut' : 'fadeIn';
+  const reducedType: AnimationType = (config.type as string).includes('Out') ? 'fadeOut' : 'fadeIn';
 
   return {
     ...config,

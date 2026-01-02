@@ -19,7 +19,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
-import { CanvasElement } from '../types';
+import { CanvasElement } from '../types/canvas';
 import * as timelineService from '../services/timelineService';
 
 interface LayerPanelProps {

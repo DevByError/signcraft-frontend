@@ -23,38 +23,31 @@ export interface ScreenDocument {
 }
 
 const SCREENS_COLLECTION = 'screens';
-const getCurrentUser = () => ({ uid: 'guest-user-123', email: 'guest@signcraft.com' });
-const STORAGE_KEY = 'signcraft:screens';
-const readAll = () => {
-  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
-};
-const writeAll = (arr: any[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+import authService from './authService';
 
-export const createScreen = async (name: string, location: string, res: string = '1920x1080', ip: string = '', pId?: string) => {
-  const user = getCurrentUser();
-  const screens = readAll();
-  const id = Math.random().toString(36).slice(2, 10);
-  screens.push({ id, screenId: `scr${Math.floor(Math.random() * 1000)}`, userId: user.uid, userEmail: user.email, name, location, resolution: res, ipAddress: ip, status: 'offline', lastSeen: Timestamp.now(), playlistId: pId || null, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
-  writeAll(screens);
-  return { success: true, screenId: id };
+const getCurrentUser = () => {
+  const u = authService.getUser();
+  if (u && u.id) return { uid: u.id, email: u.email || '' };
+  return { uid: 'guest-user-123', email: 'guest@signcraft.com' };
 };
+
+// Local screen functions removed - use backend API instead
+export const createScreen = async (name: string, location: string, res: string = '1920x1080', ip: string = '', pId?: string) => {
+  // Use backend API
+  return { success: false, error: 'Use backend API instead' };
+};
+
 
 export const getUserScreens = async (limitNum: number = 100): Promise<ScreenDocument[]> => {
-  return readAll().slice(0, limitNum);
+  return [];
 };
 
 export const updateScreenStatus = async (id: string, status: 'online' | 'offline') => {
-  const screens = readAll();
-  const idx = screens.findIndex((s: any) => s.id === id);
-  if (idx >= 0) { screens[idx].status = status; screens[idx].lastSeen = Timestamp.now(); writeAll(screens); return { success: true }; }
   return { success: false };
 };
 
 export const deleteScreen = async (id: string) => {
-  const screens = readAll();
-  const next = screens.filter((s: any) => s.id !== id);
-  writeAll(next);
-  return { success: true };
+  return { success: false };
 };
 
 // ==================== Backend API Integration ====================
@@ -62,16 +55,16 @@ export const deleteScreen = async (id: string) => {
 /**
  * Get all screens from backend
  */
+
 export const getScreensFromBackend = async (): Promise<{
   success: boolean;
   data?: any[];
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getscreens`, {
+    const response = await authService.authFetch(`${API_BASE}/design/getscreens`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -99,10 +92,9 @@ export const getScreenByIdFromBackend = async (id: string): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/getscreenbyid?id=${id}`, {
+    const response = await authService.authFetch(`${API_BASE}/design/getscreenbyid?id=${id}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -137,10 +129,9 @@ export const updateScreenToBackend = async (data: {
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postscreenupdate`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postscreenupdate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(data),
     });
 
@@ -168,10 +159,9 @@ export const deleteScreenFromBackend = async (id: string): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postdelscreen`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postdelscreen`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ id }),
     });
 
@@ -199,10 +189,9 @@ export const deployToScreenViaBackend = async (screenId: string): Promise<{
   msg?: string;
 }> => {
   try {
-    const response = await fetch(`${API_BASE}/design/postdeploytoscreen`, {
+    const response = await authService.authFetch(`${API_BASE}/design/postdeploytoscreen`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ screenId }),
     });
 

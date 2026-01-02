@@ -8,6 +8,8 @@ import { X, AlertCircle, CheckCircle } from 'lucide-react';
 
 export interface SaveDesignModalData {
   title: string;
+  description?: string;
+  tags?: string[];
 }
 
 interface SaveDesignModalProps {
@@ -50,22 +52,9 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
     await onSave(formData);
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, tagInput.trim()],
-      }));
-      setTagInput('');
-    }
-  };
+ 
 
-  const removeTag = (tag: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(t => t !== tag),
-    }));
-  };
+  
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">

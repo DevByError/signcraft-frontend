@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, PlayCircle, AlertCircle, Copy, Clock, Image, RefreshCw } from 'lucide-react';
-import { listDesignLocals } from '../services/localDesignStore';
 import { 
-  getUserPlaylists, 
-  createPlaylist, 
-  deletePlaylist, 
-  duplicatePlaylist,
-  PlaylistDocument,
   getPlaylistsFromBackend,
   savePlaylistToBackend,
-  deletePlaylistFromBackend
+  deletePlaylistFromBackend,
+  getUserPlaylists,
+  duplicatePlaylist
 } from '../services/playlistService';
+import { listDesignLocals } from '../services/localDesignStore';
+import authService from '../services/authService';
 
 interface PlaylistItem {
   id: string;
@@ -47,28 +45,42 @@ const SchedulePlaylist: React.FC = () => {
       setError(null);
       console.log('📋 [PLAYLIST] Attempting to load from backend...');
       
+      // Get current user
+      const currentUser = authService.getUser();
+      const currentUserId = currentUser?.id;
+      
+      if (!currentUserId) {
+        setError('User not authenticated');
+        setLoading(false);
+        return;
+      }
+      
       // Try backend first
       const backendResponse = await getPlaylistsFromBackend();
       let playlistsData: any[] = [];
       
       if (backendResponse.success && backendResponse.data) {
         console.log(`✅ [PLAYLIST] Loaded ${backendResponse.data.length} playlists from backend`);
-        playlistsData = backendResponse.data;
+        // Filter by current user
+        playlistsData = backendResponse.data.filter((p: any) => p.userId === currentUserId);
         setIsOnlineMode(true);
       } else {
         // Fallback to localStorage
         console.log('⚠️ [PLAYLIST] Backend unavailable, using localStorage...');
         playlistsData = await getUserPlaylists(100);
+        // Filter by current user
+        playlistsData = playlistsData.filter((p: any) => p.userId === currentUserId);
         setIsOnlineMode(false);
         if (!backendResponse.success) {
           setError('Using local storage (backend unavailable)');
         }
       }
       
-      // Fetch available designs count
+      // Fetch available designs count and filter by userId
       const designs = await listDesignLocals();
-      setAvailableDesignCount(designs.length);
-      console.log(`✅ [PLAYLIST] Found ${designs.length} available designs`);
+      const userDesigns = designs.filter((d: any) => d.userId === currentUserId || !d.userId);
+      setAvailableDesignCount(userDesigns.length);
+      console.log(`✅ [PLAYLIST] Found ${userDesigns.length} available designs for user`);
       
       // Convert backend data to UI format
       const playlistItems: PlaylistItem[] = playlistsData.map(playlist => {
@@ -90,25 +102,7 @@ const SchedulePlaylist: React.FC = () => {
     } catch (err) {
       console.error('❌ [PLAYLIST] Error fetching data:', err);
       setError(`Failed to load playlists: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      
-      // Final fallback to localStorage
-      try {
-        const localPlaylists = await getUserPlaylists(100);
-        const playlistItems: PlaylistItem[] = localPlaylists.map(playlist => ({
-          id: playlist.id,
-          name: playlist.name,
-          itemCount: playlist.designReferences.length,
-          totalDuration: playlist.totalDuration,
-          lastModified: (typeof (playlist as any).updatedAt === 'string')
-            ? (playlist as any).updatedAt
-            : new Date((playlist as any).updatedAt?.toMillis?.() ?? Date.now()).toISOString(),
-          description: playlist.description || 'No description',
-        }));
-        setPlaylists(playlistItems);
-        setIsOnlineMode(false);
-      } catch (localErr) {
-        setPlaylists([]);
-      }
+      setPlaylists([]);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -132,47 +126,49 @@ const SchedulePlaylist: React.FC = () => {
     try {
       console.log('📋 [PLAYLIST] Creating new playlist:', newPlaylistName);
       
-      let playlistId: string | undefined;
+      const currentUser = authService.getUser();
+      const currentUserId = currentUser?.id || 'guest-user-123';
+      const currentUserEmail = currentUser?.email || 'guest@signcraft.com';
       
-      // Try backend first if online
-      if (isOnlineMode) {
-        const backendResult = await savePlaylistToBackend({
+      // Create playlist via backend
+      const backendResult = await savePlaylistToBackend({
+        name: newPlaylistName,
+        description: newPlaylistDescription,
+        userID: currentUserId,
+        userId: currentUserId
+      });
+      
+      if (backendResult.success && backendResult.data?.id) {
+        const playlistId = backendResult.data.id;
+        console.log('✅ [PLAYLIST] Created on backend:', playlistId);
+        
+        // Add new playlist to local state
+        const newPlaylist: PlaylistItem = {
+          id: playlistId,
           name: newPlaylistName,
-          userID: 'guest-user-123'
-        });
+          itemCount: 0,
+          totalDuration: 0,
+          lastModified: new Date().toISOString(),
+          description: newPlaylistDescription || 'No description',
+        };
         
-        if (backendResult.success && backendResult.data?.id) {
-          playlistId = backendResult.data.id;
-          console.log('✅ [PLAYLIST] Created on backend:', playlistId);
-        } else {
-          console.warn('⚠️ [PLAYLIST] Backend create failed, using localStorage');
-        }
-      }
-      
-      // Fallback to localStorage or if backend failed
-      if (!playlistId) {
-        const result = await createPlaylist(
-          newPlaylistName,
-          newPlaylistDescription,
-          [],
-          false
-        );
+        setPlaylists(prev => [newPlaylist, ...prev]);
+        setNewPlaylistName('');
+        setNewPlaylistDescription('');
+        setShowCreateForm(false);
+        setError(null);
         
-        if (result.success && result.playlistId) {
-          playlistId = result.playlistId;
-          console.log('✅ [PLAYLIST] Created locally:', playlistId);
-        }
-      }
-      
-      if (playlistId) {
         // Navigate to playlist editor to add designs
-        navigate(`/playlist/edit/${playlistId}`);
+        setTimeout(() => {
+          navigate(`/playlist/edit/${playlistId}`);
+        }, 300);
       } else {
-        setError('Failed to create playlist');
+        console.error('❌ [PLAYLIST] Backend create failed:', backendResult.msg);
+        setError(backendResult.msg || 'Failed to create playlist. Please ensure backend is running.');
       }
     } catch (err) {
       console.error('❌ [PLAYLIST] Error creating playlist:', err);
-      setError('Failed to create playlist');
+      setError(`Failed to create playlist: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -183,25 +179,14 @@ const SchedulePlaylist: React.FC = () => {
       try {
         console.log('🗑️ [PLAYLIST] Deleting playlist:', id);
         
-        // Try backend first if online
-        if (isOnlineMode) {
-          const backendResult = await deletePlaylistFromBackend(id);
-          if (backendResult.success) {
-            console.log('✅ [PLAYLIST] Deleted from backend');
-          } else {
-            console.warn('⚠️ [PLAYLIST] Backend delete failed, deleting locally only');
-          }
-        }
-        
-        // Always delete from localStorage as well
-        const result = await deletePlaylist(id);
-        
-        if (result.success) {
+        // Delete from backend only
+        const backendResult = await deletePlaylistFromBackend(id);
+        if (backendResult.success) {
           setPlaylists(prev => prev.filter(p => p.id !== id));
           console.log('✅ [PLAYLIST] Deleted successfully');
         } else {
-          console.error('❌ [PLAYLIST] Failed to delete:', result.error);
-          setError(result.error || 'Failed to delete playlist');
+          console.error('❌ [PLAYLIST] Failed to delete:', backendResult.msg);
+          setError(backendResult.msg || 'Failed to delete playlist');
         }
       } catch (err) {
         console.error('❌ [PLAYLIST] Error deleting:', err);

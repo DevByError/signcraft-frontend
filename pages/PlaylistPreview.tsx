@@ -506,7 +506,7 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
         );
 
       case 'video':
-      case 'web-video':
+      case 'web_video':
         return activeElement.content && (activeElement.content.startsWith('http') || activeElement.content.startsWith('blob:')) ? (
           <video
             key={activeElement.id}
@@ -523,7 +523,7 @@ const PlaylistPreview: React.FC<PlaylistPreviewProps> = ({ id: propId, forceAuto
         ) : null;
 
       case 'gif':
-      case 'web-image':
+      case 'web_image':
         return activeElement.content && activeElement.content.startsWith('http') ? (
           <img
             key={activeElement.id}

@@ -10,6 +10,7 @@ import {
   savePlaylistToBackend,
   syncPlaylistItemsToBackend
 } from '../services/playlistService';
+import authService from '../services/authService';
 import { listDesignLocals, StoredDesign } from '../services/localDesignStore';
 import { getAllDesigns, convertBackendToLocal } from '../services/designService';
 import type { PlaylistDocument, PlaylistDesignReference } from '../services/playlistService';
@@ -38,13 +39,19 @@ const PlaylistEditor: React.FC = () => {
   const fetchDesigns = async () => {
     let designs: StoredDesign[] = [];
     
+    // Get current user ID
+    const currentUser = authService.getUser();
+    const currentUserId = currentUser?.id;
+    
     // Try backend first
     console.log('🎨 [PLAYLIST_EDITOR] Fetching designs from backend...');
     const backendDesignsResponse = await getAllDesigns();
     
     if (backendDesignsResponse.success && backendDesignsResponse.data) {
       console.log(`✅ [PLAYLIST_EDITOR] Loaded ${backendDesignsResponse.data.length} designs from backend`);
-      designs = backendDesignsResponse.data.map(convertBackendToLocal);
+      // Filter by current user
+      const convertedDesigns = backendDesignsResponse.data.map(convertBackendToLocal);
+      designs = convertedDesigns.filter(d => (d as any).userId === currentUserId || !(d as any).userId);
     } else {
       console.log('⚠️ [PLAYLIST_EDITOR] Backend designs unavailable, using localStorage...');
     }
@@ -52,10 +59,13 @@ const PlaylistEditor: React.FC = () => {
     // Merge with localStorage designs
     const localDesigns = await listDesignLocals();
     const localDesignIds = new Set(designs.map(d => d.id));
-    const uniqueLocalDesigns = localDesigns.filter(d => !localDesignIds.has(d.id));
+    // Filter local designs and exclude already fetched designs
+    const uniqueLocalDesigns = localDesigns.filter(d => 
+      !localDesignIds.has(d.id)
+    );
     designs = [...designs, ...uniqueLocalDesigns];
     
-    console.log(`📦 [PLAYLIST_EDITOR] Total designs available: ${designs.length}`);
+    console.log(`📦 [PLAYLIST_EDITOR] Total designs available for user: ${designs.length}`);
     return designs;
   };
 
@@ -81,8 +91,8 @@ const PlaylistEditor: React.FC = () => {
             // Convert backend format to local format
             const convertedPlaylist: PlaylistDocument = {
               id: playlistDoc.id,
-              userId: playlistDoc.userId || 'guest-user-123',
-              userEmail: playlistDoc.userEmail || 'guest@signcraft.com',
+              userId: playlistDoc.userId || authService.getUser()?.id || 'guest-user-123',
+              userEmail: playlistDoc.userEmail || authService.getUser()?.email || 'guest@signcraft.com',
               name: playlistDoc.name,
               description: playlistDoc.description || '',
               designReferences: (playlistDoc.tblplaylistitems || []).map((item: any) => ({
@@ -99,10 +109,12 @@ const PlaylistEditor: React.FC = () => {
           } else {
             // Fallback to localStorage
             console.log('⚠️ [PLAYLIST_EDITOR] Backend unavailable, using localStorage...');
+            console.error('❌ [PLAYLIST_EDITOR] Backend error:', backendResponse.msg);
             playlistDoc = await getPlaylistById(id);
             setIsOnlineMode(false);
-            if (!backendResponse.success) {
-              setError('Using local storage (backend unavailable)');
+            // Only show error if we couldn't load from backend AND localStorage
+            if (!playlistDoc) {
+              setError(`Failed to load playlist: ${backendResponse.msg || 'Unknown error'}`);
             }
           }
 
@@ -218,49 +230,62 @@ const PlaylistEditor: React.FC = () => {
         order
       }));
 
+      let backendSuccess = false;
+
       // Try backend first if online
       if (isOnlineMode) {
-        // Save playlist name/description
-        const nameResult = await savePlaylistToBackend({
-          id,
-          name: playlistName,
-          userID: 'guest-user-123'
-        });
-        
-        if (nameResult.success) {
-          console.log('✅ [PLAYLIST_EDITOR] Playlist name saved to backend');
+        try {
+          // Save playlist name/description
+          const nameResult = await savePlaylistToBackend({
+            id,
+            name: playlistName,
+            description: playlistDescription,
+            userID: authService.getUser()?.id || 'guest-user-123'
+          });
           
-          // Sync playlist items
-          const items = selectedDesigns.map(({ designId, duration, order }) => ({
-            designId,
-            slno: order,
-            duration
-          }));
-          
-          const itemsResult = await syncPlaylistItemsToBackend(id, items, 'guest-user-123');
-          
-          if (itemsResult.success) {
-            console.log('✅ [PLAYLIST_EDITOR] Playlist items synced to backend');
+          if (nameResult.success) {
+            console.log('✅ [PLAYLIST_EDITOR] Playlist name saved to backend');
+            
+            // Sync playlist items
+            const items = selectedDesigns.map(({ designId, duration, order }) => ({
+              designId,
+              slno: order,
+              duration
+            }));
+            
+            const itemsResult = await syncPlaylistItemsToBackend(id, items, authService.getUser()?.id || 'guest-user-123');
+            
+            if (itemsResult.success) {
+              console.log('✅ [PLAYLIST_EDITOR] Playlist items synced to backend');
+              backendSuccess = true;
+            } else {
+              console.warn('⚠️ [PLAYLIST_EDITOR] Backend items sync failed:', itemsResult.msg);
+            }
           } else {
-            console.warn('⚠️ [PLAYLIST_EDITOR] Backend sync failed, saving locally only');
+            console.warn('⚠️ [PLAYLIST_EDITOR] Backend save failed:', nameResult.msg);
           }
-        } else {
-          console.warn('⚠️ [PLAYLIST_EDITOR] Backend save failed, saving locally only');
+        } catch (backendErr) {
+          console.error('❌ [PLAYLIST_EDITOR] Backend error:', backendErr);
         }
       }
 
-      // Always save to localStorage as well
-      const result = await updatePlaylist(id, {
+      // Always save to localStorage as well for offline support
+      const localResult = await updatePlaylist(id, {
         name: playlistName,
         description: playlistDescription,
         designReferences
       });
 
-      if (result.success) {
+      if (localResult.success || backendSuccess) {
         console.log('✅ [PLAYLIST_EDITOR] Playlist saved successfully');
-        navigate('/playlist');
+        setError(null);
+        // Show brief success message then navigate
+        setTimeout(() => {
+          navigate('/playlist');
+        }, 500);
       } else {
-        setError(result.error || 'Failed to save playlist');
+        setError(localResult.error || 'Failed to save playlist');
+        console.error('❌ [PLAYLIST_EDITOR] Save failed:', localResult.error);
       }
     } catch (err) {
       console.error('❌ [PLAYLIST_EDITOR] Error saving playlist:', err);

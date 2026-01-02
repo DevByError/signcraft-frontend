@@ -15,7 +15,7 @@ import {
   LayerInfo,
   TimelineMarker
 } from '../types/timeline';
-import { CanvasElement, ElementType } from '../types';
+import { CanvasElement, ElementType } from '../types/canvas';
 import * as animationEngine from './animationEngine';
 
 // ==================== Default Configuration ====================
@@ -30,13 +30,39 @@ const DEFAULT_CONFIG: TimelineConfig = {
   maxAudioTracks: 5,
 };
 
+// Duration buffer (2 seconds) added to the latest element end time
+const TIMELINE_DURATION_BUFFER = 2000;
+
+// ==================== Helper Functions ====================
+
+/**
+ * Calculate dynamic timeline duration based on elements
+ * Duration = (latest element end time) + buffer
+ * This allows the timeline to grow and shrink based on content
+ */
+function calculateDynamicDuration(tracks: TimelineTrack[]): number {
+  let maxEndTime = 0;
+
+  // Find the latest end time of any element
+  for (const track of tracks) {
+    for (const item of track.items) {
+      const itemEndTime = item.startTime + item.duration;
+      maxEndTime = Math.max(maxEndTime, itemEndTime);
+    }
+  }
+
+  // Return the end time plus a buffer for breathing room
+  // If no items, return a minimum duration
+  return maxEndTime > 0 ? maxEndTime + TIMELINE_DURATION_BUFFER : 5000;
+}
+
 // ==================== Timeline Creation ====================
 
 /**
  * Create a new empty timeline
  */
 export function createTimeline(designId: string): Timeline {
-  return {
+  const timeline = {
     id: `timeline-${Date.now()}`,
     designId,
     fps: 30, // Standard 30fps for consistency
@@ -44,13 +70,18 @@ export function createTimeline(designId: string): Timeline {
       createTrack('Visual Track 1', 'visual', 0),
       createTrack('Audio Track 1', 'audio', 0),
     ],
-    totalDuration: 30000, // 30 seconds default
+    totalDuration: 5000, // 5 seconds default (will grow with elements)
     currentTime: 0,
     isPlaying: false,
     loop: false,
     playbackSpeed: 1.0,
     snapInterval: DEFAULT_CONFIG.defaultSnapInterval,
     zoom: DEFAULT_CONFIG.defaultZoom,
+  };
+  
+  return {
+    ...timeline,
+    totalDuration: calculateDynamicDuration(timeline.tracks),
   };
 }
 
@@ -94,7 +125,7 @@ export function createTimelineItem(
   return {
     id: `item-${element.id}-${Date.now()}`,
     elementId: element.id,
-    elementType: element.type,
+    elementType: element.type as ElementType,
     trackType,
     startTime,
     duration,
@@ -159,9 +190,8 @@ export function addItemToTimeline(
     return track;
   });
 
-  // Update total duration if needed
-  const itemEnd = item.startTime + item.duration;
-  const newDuration = Math.max(timeline.totalDuration, itemEnd);
+  // Recalculate total duration based on all elements
+  const newDuration = calculateDynamicDuration(updatedTracks);
 
   return {
     ...timeline,
@@ -182,9 +212,13 @@ export function removeItemFromTimeline(
     items: track.items.filter(item => item.id !== itemId),
   }));
 
+  // Recalculate total duration based on remaining elements
+  const newDuration = calculateDynamicDuration(updatedTracks);
+
   return {
     ...timeline,
     tracks: updatedTracks,
+    totalDuration: newDuration,
   };
 }
 
@@ -238,9 +272,13 @@ export function rippleDelete(
     return track;
   });
 
+  // Recalculate total duration based on remaining elements
+  const newDuration = calculateDynamicDuration(updatedTracks);
+
   return {
     ...timeline,
     tracks: updatedTracks,
+    totalDuration: newDuration,
   };
 }
 
@@ -259,16 +297,13 @@ export function updateTimelineItem(
     ).sort((a, b) => a.startTime - b.startTime),
   }));
 
-  // Recalculate total duration
-  const maxEndTime = Math.max(
-    ...updatedTracks.flatMap(t => t.items.map(i => i.startTime + i.duration)),
-    timeline.totalDuration
-  );
+  // Recalculate total duration based on dynamic elements
+  const newDuration = calculateDynamicDuration(updatedTracks);
 
   return {
     ...timeline,
     tracks: updatedTracks,
-    totalDuration: maxEndTime,
+    totalDuration: newDuration,
   };
 }
 
@@ -458,7 +493,7 @@ export function getLayers(elements: CanvasElement[]): LayerInfo[] {
   return elements
     .map(el => ({
       elementId: el.id,
-      elementType: el.type,
+      elementType: el.type as ElementType,
       name: el.content || el.type,
       layer: el.zIndex,
       visible: el.visible,
@@ -723,7 +758,7 @@ export function exportTimeline(
   
   elements.forEach(el => {
     elementMap[el.id] = {
-      type: el.type,
+      type: el.type as ElementType,
       properties: { ...el },
     };
   });
@@ -779,10 +814,13 @@ export function autoArrangeSequential(
     };
   });
 
+  // Recalculate total duration based on dynamic elements
+  const newDuration = calculateDynamicDuration(updatedTracks);
+
   return {
     ...timeline,
     tracks: updatedTracks,
-    totalDuration: Math.max(timeline.totalDuration, currentTime),
+    totalDuration: newDuration,
   };
 }
 

@@ -8,7 +8,8 @@
  *    - UI is derived from time, not vice versa
  *    - Formula: pxPerMs = zoom / 1000
  * 
- * 2. PRECISE RENDERING
+ * 2. PRECISE item.id.toString()
+
  *    - clipLeftPx = clip.startMs * pxPerMs
  *    - clipWidthPx = clip.durationMs * pxPerMs
  *    - Zoom works perfectly with this formula
@@ -90,13 +91,13 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
   const [dragStartTime, setDragStartTime] = useState(0);
   const [dragTrackId, setDragTrackId] = useState<string | null>(null);
   const [targetTrackId, setTargetTrackId] = useState<string | null>(null);
-  
+
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
   const [resizingItem, setResizingItem] = useState<string | null>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartTime, setResizeStartTime] = useState(0);
   const [resizeStartDuration, setResizeStartDuration] = useState(0);
-  
+
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [adjustingInOut, setAdjustingInOut] = useState<{ itemId: string; type: 'in' | 'out' } | null>(null);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
@@ -196,9 +197,9 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     }
   }, [timeline.isPlaying, timeline.playbackSpeed, timeline.loop, timeline.totalDuration]);
 
-  // Auto-scroll to playhead
+  // Auto-scroll to playhead and sync ruler/tracks scroll
   useEffect(() => {
-    if (timeline.isPlaying && scrollContainerRef.current) {
+    if (timeline.isPlaying && scrollContainerRef.current && timelineRef.current) {
       const playheadX = timeToPixels(timeline.currentTime);
       const container = scrollContainerRef.current;
       const containerWidth = container.clientWidth;
@@ -206,16 +207,34 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
 
       // Keep playhead in center-right area during playback
       if (playheadX > scrollLeft + containerWidth * 0.7) {
-        container.scrollLeft = playheadX - containerWidth * 0.5;
+        const newScrollLeft = playheadX - containerWidth * 0.5;
+        container.scrollLeft = newScrollLeft;
+        timelineRef.current.scrollLeft = newScrollLeft;
       }
     }
   }, [timeline.currentTime, timeline.isPlaying]);
+
+  // Sync horizontal scroll between ruler and tracks
+  useEffect(() => {
+    const handleTimelineScroll = () => {
+      if (scrollContainerRef.current && timelineRef.current) {
+        scrollContainerRef.current.scrollLeft = timelineRef.current.scrollLeft;
+      }
+    };
+
+    if (timelineRef.current) {
+      timelineRef.current.addEventListener('scroll', handleTimelineScroll);
+      return () => {
+        timelineRef.current?.removeEventListener('scroll', handleTimelineScroll);
+      };
+    }
+  }, []);
 
   // Playback controls
   const handlePlay = () => onTimelineChange(timelineService.play(timeline));
   const handlePause = () => onTimelineChange(timelineService.pause(timeline));
   const handleStop = () => onTimelineChange(timelineService.stop(timeline));
-  
+
   const handleSeek = (time: number) => {
     onTimelineChange(timelineService.seek(timeline, time));
   };
@@ -293,14 +312,14 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
   // Drag and drop for items
   const handleItemMouseDown = (e: React.MouseEvent, item: TimelineItem, trackId: string) => {
     if (item.locked) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const itemWidth = rect.width;
-    
+
     // Check if clicking on resize handles (10% from edges)
     const handleWidth = Math.min(itemWidth * 0.1, 20);
-    
+
     if (offsetX < handleWidth) {
       // Left handle - resize start
       setIsResizing('left');
@@ -332,7 +351,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       const deltaX = e.clientX - dragStartX;
       const deltaTime = pixelsToTime(deltaX);
       let newStartTime = Math.max(0, dragStartTime + deltaTime);
-      
+
       // Apply snapping
       newStartTime = snapToTimeline(newStartTime);
 
@@ -342,7 +361,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       const trackHeight = 64; // Height of each track (h-16 = 64px)
       const trackIndex = Math.floor(relativeY / trackHeight);
       const newTargetTrackId = timeline.tracks[trackIndex]?.id || dragTrackId;
-      
+
       if (newTargetTrackId !== targetTrackId) {
         setTargetTrackId(newTargetTrackId);
       }
@@ -372,7 +391,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
             }
           }
         }
-        
+
         // If track changed, move item to new track
         if (newTargetTrackId !== dragTrackId) {
           onTimelineChange(timelineService.moveTimelineItem(timeline, draggedItem, newStartTime, newTargetTrackId));
@@ -386,17 +405,17 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     } else if (isResizing && resizingItem) {
       const deltaX = e.clientX - resizeStartX;
       const deltaTime = pixelsToTime(deltaX);
-      
+
       if (isResizing === 'left') {
         // Resize from start
         let newStartTime = Math.max(0, resizeStartTime + deltaTime);
         let newDuration = Math.max(100, resizeStartDuration - deltaTime);
-        
+
         // Apply snapping to start point
         newStartTime = snapToTimeline(newStartTime);
         newDuration = (resizeStartTime + resizeStartDuration) - newStartTime;
         newDuration = Math.max(100, newDuration);
-        
+
         onTimelineChange(timelineService.updateTimelineItem(timeline, resizingItem, {
           startTime: newStartTime,
           duration: newDuration,
@@ -404,12 +423,12 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       } else {
         // Resize from end
         let newDuration = Math.max(100, resizeStartDuration + deltaTime);
-        
+
         // Apply snapping to end point
         const endTime = resizeStartTime + newDuration;
         const snappedEnd = snapToTimeline(endTime);
         newDuration = Math.max(100, snappedEnd - resizeStartTime);
-        
+
         onTimelineChange(timelineService.updateTimelineItem(timeline, resizingItem, {
           duration: newDuration,
         }));
@@ -440,8 +459,11 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (scrollContainerRef.current) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left + scrollContainerRef.current.scrollLeft;
-      const time = pixelsToTime(x);
+      const scrollLeft = scrollContainerRef.current.scrollLeft;
+      const x = e.clientX - rect.left + scrollLeft;
+      // Subtract the 176px padding (pl-44 = 11 * 16 = 176px) to account for label area
+      const adjustedX = Math.max(0, x - 176);
+      const time = pixelsToTime(adjustedX);
       const snappedTime = snapToTimeline(time);
       handleSeek(snappedTime);
     }
@@ -471,7 +493,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     for (let time = 0; time <= timeline.totalDuration; time += interval) {
       const x = timeToPixels(time);
       const isSecond = time % 1000 === 0;
-      
+
       markers.push(
         <div
           key={time}
@@ -487,7 +509,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     }
 
     return (
-      <div 
+      <div
         className="relative h-8 bg-gray-900 border-b border-gray-700 cursor-pointer select-none overflow-hidden"
         onMouseDown={handleRulerMouseDown}
         onMouseMove={handleRulerMouseMove}
@@ -501,10 +523,10 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
               START
             </div>
           </div>
-          
+
           {/* Grid markers */}
           {markers}
-          
+
           {/* Playhead */}
           <div
             className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none"
@@ -520,7 +542,12 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
 
   // Get thumbnail for item
   const getItemThumbnail = (item: TimelineItem): string => {
-    const iconMap: { [key: string]: string } = {
+    if (!item.elementType) {
+      // Fallback based on track type
+      return item.trackType === 'audio' ? '🎵' : '📦';
+    }
+
+    const iconMap: Record<string, string> = {
       TEXT: '📝',
       IMAGE: '🖼️',
       VIDEO: '🎬',
@@ -529,9 +556,12 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       TRIANGLE: '▲',
       STAR: '⭐',
       HEART: '❤️',
+      AUDIO: '🎵',
     };
-    return iconMap[item.elementType.toString()] || '📦';
+
+    return iconMap[String(item.elementType)] ?? '📦';
   };
+
 
   // Render timeline item (CapCut style)
   const renderItem = (item: TimelineItem, track: TimelineTrack) => {
@@ -544,7 +574,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     const isResizingThis = resizingItem === item.id;
 
     const isVisual = item.trackType === 'visual';
-    
+
     // Calculate IN/OUT point positions
     const inPointX = timeToPixels(item.inPoint || 0);
     const outPointX = timeToPixels(item.outPoint || item.duration);
@@ -553,9 +583,8 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     return (
       <div
         key={item.id}
-        className={`absolute h-12 rounded overflow-hidden transition-all group ${
-          isLocked ? 'cursor-not-allowed' : 'cursor-move'
-        } ${isDraggingThis || isResizingThis ? 'opacity-70 shadow-2xl scale-105 z-30' : 'z-10'}`}
+        className={`absolute h-12 rounded overflow-hidden transition-all group ${isLocked ? 'cursor-not-allowed' : 'cursor-move'
+          } ${isDraggingThis || isResizingThis ? 'opacity-70 shadow-2xl scale-105 z-30' : 'z-10'}`}
         style={{
           left: `${x}px`,
           width: `${width}px`,
@@ -568,7 +597,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       >
         {/* Partition end marker */}
         <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-white/50 z-10" />
-        
+
         {/* Dimmed areas (before IN and after OUT) */}
         {hasInOutPoints && (
           <>
@@ -588,15 +617,14 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
         )}
 
         {/* Item background with gradient */}
-        <div className={`absolute inset-0 ${
-          isSelected
+        <div className={`absolute inset-0 ${isSelected
             ? isVisual
               ? 'bg-gradient-to-r from-blue-500 to-blue-600'
               : 'bg-gradient-to-r from-green-500 to-green-600'
             : isVisual
-            ? 'bg-gradient-to-r from-purple-500 to-purple-600'
-            : 'bg-gradient-to-r from-emerald-500 to-emerald-600'
-        }`}>
+              ? 'bg-gradient-to-r from-purple-500 to-purple-600'
+              : 'bg-gradient-to-r from-emerald-500 to-emerald-600'
+          }`}>
           {/* Waveform pattern for audio */}
           {!isVisual && (
             <div className="absolute inset-0 opacity-20">
@@ -626,7 +654,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
                 <span className="text-[8px] font-bold text-black">IN</span>
               </div>
             </div>
-            
+
             {/* OUT point marker */}
             <div
               className="absolute top-0 bottom-0 w-1 bg-yellow-400 cursor-col-resize hover:w-1.5 transition-all z-20"
@@ -649,16 +677,16 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
         <div className="relative h-full px-2 py-1 flex items-center gap-2 text-white text-xs font-medium select-none">
           {/* Thumbnail/Icon */}
           <span className="text-lg">{getItemThumbnail(item)}</span>
-          
+
           {/* Name with Element ID */}
           <div className="flex-1 truncate">
             <div className="font-semibold">{item.elementType}</div>
             <div className="text-[9px] opacity-60">Start: {formatTime(item.startTime)} | End: {formatTime(item.startTime + item.duration)}</div>
           </div>
-          
+
           {/* Lock icon */}
           {isLocked && <Lock size={12} className="opacity-70" />}
-          
+
           {/* Duration */}
           <span className="text-[10px] opacity-70 font-bold">{formatTime(item.duration)}</span>
         </div>
@@ -666,11 +694,11 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
         {/* Trim handles (visible on hover or selection) */}
         {!isLocked && (isHovered || isSelected || isResizingThis) && (
           <>
-            <div 
+            <div
               className="absolute left-0 top-0 bottom-0 w-2 bg-white bg-opacity-40 cursor-ew-resize hover:bg-opacity-60 transition-all"
               style={{ borderLeft: '2px solid white' }}
             />
-            <div 
+            <div
               className="absolute right-0 top-0 bottom-0 w-2 bg-white bg-opacity-40 cursor-ew-resize hover:bg-opacity-60 transition-all"
               style={{ borderRight: '2px solid white' }}
             />
@@ -714,15 +742,14 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     const isDragTarget = isDragging && targetTrackId === track.id;
 
     return (
-      <div 
-        key={track.id} 
-        className={`flex border-b border-gray-700 ${
-          isDragTarget 
-            ? 'bg-blue-900 bg-opacity-30' 
-            : isHovered 
-              ? 'bg-gray-800' 
+      <div
+        key={track.id}
+        className={`flex border-b border-gray-700 ${isDragTarget
+            ? 'bg-blue-900 bg-opacity-30'
+            : isHovered
+              ? 'bg-gray-800'
               : 'bg-gray-900'
-        } transition-colors`}
+          } transition-colors`}
         onMouseEnter={() => setHoveredTrack(track.id)}
         onMouseLeave={() => setHoveredTrack(null)}
       >
@@ -740,7 +767,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
               <Trash2 size={14} />
             </button>
           </div>
-          
+
           <div className="flex items-center gap-1">
             <button
               onClick={() => handleToggleTrackVisibility(track.id)}
@@ -764,7 +791,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
                 {track.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
             )}
-            
+
             <div className="text-[10px] text-gray-500 ml-auto">
               {track.items.length}
             </div>
@@ -782,7 +809,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
                 style={{ left: `${timeToPixels(i * 1000)}px` }}
               />
             ))}
-            
+
             {/* Items */}
             {track.items.map(item => renderItem(item, track))}
           </div>
@@ -852,9 +879,8 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
         {/* Loop toggle */}
         <button
           onClick={handleToggleLoop}
-          className={`px-3 py-1 rounded text-xs transition-colors ${
-            timeline.loop ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-          }`}
+          className={`px-3 py-1 rounded text-xs transition-colors ${timeline.loop ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
           title="Toggle Loop"
         >
           Loop
@@ -872,7 +898,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
             <ZoomOut size={16} className="text-gray-300" />
           </button>
           <div className="w-20 h-1 bg-gray-700 rounded-full relative">
-            <div 
+            <div
               className="absolute top-0 left-0 h-full bg-blue-500 rounded-full transition-all"
               style={{ width: `${((timeline.zoom - 10) / (200 - 10)) * 100}%` }}
             />
@@ -920,12 +946,18 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
 
       {/* Timeline area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Ruler */}
-        <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
-          {renderRuler()}
+        {/* Ruler - Hidden overflow, scroll synced with tracks */}
+        <div className="overflow-hidden bg-gray-900 border-b border-gray-700">
+          <div
+            className="overflow-x-auto overflow-y-hidden scrollbar-thin"
+            ref={scrollContainerRef}
+            style={{ width: '100%' }}
+          >
+            {renderRuler()}
+          </div>
         </div>
 
-        {/* Tracks */}
+        {/* Tracks - Main scroll container */}
         <div className="flex-1 overflow-auto scrollbar-thin" ref={timelineRef}>
           {timeline.tracks.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
@@ -952,8 +984,8 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
               ▶ PLAYING | Active: {
                 timeline.tracks
                   .flatMap(t => t.items)
-                  .filter(item => 
-                    timeline.currentTime >= item.startTime && 
+                  .filter(item =>
+                    timeline.currentTime >= item.startTime &&
                     timeline.currentTime < item.startTime + item.duration
                   ).length
               } element(s)

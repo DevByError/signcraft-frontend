@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw, SkipForward, Settings, Clock } from 'lucide-react';
 import { animationEngine } from '../services/animationService';
-import { CanvasElement } from '../types';
+import { CanvasElement } from '../types/canvas';
 
 interface AnimationPlaybackProps {
   elements: CanvasElement[];

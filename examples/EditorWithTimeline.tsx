@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import TimelineCapCut from '../components/TimelineCapCut';
 import { LayerPanel } from '../components/LayerPanel';
 import { useTimeline } from '../hooks/useTimeline';
-import { CanvasElement, ElementType } from '../types';
+import { CanvasElement, ElementType } from '../types/canvas';
 
 interface EditorWithTimelineProps {
   designId: string;

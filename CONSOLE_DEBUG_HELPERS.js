@@ -30,7 +30,7 @@ window.__testSerialize = async function() {
     // For now, this is a placeholder that shows expected format
     const testElement = {
       id: "test123",
-      type: "TEXT",
+      type: "text",
       content: "Test Content",
       x: 100,
       y: 100,
@@ -64,27 +64,19 @@ window.__testSerialize = async function() {
   }
 };
 
-// Function 3: Monitor localStorage/sessionStorage for design data
+// Function 3: Monitor sessionStorage for debug data
 window.__monitorStorage = function() {
   console.group('💾 Storage Contents');
-  console.log('LocalStorage keys:', Object.keys(localStorage));
   console.log('SessionStorage keys:', Object.keys(sessionStorage));
-  
-  // Check for design-related data
-  if (localStorage.getItem('lastSavedDesign')) {
-    console.group('Last Saved Design');
-    const design = JSON.parse(localStorage.getItem('lastSavedDesign'));
-    console.log('Design:', design);
-    console.groupEnd();
-  }
+  console.log('Note: localStorage has been disabled');
   console.groupEnd();
 };
 
-// Function 4: Intercept Firestore calls (advanced)
-window.__setupFirestoreInterceptor = function() {
-  console.log('🔍 Setting up Firestore interceptor...');
-  console.log('Firestore calls will be logged to console');
-  console.log('Look for messages starting with 🚀 [FIRESTORE SAVE]');
+// Function 4: Intercept API calls (advanced)
+window.__setupAPIInterceptor = function() {
+  console.log('🔍 Setting up API interceptor...');
+  console.log('API calls will be logged to console');
+  console.log('Look for messages starting with 🚀 [API]');
 };
 
 // Usage instructions
@@ -97,21 +89,21 @@ Available commands:
   • window.__debugElements()     - Show all canvas elements
   • window.__testSerialize()     - Test serialization format
   • window.__monitorStorage()    - Check browser storage
-  • window.__setupFirestoreInterceptor() - Monitor Firestore calls
+  • window.__setupAPIInterceptor() - Monitor API calls
+
+Note: localStorage has been removed. All data is backend-driven.
 
 Example workflow:
   1. Create a text element
   2. Edit it with your text
   3. Type: window.__debugElements()
   4. Check if 'content' field has your text
-  5. Save the design
-  6. Check browser console for 🚀 [FIRESTORE SAVE] messages
+  5. Save the design via backend API
+  6. Check browser console for 🚀 [API] messages
 
 Console logs to watch for:
   🔍 [SERIALIZATION DEBUG] - Before serialization
   📝 [TEXT ELEMENT DEBUG]  - During serialization
   ✅ [SERIALIZATION DEBUG] - After serialization
-  🚀 [FIRESTORE SAVE]      - Firestore save attempt
-  ✅ [FIRESTORE SAVE]      - Firestore save success
-  ❌ Error                 - Any errors during process
-`);
+  🚀 [API]                 - API call attempt
+  ✅ [API]                 - API call success

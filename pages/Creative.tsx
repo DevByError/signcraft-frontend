@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle, RefreshCw } from 'lucide-react';
-import { listDesignLocals, deleteDesignLocal } from '../services/localDesignStore';
-import { getAllDesigns, deleteDesign, convertBackendToLocal } from '../services/designService';
+import { getAllDesigns, deleteDesign } from '../services/designService'; // <--- Import it here
 
 interface Creative {
   id: string;
@@ -22,131 +21,150 @@ const ScheduleCreative: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isOnlineMode, setIsOnlineMode] = useState(false);
 
-  // Fetch creatives from backend with localStorage fallback
+  // Fetch creatives from backend
+  // const fetchCreatives = async (isRefresh = false) => {
+  //   try {
+  //     if (isRefresh) setIsRefreshing(true);
+  //     else setLoading(true);
+  //     setError(null);
+
+  //     console.log('🎨 [CREATIVE] Attempting to load designs from backend...');
+  //     const response = await getAllDesigns(); // returns { success, data, msg }
+
+  //     // Ensure response.data is an array
+  //     const designsArray = Array.isArray(response.data) ? response.data : [];
+
+  //     if (!response.success || designsArray.length === 0) {
+  //       console.error('❌ [CREATIVE] Failed to load designs from backend:', response.msg);
+  //       setError('Failed to load designs. Please ensure backend is running.');
+  //     }
+
+  //     // Convert backend designs to Creative objects
+  //     const convertedCreatives: Creative[] = designsArray.slice(0, 100).map(design => {
+  //       const numElements = design.canvasData?.elements?.length || 0;
+  //       const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
+  //       const colorIndex = design.id.charCodeAt(0) % colors.length;
+  //       const thumbnailColor = colors[colorIndex];
+
+  //       return {
+  //         id: design.id,
+  //         name: design.title || 'Untitled Design',
+  //         thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${numElements} elements%3C/text%3E%3C/svg%3E`,
+  //         createdDate: design.createdAt || '',
+  //         duration: numElements * 5,
+  //         size: `${design.canvasData?.width || 0}x${design.canvasData?.height || 0}`,
+  //       };
+  //     });
+
+  //     setCreatives(convertedCreatives);
+  //     setLastUpdated(new Date());
+  //   } catch (err) {
+  //     console.error('❌ [CREATIVE] Error loading designs:', err);
+  //     setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  //   } finally {
+  //     setLoading(false);
+  //     setIsRefreshing(false);
+  //   }
+  // };
+
+  // Fetch creatives from backend
   const fetchCreatives = async (isRefresh = false) => {
     try {
-      if (isRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (isRefresh) setIsRefreshing(true);
+      else setLoading(true);
       setError(null);
-      
+
       console.log('🎨 [CREATIVE] Attempting to load designs from backend...');
-      
-      // Try to fetch from backend first
+
+      // response is already the body: { success: boolean, data: DesignData[], msg: string }
       const response = await getAllDesigns();
-      
-      let designs: any[] = [];
-      
-      if (response.success && response.data) {
-        console.log(`✅ [CREATIVE] Loaded ${response.data.length} designs from backend`);
-        designs = response.data.map(convertBackendToLocal);
-        setIsOnlineMode(true);
-      } else {
-        // Fallback to local storage if backend fails
-        console.log('⚠️ [CREATIVE] Backend failed, using local storage...');
-        designs = listDesignLocals();
-        setIsOnlineMode(false);
-        setError('Using local storage (backend unavailable)');
+
+      // ✅ FIX: Simplify this check. 
+      // We trust the Interface: response.data is the array of designs.
+      const designsArray = Array.isArray(response.data) ? response.data : [];
+
+      if (!response.success && designsArray.length === 0) {
+        console.error('❌ [CREATIVE] Failed to load designs:', response.msg);
+        setError('Failed to load designs.');
+        // We don't return here because designsArray might just be empty (valid), 
+        // but if success is false, we might want to show the error.
       }
-      
-      console.log(`✅ [CREATIVE] Loaded ${designs.length} designs`);
-      
-      // Convert designs to Creative format
-      const convertedCreatives: Creative[] = designs.slice(0, 100).map(design => {
-        // Generate thumbnail color based on design title
+
+      // Convert backend designs to Creative objects
+      const convertedCreatives: Creative[] = designsArray.slice(0, 100).map((design: any) => {
+        const numElements = design.canvasData?.elements?.length || 0;
         const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
-        const colorIndex = design.id.charCodeAt(0) % colors.length;
+        const charCode = design.id && typeof design.id === 'string' ? design.id.charCodeAt(0) : 0;
+        const colorIndex = charCode % colors.length;
         const thumbnailColor = colors[colorIndex];
-        
+
         return {
           id: design.id,
-          name: design.metadata.title || 'Untitled Design',
-          thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.metadata.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${design.designJSON.elements.length} elements%3C/text%3E%3C/svg%3E`,
-          createdDate: design.metadata.createdAt,
-          duration: design.designJSON.elements.length * 5, // 5 seconds per element
-          size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
+          name: design.title || 'Untitled Design',
+          thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${numElements} elements%3C/text%3E%3C/svg%3E`,
+          createdDate: design.createdAt || new Date().toISOString(),
+          duration: numElements * 5,
+          size: design.videoSize || `${design.canvasData?.width || 0}x${design.canvasData?.height || 0}`,
         };
       });
-      
+
       setCreatives(convertedCreatives);
       setLastUpdated(new Date());
-      console.log(`✅ [CREATIVE] Converted ${convertedCreatives.length} creatives for display`);
-    } catch (err) {
+
+    } catch (err: any) {
+      // Ignore 401/403 (Global Modal handles it)
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        setLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
+
       console.error('❌ [CREATIVE] Error loading designs:', err);
       setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      
-      // Final fallback to localStorage on error
-      try {
-        const localDesigns = listDesignLocals();
-        const convertedCreatives: Creative[] = localDesigns.slice(0, 100).map(design => {
-          const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
-          const colorIndex = design.id.charCodeAt(0) % colors.length;
-          const thumbnailColor = colors[colorIndex];
-          
-          return {
-            id: design.id,
-            name: design.metadata.title || 'Untitled Design',
-            thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.metadata.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${design.designJSON.elements.length} elements%3C/text%3E%3C/svg%3E`,
-            createdDate: design.metadata.createdAt,
-            duration: design.designJSON.elements.length * 5,
-            size: `${design.metadata.canvasWidth}x${design.metadata.canvasHeight}`,
-          };
-        });
-        setCreatives(convertedCreatives);
-        setIsOnlineMode(false);
-      } catch (localErr) {
-        setCreatives([]);
-      }
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchCreatives();
-  }, []);
+  // Delete creative
+  const handleDelete = async (designId: string) => {
+    if (!confirm('Are you sure you want to delete this design?')) return;
 
-  const filteredCreatives = creatives.filter(creative =>
-    creative.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    try {
+      // ✅ NOW we are using the service!
+      const data = await deleteDesign(designId);
 
-  const handleDelete = async (id: string) => {
-    const creativeName = creatives.find(c => c.id === id)?.name || 'this design';
-    
-    if (window.confirm(`Are you sure you want to delete "${creativeName}"? This action cannot be undone.`)) {
-      try {
-        console.log(`🗑️ [CREATIVE] Deleting design: ${id}`);
-        
-        if (isOnlineMode) {
-          // Delete from backend
-          const response = await deleteDesign(id);
-          if (response.success) {
-            console.log('✅ [CREATIVE] Design deleted from backend');
-          } else {
-            console.warn('⚠️ [CREATIVE] Backend delete failed, deleting locally only');
-          }
-        }
-        
-        // Always delete from localStorage as well
-        deleteDesignLocal(id);
-        setCreatives(prev => prev.filter(c => c.id !== id));
-        console.log('✅ [CREATIVE] Design deleted');
-      } catch (err) {
-        console.error('❌ [CREATIVE] Error deleting design:', err);
-        setError(`Failed to delete creative: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      if (data.success) {
+        alert('Design deleted successfully');
+        setCreatives(prev => prev.filter(c => c.id !== designId));
+      } else {
+        alert('Failed to delete design: ' + data.msg);
       }
+    } catch (err: any) {
+      // Global Modal handles 401/403
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        return;
+      }
+
+      console.error('Error deleting design:', err);
+      alert('Error deleting design: ' + (err.response?.data?.msg || err.message));
     }
   };
+
 
   const handleEdit = (id: string) => {
     navigate(`/modify/${id}`);
   };
+
+  useEffect(() => {
+    fetchCreatives();
+  }, []);
+
+  const filteredCreatives = creatives.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8 px-4">
@@ -160,7 +178,7 @@ const ScheduleCreative: React.FC = () => {
             <ArrowLeft size={20} />
             Back to Dashboard
           </button>
-          
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Creative Library</h1>
@@ -173,7 +191,7 @@ const ScheduleCreative: React.FC = () => {
                 )}
               </p>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => fetchCreatives(true)}
@@ -206,88 +224,22 @@ const ScheduleCreative: React.FC = () => {
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
-          
+
           <div className="flex gap-2 bg-white rounded-lg p-1 border border-gray-300">
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-4 py-2 rounded flex items-center gap-2 transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
+              className={`px-4 py-2 rounded flex items-center gap-2 transition-colors ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-gray-600 hover:text-primary'}`}
             >
               <Grid2x2 size={18} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-4 py-2 rounded flex items-center gap-2 transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
+              className={`px-4 py-2 rounded flex items-center gap-2 transition-colors ${viewMode === 'list' ? 'bg-primary text-white' : 'text-gray-600 hover:text-primary'}`}
             >
               <List size={18} />
             </button>
           </div>
         </div>
-
-        {/* Stats Bar */}
-        {!loading && !error && (
-          <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div>
-                  <p className="text-sm text-gray-600">Total Designs</p>
-                  <p className="text-2xl font-bold text-primary">{creatives.length}</p>
-                </div>
-                <div className="h-10 w-px bg-gray-300"></div>
-                <div>
-                  <p className="text-sm text-gray-600">Filtered Results</p>
-                  <p className="text-2xl font-bold text-gray-900">{filteredCreatives.length}</p>
-                </div>
-                {searchTerm && (
-                  <>
-                    <div className="h-10 w-px bg-gray-300"></div>
-                    <div>
-                      <p className="text-sm text-gray-600">Search: "{searchTerm}"</p>
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className="text-sm text-primary hover:text-primaryLight font-semibold"
-                      >
-                        Clear Search
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className={`w-2 h-2 ${isOnlineMode ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
-                <span className="text-gray-600">{isOnlineMode ? 'Online mode' : 'Offline mode'}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-red-800 font-medium">Error loading creatives</p>
-              <p className="text-red-700 text-sm mt-1">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <p className="text-gray-600">Loading local creatives...</p>
-          </div>
-        )}
 
         {/* Creatives Display */}
         {!loading && filteredCreatives.length === 0 ? (
@@ -297,9 +249,7 @@ const ScheduleCreative: React.FC = () => {
               {creatives.length === 0 ? 'No Creatives Yet' : 'No Match Found'}
             </h3>
             <p className="text-gray-600 mb-6">
-              {creatives.length === 0
-                ? 'Create your first design to get started'
-                : 'Try a different search term'}
+              {creatives.length === 0 ? 'Create your first design to get started' : 'Try a different search term'}
             </p>
             {creatives.length === 0 && (
               <button
@@ -316,24 +266,17 @@ const ScheduleCreative: React.FC = () => {
             {filteredCreatives.map(creative => (
               <div key={creative.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
                 <div className="aspect-video bg-gray-200 overflow-hidden">
-                  <img
-                    src={creative.thumbnail}
-                    alt={creative.name}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={creative.thumbnail} alt={creative.name} className="w-full h-full object-cover" />
                 </div>
-                
                 <div className="p-4">
                   <h3 className="font-semibold text-gray-900 mb-2 line-clamp-1">{creative.name}</h3>
-                  
                   <div className="space-y-2 text-sm text-gray-600 mb-4">
                     <p>Resolution: {creative.size}</p>
                     <p>Duration: {creative.duration}s</p>
                     <p>Created: {new Date(creative.createdDate).toLocaleDateString()}</p>
                   </div>
-
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => handleEdit(creative.id)}
                       className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold flex items-center justify-center gap-2">
                       <Edit2 size={16} />
@@ -367,30 +310,19 @@ const ScheduleCreative: React.FC = () => {
                   <tr key={creative.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={creative.thumbnail}
-                          alt={creative.name}
-                          className="w-12 h-12 rounded object-cover"
-                        />
+                        <img src={creative.thumbnail} alt={creative.name} className="w-12 h-12 rounded object-cover" />
                         <span className="font-semibold text-gray-900">{creative.name}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{creative.size}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{creative.duration}s</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(creative.createdDate).toLocaleDateString()}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{new Date(creative.createdDate).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-right flex gap-2 justify-end">
-                      <button 
-                        onClick={() => handleEdit(creative.id)}
-                        className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primaryLight transition-colors flex items-center gap-2">
+                      <button onClick={() => handleEdit(creative.id)} className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primaryLight transition-colors flex items-center gap-2">
                         <Edit2 size={16} />
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDelete(creative.id)}
-                        className="px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors"
-                      >
+                      <button onClick={() => handleDelete(creative.id)} className="px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors">
                         <Trash2 size={18} />
                       </button>
                     </td>

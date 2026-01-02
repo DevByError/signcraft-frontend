@@ -3,7 +3,7 @@
  * Comprehensive timeline for managing shapes, media, and audio sequencing
  */
 
-import { ElementType } from '../types';
+import { ElementType } from './canvas';
 import { Animation } from './animation';
 
 // ==================== Timeline Types ====================

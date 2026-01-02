@@ -13,208 +13,14 @@ import {
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
-import { getDesignLocalById, saveDesignLocal, updateDesignLocal } from '../services/localDesignStore';
-import { saveDesign as saveDesignAPI, getDesignById, convertBackendToLocal } from '../services/designService';
+import { postsaveDesign as saveDesignAPI, getDesignById, convertBackendToLocal } from '../services/designService';
+import authService from '../services/authService';
 import TimelineCapCut from '../components/TimelineCapCut';
+import { AlignmentToolbar } from '../components/AlignmentToolbar';
 import { useTimeline } from '../hooks/useTimeline';
 import * as timelineService from '../services/timelineService';
 import * as propertyPlaybackService from '../services/propertyPlaybackService';
-import type { CanvasElement as SharedCanvasElement } from '../types';
-
-// Editor's extended ElementType enum
-enum ElementType {
-  // Essential
-  TEXT = 'text',
-  IMAGE = 'image',
-  SLIDESHOW = 'slideshow',
-  TICKER = 'ticker',
-  RSS = 'rss',
-  WEATHER = 'weather',
-  
-  // Media
-  VIDEO = 'video',
-  GIF = 'gif',
-  MEDIA_RSS = 'media_rss',
-  YOUTUBE = 'youtube',
-  USTREAM = 'ustream',
-  FTP = 'ftp',
-  INSTAGRAM = 'instagram',
-  STREAMING = 'streaming',
-  
-  // General
-  LABEL = 'label',
-  CLOCK = 'clock',
-  TIMER = 'timer',
-  SHAPE = 'shape',
-  TOUCH = 'touch',
-  WEATHER_2 = 'weather_2',
-  
-  // Primitive Shapes
-  RECT = 'rect',
-  CIRCLE = 'circle',
-  TRIANGLE = 'triangle',
-  STAR = 'star',
-  HEART = 'heart',
-  DIAMOND = 'diamond',
-  PENTAGON = 'pentagon',
-  HEXAGON = 'hexagon',
-  OCTAGON = 'octagon',
-  LINE = 'line',
-  
-  // Extended shapes (Editor-specific)
-  TRAPEZOID = 'trapezoid',
-  CRESCENT = 'crescent',
-  CROSS = 'cross',
-  
-  // Advanced
-  AD_SERVING = 'ad_serving',
-  CALENDAR = 'calendar',
-  DASHBOARDS = 'dashboards',
-  TABLE = 'table',
-  SMART_SWITCH = 'smart_switch',
-  
-  // Embed
-  WEB_IMAGE = 'web_image',
-  WEB_VIDEO = 'web_video',
-  SUB_CREATIVE = 'sub_creative',
-  EMBED = 'embed',
-  HTML = 'html',
-}
-
-// Editor's extended CanvasElement interface
-interface CanvasElement {
-  id: string;
-  type: ElementType;
-  content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fontSize?: number;
-  color?: string;
-  backgroundColor?: string;
-  fillColor?: string;
-  opacity: number;
-  rotation: number;
-  zIndex: number;
-  strokeColor?: string;
-  strokeWidth?: number;
-  borderRadius?: number;
-  locked: boolean;
-  visible: boolean;
-  animation?: string;
-  animationDuration?: number;
-  animationSpeed?: number;
-  widgetSettings?: {
-    // General
-    autoplay?: boolean;
-    loop?: boolean;
-    mute?: boolean;
-    controls?: boolean;
-    volume?: number;
-    playbackSpeed?: number;
-    fitMode?: string;
-    videoUrl?: string;
-    embedCode?: string;
-    
-    // Slideshow
-    transitionDuration?: number;
-    transitionEffect?: string;
-    
-    // Ticker/RSS
-    scrollSpeed?: string;
-    updateInterval?: number;
-    maxItems?: number;
-    displayMode?: string;
-    
-    // Weather
-    temperature?: number;
-    condition?: string;
-    location?: string;
-    temperatureUnit?: string;
-    apiKey?: string;
-    
-    // Clock/Timer
-    timeFormat?: string;
-    timezone?: string;
-    showSeconds?: boolean;
-    showDate?: boolean;
-    showIcon?: boolean;
-    displayStyle?: string;
-    timerType?: string;
-    countdownTo?: string;
-    displayFormat?: string;
-    labelText?: string;
-    autoStart?: boolean;
-    
-    // Direction/Animation
-    direction?: string;
-    pauseOnHover?: boolean;
-    showImages?: boolean;
-    
-    // Calendar
-    calendarSource?: string;
-    calendarUrl?: string;
-    viewMode?: string;
-    colorScheme?: string;
-    showWeekends?: boolean;
-    
-    // Table
-    rows?: number;
-    columns?: number;
-    dataSource?: string;
-    dataUrl?: string;
-    tableStyle?: string;
-    showHeader?: boolean;
-    sortable?: boolean;
-    
-    // Dashboard
-    dashboardType?: string;
-    refreshRate?: number;
-    layout?: string;
-    showCharts?: boolean;
-    autoRefresh?: boolean;
-    
-    // Smart Switch
-    switchCondition?: string;
-    contentA?: string;
-    contentB?: string;
-    
-    // Ad Serving
-    adNetwork?: string;
-    adUnitId?: string;
-    
-    // FTP
-    ftpServer?: string;
-    ftpUsername?: string;
-    ftpPassword?: string;
-    
-    // Instagram/Social
-    username?: string;
-    
-    // Touch/Interactive
-    actionType?: string;
-    targetAction?: string;
-  };
-  shadow?: {
-    offsetX: number;
-    offsetY: number;
-    blur: number;
-    color: string;
-    opacity: number;
-  };
-  radius?: number;
-  textStyle?: {
-    bold: boolean;
-    italic: boolean;
-    underline: boolean;
-    textAlign: 'left' | 'center' | 'right' | 'justify';
-    fontFamily: string;
-    letterSpacing: number;
-    lineHeight: number;
-  };
-    assetId?: string; // link to AssetManager asset
-}
+import { ElementType, ElementTypeValue, CanvasElement } from '../types/canvas';
 
 // Templates
 const TEMPLATES = [
@@ -348,7 +154,7 @@ const Editor: React.FC = () => {
   const [zoom, setZoom] = useState(50);
   const [showSafeZone, setShowSafeZone] = useState(false);
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'templates' | 'uploads'>('design');
-  const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers' | 'animation'>('properties');
+  const [activeRightTab, setActiveRightTab] = useState<'properties' | 'layers' | 'animation' | 'align'>('properties');
   const [selectedAnimation, setSelectedAnimation] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
@@ -432,7 +238,7 @@ const Editor: React.FC = () => {
     return null;
   };
 
-  const renderShape = (shapeType: ElementType, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
+  const renderShape = (shapeType: ElementTypeValue, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
     const svgStrokeProps = strokeWidth && strokeWidth > 0 ? { 
       stroke: strokeColor || '#000000', 
       strokeWidth,
@@ -1805,7 +1611,7 @@ const Editor: React.FC = () => {
       ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP
     ];
     
-    if (element && editableTypes.includes(element.type)) {
+    if (element && editableTypes.includes(element.type as ElementType)) {
       setSelectedIds([id]);
       setEditingTextId(id);
       setEditingText(element.content);
@@ -1909,7 +1715,7 @@ const Editor: React.FC = () => {
         },
       };
 
-      let result: { success: boolean; designId?: string; data?: any };
+      let result: { success: boolean; designId?: string; data?: any; error?: string };
 
       if (designId) {
         // Update existing design - try backend first, fallback to local
@@ -1919,7 +1725,7 @@ const Editor: React.FC = () => {
           title: data.title,
           canvasData: elementsWithDefaults,
           timelineData: timelineVideoData,
-          userID: 'guest-user-123', // TODO: Get from auth context
+          userID: authService.getUser()?.id || 'guest-user-123',
         });
 
         if (backendResult.success) {
@@ -1930,19 +1736,19 @@ const Editor: React.FC = () => {
           };
           setSuccessMessage('Saved to backend');
         } else {
-          // Fallback to local storage
-          console.log('Backend failed, saving locally:', backendResult.msg);
-          result = updateDesignLocal(designId, exportedDesign as any);
-          setSuccessMessage('Saved locally (backend unavailable)');
+          // Backend save failed - show error instead of falling back
+          console.error('❌ Backend save failed:', backendResult.msg);
+          result = { success: false, error: backendResult.msg };
+          setSuccessMessage(null);
         }
       } else {
-        // Create new design - try backend first, fallback to local
+        // Create new design - backend only
         console.log('Creating new design (backend)');
         const backendResult = await saveDesignAPI({
           title: data.title,
           canvasData: elementsWithDefaults,
           timelineData: timelineVideoData,
-          userID: 'guest-user-123', // TODO: Get from auth context
+          userID: authService.getUser()?.id || 'guest-user-123',
         });
 
         if (backendResult.success && backendResult.data?.id) {
@@ -1954,10 +1760,10 @@ const Editor: React.FC = () => {
           setDesignId(backendResult.data.id); // Update the designId state
           setSuccessMessage('Saved to backend');
         } else {
-          // Fallback to local storage
-          console.log('Backend failed, saving locally:', backendResult.msg);
-          result = saveDesignLocal(exportedDesign as any);
-          setSuccessMessage('Saved locally (backend unavailable)');
+          // Backend save failed - show error instead of falling back
+          console.error('❌ Backend save failed:', backendResult.msg);
+          result = { success: false, error: backendResult.msg };
+          setSuccessMessage(null);
         }
       }
 
@@ -2086,7 +1892,7 @@ const Editor: React.FC = () => {
       const shapeImageMap = new Map<string, HTMLImageElement>();
       
       for (const el of elements) {
-        if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+        if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type as ElementType)) {
           const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
           
           if (!shapeImageMap.has(shapeKey)) {
@@ -2247,7 +2053,7 @@ const Editor: React.FC = () => {
             ctx.stroke();
           }
 
-        } else if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+        } else if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type as ElementType)) {
           // Draw preloaded shape image
           const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
           const shapeImg = shapeImageMap.get(shapeKey);
@@ -2328,9 +2134,8 @@ const Editor: React.FC = () => {
             console.log('Design loaded from backend:', backendResult.data);
             design = convertBackendToLocal(backendResult.data);
           } else {
-            // Fallback to local storage
-            console.log('Backend failed, loading from local storage...');
-            design = getDesignLocalById(designId);
+            console.error('Failed to load design from backend:', backendResult.msg);
+            return;
           }
           
           if (design) {
@@ -2372,6 +2177,44 @@ const Editor: React.FC = () => {
             setElements(loadedElements);
             setHistory([loadedElements]);
             setHistoryIndex(0);
+            
+            // Restore timeline data if it exists
+            if (design.designJSON.timeline) {
+              console.log('Restoring timeline data:', design.designJSON.timeline);
+              // Convert backend timeline format back to timeline state
+              const restoredTimeline = design.designJSON.timeline;
+              if (restoredTimeline.tracks && Array.isArray(restoredTimeline.tracks)) {
+                const newTimeline: any = {
+                  id: restoredTimeline.id || `timeline-${Date.now()}`,
+                  designId: designId,
+                  fps: restoredTimeline.fps || 30,
+                  tracks: restoredTimeline.tracks.map((track: any) => ({
+                    id: track.id,
+                    name: track.name,
+                    type: track.type,
+                    items: (track.items || []).map((item: any) => ({
+                      id: item.id,
+                      elementId: item.elementId,
+                      startTime: item.startTime,
+                      duration: item.duration,
+                      inPoint: item.inPoint || 0,
+                      outPoint: item.outPoint || item.duration,
+                      layer: item.layer,
+                      properties: item.properties || {},
+                      animations: item.animations || [],
+                    })),
+                  })),
+                  totalDuration: restoredTimeline.totalDuration || 0,
+                  currentTime: 0,
+                  isPlaying: false,
+                  loop: false,
+                  playbackSpeed: 1.0,
+                  snapInterval: 100,
+                  zoom: 1,
+                };
+                updateTimeline(newTimeline);
+              }
+            }
           } else {
             console.error('Design not found:', designId);
           }
@@ -3024,7 +2867,7 @@ const Editor: React.FC = () => {
                     onClick={(e) => e.stopPropagation()} 
                     onDoubleClick={(e) => handleDoubleClick(e, el.id)}
                   >
-                    {editingTextId === el.id && [ElementType.TEXT, ElementType.LABEL, ElementType.TICKER, ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP].includes(el.type) ? (
+                    {editingTextId === el.id && [ElementType.TEXT, ElementType.LABEL, ElementType.TICKER, ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP].includes(el.type as ElementType) ? (
                       <textarea
                         ref={textInputRef}
                         value={editingText}
@@ -3219,11 +3062,43 @@ const Editor: React.FC = () => {
                     <span className="hidden sm:inline">Layers</span>
                   </div>
                 </button>
+                {selectedIds.length >= 2 && (
+                  <button 
+                    onClick={() => setActiveRightTab('align')} 
+                    className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
+                      activeRightTab === 'align' 
+                        ? 'bg-slate-900 text-white shadow-md' 
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title="Align multiple selected elements"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Grid3x3 size={14} />
+                      <span className="hidden sm:inline">Align</span>
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              {activeRightTab === 'properties' ? (
+              {activeRightTab === 'align' ? (
+                <div className="space-y-4">
+                  <AlignmentToolbar
+                    selectedElements={elements.filter(el => selectedIds.includes(el.id))}
+                    onElementsUpdate={(updated) => {
+                      const newElements = elements.map(el => {
+                        const updated_el = updated.find(u => u.id === el.id);
+                        return updated_el || el;
+                      });
+                      setElements(newElements);
+                      updateHistory(newElements);
+                    }}
+                    canvasWidth={canvasSize.width}
+                    canvasHeight={canvasSize.height}
+                  />
+                </div>
+              ) : activeRightTab === 'properties' ? (
                 <div className="space-y-6">
                   {!selectedElement ? (
                     // Canvas Properties
@@ -3417,7 +3292,7 @@ const Editor: React.FC = () => {
                           />
                         </div>
 
-                        {([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type) || selectedElement.type === ElementType.IMAGE) && (
+                        {([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType) || selectedElement.type === ElementType.IMAGE) && (
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Border Radius</label>
                             <input 
@@ -3432,7 +3307,7 @@ const Editor: React.FC = () => {
                       </div>
 
                       {/* Colors */}
-                      {(selectedElement.type === ElementType.TEXT || [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type)) && (
+                      {(selectedElement.type === ElementType.TEXT || [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType)) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Palette size={14} />
@@ -3496,7 +3371,7 @@ const Editor: React.FC = () => {
                             </>
                           )}
                           
-                          {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type) && (
+                          {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType) && (
                             <div>
                               <label className="text-xs text-gray-600 mb-2 block font-medium">Fill Color</label>
                               <div className="flex gap-2 items-center mb-3">
@@ -3585,7 +3460,7 @@ const Editor: React.FC = () => {
                       {/* Widget-Specific Properties */}
                       
                       {/* Text & Label Typography */}
-                      {[ElementType.TEXT, ElementType.LABEL].includes(selectedElement.type) && (
+                      {[ElementType.TEXT, ElementType.LABEL].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Type size={14} />
@@ -3706,7 +3581,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Image & Media Properties */}
-                      {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                      {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <ImageIcon size={14} />
@@ -3787,7 +3662,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Video & Streaming Properties */}
-                      {[ElementType.VIDEO, ElementType.WEB_VIDEO, ElementType.YOUTUBE, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                      {[ElementType.VIDEO, ElementType.WEB_VIDEO, ElementType.YOUTUBE, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Video size={14} />
@@ -4038,7 +3913,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* RSS & Media RSS Properties */}
-                      {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type) && (
+                      {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <FileText size={14} />
@@ -4122,7 +3997,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Weather Properties */}
-                      {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) && (
+                      {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <CloudSun size={14} />
@@ -4671,7 +4546,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Embed Properties */}
-                      {[ElementType.EMBED, ElementType.SUB_CREATIVE].includes(selectedElement.type) && (
+                      {[ElementType.EMBED, ElementType.SUB_CREATIVE].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Layout size={14} />
@@ -4889,7 +4764,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* GIF & Web Image Properties */}
-                      {[ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                      {[ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Image size={14} />
@@ -5230,7 +5105,7 @@ const Editor: React.FC = () => {
                       <div className={selectedIds.includes(el.id) ? 'text-white' : 'text-gray-400'}>
                         {el.type === ElementType.TEXT && <Type size={16} />}
                         {el.type === ElementType.IMAGE && <ImageIcon size={16} />}
-                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(el.type) && <Shapes size={16} />}
+                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(el.type as ElementType) && <Shapes size={16} />}
                       </div>
                       <span className={`text-sm flex-1 font-medium ${selectedIds.includes(el.id) ? 'text-white' : 'text-gray-700'}`}>
                         {el.type.charAt(0).toUpperCase() + el.type.slice(1)} {elements.length - i}

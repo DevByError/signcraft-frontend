@@ -11,87 +11,10 @@ import {
   Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
-import { useDesignSave } from '../hooks/useDesignSave';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
 import { getDesignLocalById, updateDesignLocal } from '../services/localDesignStore';
-
-enum ElementType {
-  TEXT = 'text',
-  IMAGE = 'image',
-  RECT = 'rect',
-  CIRCLE = 'circle',
-  TRIANGLE = 'triangle',
-  STAR = 'star',
-  HEART = 'heart',
-  LINE = 'line',
-  VIDEO = 'video',
-  PENTAGON = 'pentagon',
-  HEXAGON = 'hexagon',
-  OCTAGON = 'octagon',
-  DIAMOND = 'diamond',
-  TRAPEZOID = 'trapezoid',
-  CRESCENT = 'crescent',
-  CROSS = 'cross',
-  SLIDESHOW = 'slideshow',
-  TICKER = 'ticker',
-  RSS = 'rss',
-  WEATHER = 'weather',
-  GIF = 'gif',
-  MEDIA_RSS = 'media-rss',
-  YOUTUBE = 'youtube',
-  USTREAM = 'ustream',
-  FTP = 'ftp',
-  INSTAGRAM = 'instagram',
-  STREAMING = 'streaming',
-  LABEL = 'label',
-  CLOCK = 'clock',
-  TIMER = 'timer',
-  TOUCH = 'touch',
-  WEATHER_2 = 'weather-2',
-  AD_SERVING = 'ad-serving',
-  CALENDAR = 'calendar',
-  DASHBOARDS = 'dashboards',
-  TABLE = 'table',
-  SMART_SWITCH = 'smart-switch',
-  WEB_IMAGE = 'web-image',
-  WEB_VIDEO = 'web-video',
-  SUB_CREATIVE = 'sub-creative',
-  EMBED = 'embed',
-  HTML = 'html',
-}
-
-interface CanvasElement {
-  id: string;
-  type: ElementType;
-  content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fontSize?: number;
-  color?: string;
-  backgroundColor?: string;
-  fillColor?: string;
-  opacity: number;
-  rotation: number;
-  zIndex: number;
-  strokeColor?: string;
-  strokeWidth?: number;
-  borderRadius?: number;
-  locked: boolean;
-  visible: boolean;
-  animation?: string;
-  widgetSettings?: any;
-  textStyle?: {
-    bold: boolean;
-    italic: boolean;
-    underline: boolean;
-    textAlign: 'left' | 'center' | 'right';
-    fontFamily: string;
-    letterSpacing: number;
-    lineHeight: number;
-  };
-}
+import { modifyDesign, hasModificationPermission } from '../services/designModificationService';
+import { ElementType, ElementTypeValue, CanvasElement } from '../types/canvas';
 
 const TEMPLATES = [
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
@@ -214,6 +137,8 @@ const Editor: React.FC = () => {
   const [editingText, setEditingText] = useState<string>('');
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [isLoadingDesign, setIsLoadingDesign] = useState(true);
+  const [designLoadError, setDesignLoadError] = useState<string | null>(null);
   
   // Computed values for backward compatibility
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
@@ -231,8 +156,8 @@ const Editor: React.FC = () => {
   const [designTitle, setDesignTitle] = useState('My Design');
   const [designData, setDesignData] = useState<any>(null);
   
-  // Design save hook
-  const { saveDesign, isLoading: isSavingDesign, error: saveError, successMessage: hookSuccessMessage } = useDesignSave();
+  // State for save operations
+  const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -465,7 +390,7 @@ const Editor: React.FC = () => {
     }
   };
 
-  const renderShape = (shapeType: ElementType, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
+  const renderShape = (shapeType: ElementTypeValue, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
     const svgStrokeProps = strokeWidth && strokeWidth > 0 ? { 
       stroke: strokeColor || '#000000', 
       strokeWidth,
@@ -718,7 +643,8 @@ const Editor: React.FC = () => {
 
   const handleMouseUp = () => {
     if (dragInfo || resizing) {
-      updateHistory(elements);
+      // Don't update history here - let the state update complete first
+      // We'll use a useEffect to capture the final state
       setDragInfo(null);
       setResizing(null);
     }
@@ -783,11 +709,14 @@ const Editor: React.FC = () => {
       return el;
     });
     setElements(newElements);
+    return newElements;
   };
 
   const updateSelectedElementImmediate = (key: keyof CanvasElement, value: any) => {
-    updateSelectedElement(key, value);
-    updateHistory(elements);
+    const newElements = updateSelectedElement(key, value);
+    if (newElements) {
+      updateHistory(newElements);
+    }
   };
 
   const bringToFront = () => {
@@ -819,9 +748,14 @@ const Editor: React.FC = () => {
       case 'bottom': newY = canvasSize.height - element.height; break;
     }
 
-    updateSelectedElement('x', newX);
-    updateSelectedElement('y', newY);
-    updateHistory(elements);
+    const newElements = elements.map(el => {
+      if (el.id === selectedId) {
+        return { ...el, x: newX, y: newY };
+      }
+      return el;
+    });
+    setElements(newElements);
+    updateHistory(newElements);
   };
 
   const handleDoubleClick = (e: React.MouseEvent, id: string) => {
@@ -853,7 +787,23 @@ const Editor: React.FC = () => {
 
   // Handle saving design with metadata
   const handleSaveDesign = async (data: SaveDesignModalData) => {
+    if (!designId) {
+      setErrorMessage('Design ID is required');
+      return;
+    }
+
     try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+
+      console.log('🔄 [MODIFY_EDITOR] Saving design modifications:', designId);
+
+      // Check if user has permission to modify
+      if (designData && !hasModificationPermission(designData)) {
+        throw new Error('You do not have permission to modify this design');
+      }
+
       // Ensure all elements have required fields with proper defaults
       const elementsWithDefaults = elements.map(el => {
         const defaultTextStyle = {
@@ -866,7 +816,7 @@ const Editor: React.FC = () => {
           lineHeight: 1.2,
         };
 
-        // Use spread operator to preserve ALL properties (animation, widgetSettings, etc.)
+        // Preserve ALL properties (animation, widgetSettings, etc.)
         return {
           ...el,
           content: el.content || '',
@@ -875,54 +825,56 @@ const Editor: React.FC = () => {
         };
       });
 
-      // Use Firebase design name when modifying, fallback to provided title for new designs
-      const designTitle = designData?.metadata?.title || data.title || 'Untitled';
+      // Use provided title or existing design title
+      const finalTitle = data.title || designData?.metadata?.title || 'Untitled Design';
 
-      const exportedDesign = {
-        metadata: {
-          title: designTitle,
-          description: data.description || '',
-          canvasWidth: canvasSize.width || 1280,
-          canvasHeight: canvasSize.height || 720,
-          canvasColor: canvasColor || '#ffffff',
-          createdAt: designData?.metadata?.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: designData?.metadata?.createdBy || 'current-user',
-          tags: data.tags || [],
-          version: (designData?.metadata?.version || 0) + 1,
-        },
-        designJSON: {
-          elements: elementsWithDefaults,
-          totalElements: elementsWithDefaults.length,
-          version: '1.0.0',
-        },
+      // Prepare canvas data
+      const canvasDataPayload = {
+        elements: elementsWithDefaults,
+        totalElements: elementsWithDefaults.length,
+        version: '1.0.0',
+        width: canvasSize.width,
+        height: canvasSize.height,
+        backgroundColor: canvasColor,
       };
 
-      // Always modify existing design in ModifyEditor
-      if (!designId) {
-        console.error('Design ID is required for ModifyEditor');
-        throw new Error('Cannot modify design without ID');
-      }
-
-      console.log('Modifying design in Firebase:', designId);
-      console.log('Exporting design data:', exportedDesign);
-      
-      const result = updateDesignLocal(designId, exportedDesign as any);
+      // Call design modification service
+      const result = await modifyDesign(designId, {
+        title: finalTitle,
+        description: data.description || '',
+        canvasData: canvasDataPayload,
+        canvasWidth: canvasSize.width,
+        canvasHeight: canvasSize.height,
+        canvasColor: canvasColor,
+        tags: data.tags || [],
+      });
 
       if (result.success) {
-        setDesignTitle(data.title);
-        console.log('✅ Design modified successfully in Firebase:', designId);
-        console.log('Updated design:', result);
+        console.log('✅ [MODIFY_EDITOR] Design modified successfully:', designId);
+        setDesignTitle(finalTitle);
         
         // Update local design data state
         setDesignData({
           ...designData,
-          metadata: exportedDesign.metadata,
-          designJSON: exportedDesign.designJSON,
+          title: finalTitle,
+          metadata: {
+            ...designData?.metadata,
+            title: finalTitle,
+            description: data.description,
+            canvasWidth: canvasSize.width,
+            canvasHeight: canvasSize.height,
+            canvasColor: canvasColor,
+            updatedAt: new Date().toISOString(),
+            tags: data.tags,
+          },
+          designJSON: {
+            elements: elementsWithDefaults,
+            totalElements: elementsWithDefaults.length,
+            version: '1.0.0',
+          },
         });
         
-        // Show success message
-        setSuccessMessage('✅ Design updated successfully!');
+        setSuccessMessage(`✅ ${result.msg}`);
         setErrorMessage(null);
         
         // Close modal after successful save
@@ -931,16 +883,15 @@ const Editor: React.FC = () => {
           setShowSaveModal(false);
         }, 1500);
       } else {
-        console.error('❌ Failed to modify design:', result.error);
-        setErrorMessage(result.error || 'Failed to modify design');
-        setSuccessMessage(null);
-        throw new Error(result.error || 'Failed to modify design in Firebase');
+        throw new Error(result.msg || 'Failed to modify design');
       }
     } catch (error) {
-      console.error('❌ Error modifying design in Firebase:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setErrorMessage(`Error: ${errorMsg}`);
+      console.error('❌ [MODIFY_EDITOR] Error saving design:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      setErrorMessage(`❌ Error: ${errorMsg}`);
       setSuccessMessage(null);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1048,7 +999,7 @@ const Editor: React.FC = () => {
       const shapeImageMap = new Map<string, HTMLImageElement>();
       
       for (const el of elements) {
-        if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+        if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type as ElementType)) {
           const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
           
           if (!shapeImageMap.has(shapeKey)) {
@@ -1209,7 +1160,7 @@ const Editor: React.FC = () => {
             ctx.stroke();
           }
 
-        } else if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type)) {
+        } else if ([ElementType.TRIANGLE, ElementType.DIAMOND, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.TRAPEZOID, ElementType.STAR, ElementType.HEART, ElementType.CRESCENT, ElementType.CROSS, ElementType.LINE].includes(el.type as ElementType)) {
           // Draw preloaded shape image
           const shapeKey = `${el.type}-${el.fillColor}-${el.strokeColor}-${el.strokeWidth}`;
           const shapeImg = shapeImageMap.get(shapeKey);
@@ -1273,51 +1224,98 @@ const Editor: React.FC = () => {
     setShowTemplateModal(false);
   };
 
-  // Load design from Firebase if designId is provided
+  // Load design from local storage if designId is provided
   useEffect(() => {
-    if (designId) {
-      const loadDesign = async () => {
-        try {
+    const loadDesign = async () => {
+      try {
+        setIsLoadingDesign(true);
+        setDesignLoadError(null);
+        
+        if (designId) {
           console.log('Loading design:', designId);
           const design = getDesignLocalById(designId);
-          if (design) {
-            console.log('Design loaded:', design);
-            setDesignData(design);
-            setDesignTitle(design.metadata.title);
-            setCanvasSize({ width: design.metadata.canvasWidth, height: design.metadata.canvasHeight });
-            setCanvasColor(design.metadata.canvasColor);
-            
-            // Map the design elements to CanvasElement format
-            const loadedElements = design.designJSON.elements.map(el => ({
-              id: el.id,
-              type: el.type as ElementType,
-              content: el.content,
-              x: el.x,
-              y: el.y,
-              width: el.width,
-              height: el.height,
-              fontSize: el.fontSize,
-              color: el.color,
-              backgroundColor: el.backgroundColor,
-              fillColor: el.fillColor,
-              opacity: el.opacity,
-              rotation: el.rotation,
-              zIndex: el.zIndex,
-              locked: el.locked,
-              visible: el.visible,
-            } as CanvasElement));
-            
-            setElements(loadedElements);
-            setHistory([loadedElements]);
-            setHistoryIndex(0);
+          
+          if (!design) {
+            setDesignLoadError(`Design not found: ${designId}. Please check if the design exists.`);
+            console.warn('Design not found with ID:', designId);
+            setElements([]);
+            setIsLoadingDesign(false);
+            return;
           }
-        } catch (error) {
-          console.error('Failed to load design:', error);
+          
+          console.log('Design loaded:', design);
+          setDesignData(design);
+          setDesignTitle(design.metadata?.title || 'Untitled Design');
+          setCanvasSize({ 
+            width: design.metadata?.canvasWidth || 1280, 
+            height: design.metadata?.canvasHeight || 720 
+          });
+          setCanvasColor(design.metadata?.canvasColor || '#FDFBF7');
+          
+          // Map the design elements to CanvasElement format
+          const loadedElements = (design.designJSON?.elements || []).map(el => ({
+            id: el.id,
+            type: el.type as ElementType,
+            content: el.content,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+            fontSize: el.fontSize,
+            color: el.color,
+            backgroundColor: el.backgroundColor,
+            fillColor: el.fillColor,
+            opacity: el.opacity,
+            rotation: el.rotation,
+            zIndex: el.zIndex,
+            locked: el.locked,
+            visible: el.visible,
+          } as CanvasElement));
+          
+          setElements(loadedElements);
+          setHistory([loadedElements]);
+          setHistoryIndex(0);
+        } else {
+          // No design ID provided, start fresh
+          setElements([]);
+          setHistory([[]]);
+          setHistoryIndex(0);
         }
-      };
-      loadDesign();
-    }
+      } catch (error) {
+        console.error('Failed to load design:', error);
+        setDesignLoadError(`Error loading design: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setElements([]);
+      } finally {
+        setIsLoadingDesign(false);
+      }
+    };
+    
+    loadDesign();
   }, [designId]);
+
+  // Update history after drag/resize operations complete
+  useEffect(() => {
+    if (!dragInfo && !resizing) {
+      // Only update history if we were actually dragging or resizing
+      // Check if this is the first render by examining historyIndex
+      if (historyIndex >= 0 && elements.length > 0) {
+        // Don't update on initial load, only on actual modifications
+        const currentHistoryState = history[historyIndex];
+        if (currentHistoryState && currentHistoryState !== elements) {
+          // Quick check to see if elements actually changed
+          const elementsChanged = currentHistoryState.length !== elements.length || 
+            currentHistoryState.some((el, idx) => {
+              const newEl = elements[idx];
+              return !newEl || el.x !== newEl.x || el.y !== newEl.y || 
+                el.width !== newEl.width || el.height !== newEl.height;
+            });
+          if (elementsChanged) {
+            updateHistory(elements);
+          }
+        }
+      }
+    }
+  }, [dragInfo, resizing]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1349,6 +1347,31 @@ const Editor: React.FC = () => {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
+      {/* Loading State */}
+      {isLoadingDesign && !designLoadError && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-slate-900"></div>
+            <p className="text-lg font-semibold text-slate-900">Loading Design...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {designLoadError && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Cannot Load Design</h2>
+            <p className="text-gray-700 mb-6">{designLoadError}</p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors font-semibold"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -1484,9 +1507,8 @@ const Editor: React.FC = () => {
                 id: 'live-preview',
                 name: 'Live Preview',
                 elements,
-                timelineTracks,
-                canvasWidth,
-                canvasHeight,
+                canvasWidth: canvasSize.width,
+                canvasHeight: canvasSize.height,
                 backgroundColor: canvasColor,
                 duration: 10
               };
@@ -2181,7 +2203,7 @@ const Editor: React.FC = () => {
                           Embed (Add code in properties)
                         </div>
                       )
-                    ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type) ? (
+                    ) : [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type as ElementType) ? (
                       <div style={{ borderRadius: el.borderRadius, width: '100%', height: '100%' }}>
                         {renderShape(el.type, el.fillColor || '#0F172A', el.strokeColor, el.strokeWidth)}
                       </div>
@@ -2465,7 +2487,7 @@ const Editor: React.FC = () => {
                           />
                         </div>
 
-                        {([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type) || selectedElement.type === ElementType.IMAGE) && (
+                        {([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType) || selectedElement.type === ElementType.IMAGE) && (
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Border Radius</label>
                             <input 
@@ -2480,7 +2502,7 @@ const Editor: React.FC = () => {
                       </div>
 
                       {/* Colors */}
-                      {(selectedElement.type === ElementType.TEXT || [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type)) && (
+                      {(selectedElement.type === ElementType.TEXT || [ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType)) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Palette size={14} />
@@ -2511,7 +2533,7 @@ const Editor: React.FC = () => {
                             </div>
                           )}
                           
-                          {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type) && (
+                          {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType) && (
                             <div>
                               <label className="text-xs text-gray-600 mb-2 block font-medium">Fill Color</label>
                               <div className="flex gap-2 items-center mb-3">
@@ -2718,7 +2740,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Image & Media Properties */}
-                      {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                      {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <ImageIcon size={14} />
@@ -2773,7 +2795,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Video & Streaming Properties */}
-                      {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                      {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Video size={14} />
@@ -2794,7 +2816,7 @@ const Editor: React.FC = () => {
                             />
                           </div>
 
-                          {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                          {[ElementType.VIDEO, ElementType.YOUTUBE, ElementType.WEB_VIDEO, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type as ElementType) && (
                             <>
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
@@ -2888,7 +2910,7 @@ const Editor: React.FC = () => {
                             </>
                           )}
 
-                          {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type) && (
+                          {[ElementType.IMAGE, ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type as ElementType) && (
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Fit Mode</label>
@@ -2928,7 +2950,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Feed Widget Properties - RSS, TICKER, SLIDESHOW */}
-                      {[ElementType.RSS, ElementType.MEDIA_RSS, ElementType.TICKER, ElementType.SLIDESHOW].includes(selectedElement.type) && (
+                      {[ElementType.RSS, ElementType.MEDIA_RSS, ElementType.TICKER, ElementType.SLIDESHOW].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             {selectedElement.type === ElementType.SLIDESHOW ? <Layout size={14} /> : <FileText size={14} />}
@@ -2998,7 +3020,7 @@ const Editor: React.FC = () => {
                             </>
                           )}
 
-                          {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type) && (
+                          {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type as ElementType) && (
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Update Interval (minutes)</label>
@@ -3104,7 +3126,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Streaming Widgets Properties */}
-                      {[ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type) && (
+                      {[ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Video size={14} />
@@ -3206,10 +3228,10 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* General Widget Properties - CLOCK, TIMER, WEATHER */}
-                      {[ElementType.CLOCK, ElementType.TIMER, ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) && (
+                      {[ElementType.CLOCK, ElementType.TIMER, ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) ? <CloudSun size={14} /> : <Clock size={14} />}
+                            {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type as ElementType) ? <CloudSun size={14} /> : <Clock size={14} />}
                             {selectedElement.type === ElementType.CLOCK ? 'Clock Settings' : (selectedElement.type === ElementType.TIMER ? 'Timer Settings' : 'Weather Settings')}
                           </h4>
                           
@@ -3321,7 +3343,7 @@ const Editor: React.FC = () => {
                             </>
                           )}
 
-                          {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type) && (
+                          {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type as ElementType) && (
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Location</label>
@@ -3394,7 +3416,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Advanced Widget Properties - TABLE, CALENDAR, DASHBOARDS */}
-                      {[ElementType.TABLE, ElementType.CALENDAR, ElementType.DASHBOARDS].includes(selectedElement.type) && (
+                      {[ElementType.TABLE, ElementType.CALENDAR, ElementType.DASHBOARDS].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Grid3x3 size={14} />
@@ -3857,7 +3879,7 @@ const Editor: React.FC = () => {
                         {el.type === ElementType.SUB_CREATIVE && <Layout size={16} />}
                         {el.type === ElementType.EMBED && <Layout size={16} />}
                         {el.type === ElementType.HTML && <FileText size={16} />}
-                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type) && <Shapes size={16} />}
+                        {[ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON, ElementType.OCTAGON, ElementType.DIAMOND, ElementType.TRAPEZOID, ElementType.CRESCENT, ElementType.CROSS].includes(el.type as ElementType) && <Shapes size={16} />}
                       </div>
                       <span className={`text-sm flex-1 font-medium ${selectedIds.includes(el.id) ? 'text-white' : 'text-gray-700'}`}>
                         {el.type.charAt(0).toUpperCase() + el.type.slice(1)} {elements.length - i}
@@ -3903,7 +3925,7 @@ const Editor: React.FC = () => {
           onSave={handleSaveDesign}
           successMessage={successMessage}
           error={errorMessage}
-          isLoading={isSavingDesign}
+          isLoading={isLoading}
           defaultTitle={designTitle}
           isModifying={true}
         />

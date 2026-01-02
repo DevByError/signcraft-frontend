@@ -1,6 +1,7 @@
 import { MediaUpload } from '../types';
+import authService from './authService';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 /**
  * Upload media to the server
@@ -14,9 +15,11 @@ export async function uploadMedia(file: File, userId: string): Promise<MediaUplo
   formData.append('userId', userId);
 
   try {
-    const response = await fetch(`${API_BASE}/media/upload`, {
+    const response = await authService.authFetch(`${API_BASE}/media/upload`, {
       method: 'POST',
       body: formData,
+      // Don't set Content-Type for multipart/form-data; browser will set boundary
+      headers: {},
     });
 
     if (!response.ok) {
@@ -45,7 +48,7 @@ export async function uploadMedia(file: File, userId: string): Promise<MediaUplo
  */
 export async function deleteMedia(mediaId: string): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE}/media/${mediaId}`, {
+    const response = await authService.authFetch(`${API_BASE}/media/${mediaId}`, {
       method: 'DELETE',
     });
 
@@ -64,7 +67,10 @@ export async function deleteMedia(mediaId: string): Promise<void> {
  */
 export async function getMediaList(userId: string): Promise<MediaUpload[]> {
   try {
-    const response = await fetch(`${API_BASE}/media/user/${userId}`);
+    const response = await authService.authFetch(`${API_BASE}/media/user/${userId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
 
     if (!response.ok) {
       throw new Error(`Fetch failed: ${response.statusText}`);
