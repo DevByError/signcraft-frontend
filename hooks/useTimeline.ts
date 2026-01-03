@@ -42,16 +42,36 @@ export function useTimeline({
   }, [timeline, onTimelineChange]);
 
   // Update timeline (with undo support)
+  // Update timeline (with undo support & DYNAMIC DURATION)
   const updateTimeline = useCallback((newTimeline: Timeline) => {
+
+    // --- NEW LOGIC: Auto-calculate Total Duration ---
+    let maxEndTime = 0;
+
+    // Loop through all tracks and items to find the furthest point
+    newTimeline.tracks.forEach(track => {
+      track.items.forEach(item => {
+        const itemEnd = item.startTime + item.duration;
+        if (itemEnd > maxEndTime) {
+          maxEndTime = itemEnd;
+        }
+      });
+    });
+
+    // Set duration to exactly the content length
+    // (Minimum 5 seconds so it doesn't disappear if empty)
+    newTimeline.totalDuration = Math.max(5000, maxEndTime);
+    // ------------------------------------------------
+
     setUndoStack(prev => [...prev, timeline]);
-    setRedoStack([]); // Clear redo stack on new action
+    setRedoStack([]);
     setTimeline(newTimeline);
   }, [timeline]);
 
   // Undo/Redo
   const undo = useCallback(() => {
     if (undoStack.length === 0) return;
-    
+
     const previousTimeline = undoStack[undoStack.length - 1];
     setRedoStack(prev => [...prev, timeline]);
     setUndoStack(prev => prev.slice(0, -1));
@@ -60,7 +80,7 @@ export function useTimeline({
 
   const redo = useCallback(() => {
     if (redoStack.length === 0) return;
-    
+
     const nextTimeline = redoStack[redoStack.length - 1];
     setUndoStack(prev => [...prev, timeline]);
     setRedoStack(prev => prev.slice(0, -1));
@@ -71,7 +91,8 @@ export function useTimeline({
   const addElementToTimeline = useCallback((
     element: CanvasElement,
     startTime: number = timeline.currentTime,
-    duration: number = 5000,
+    // ✅ FIX: Default to element settings duration if no specific duration passed
+    duration: number = element.widgetSettings?.duration || 5000,
     trackType: 'visual' | 'audio' = 'visual'
   ) => {
     const item = timelineService.createTimelineItem(
@@ -81,7 +102,7 @@ export function useTimeline({
       element.zIndex,
       trackType
     );
-    
+
     const updated = timelineService.addItemToTimeline(timeline, item);
     updateTimeline(updated);
   }, [timeline, updateTimeline]);
@@ -89,7 +110,7 @@ export function useTimeline({
   const removeElementFromTimeline = useCallback((elementId: string) => {
     // Find all items for this element
     let updated = timeline;
-    
+
     for (const track of timeline.tracks) {
       for (const item of track.items) {
         if (item.elementId === elementId) {
@@ -97,7 +118,7 @@ export function useTimeline({
         }
       }
     }
-    
+
     updateTimeline(updated);
   }, [timeline, updateTimeline]);
 
@@ -191,8 +212,8 @@ export function useTimeline({
   // Selection management
   const selectItem = useCallback((itemId: string, addToSelection: boolean = false) => {
     if (addToSelection) {
-      setSelectedItems(prev => 
-        prev.includes(itemId) 
+      setSelectedItems(prev =>
+        prev.includes(itemId)
           ? prev.filter(id => id !== itemId)
           : [...prev, itemId]
       );
@@ -235,17 +256,17 @@ export function useTimeline({
     // Add any elements not in timeline
     let updated = { ...timeline };
     let hasNewItems = false;
-    
+
     // First, remove any timeline items for deleted elements
     const elementIds = new Set(elements.map(e => e.id));
     const allItems = updated.tracks.flatMap(t => t.items);
-    
+
     for (const item of allItems) {
       if (!elementIds.has(item.elementId)) {
         updated = timelineService.removeItemFromTimeline(updated, item.id);
       }
     }
-    
+
     // Calculate the end time of the last item in track 1 (visual track)
     const track1 = updated.tracks.find(t => t.type === 'visual');
     let lastEndTime = 0;
@@ -255,23 +276,27 @@ export function useTimeline({
         ...track1.items.map(item => item.startTime + item.duration)
       );
     }
-    
+
     // Then add any elements not in timeline
     for (const element of elements) {
       const existingItems = updated.tracks
         .flatMap(t => t.items)
         .filter(item => item.elementId === element.id);
-      
+
       if (existingItems.length === 0) {
+
+        // ✅ FIX: Check element settings for duration first!
+        const itemDuration = element.widgetSettings?.duration || 5000;
+
         // Add new items to track 1 at the end of existing items
         const item = timelineService.createTimelineItem(
           element,
           lastEndTime, // Position at the end of track 1
-          5000, // 5 seconds
+          itemDuration, // ✅ Use calculated duration
           element.zIndex,
           'visual'
         );
-        
+
         // Add to track 1 specifically
         const visualTrack = updated.tracks.find(t => t.type === 'visual');
         if (visualTrack) {
@@ -281,13 +306,13 @@ export function useTimeline({
         }
       }
     }
-    
+
     // Only auto-arrange if this is the FIRST sync (no items exist yet)
     // This ensures the initial setup has partitions from 0
     if (allItems.length === 0 && hasNewItems) {
       updated = timelineService.autoArrangeAll(updated, 0);
     }
-    
+
     // Only update if there were actual changes
     if (hasNewItems || allItems.length !== updated.tracks.flatMap(t => t.items).length) {
       setTimeline(updated);

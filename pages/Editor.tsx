@@ -9,7 +9,9 @@ import {
   Triangle, Star, Heart, Menu, Plus, Minus, Lock, Unlock,
   Layers, Palette, Settings, Grid3x3, Layout, Maximize2,
   RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap,
-  CheckCircle, AlertCircle
+  CheckCircle, AlertCircle,
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
@@ -141,6 +143,65 @@ const GRADIENTS = [
   { name: 'Ocean', value: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)' },
   { name: 'Sunset', value: 'linear-gradient(135deg, #FF6B6B 0%, #FFD93D 100%)' },
 ];
+// --- Smart Video Component for Timeline Sync ---
+const SyncedVideo = ({
+  src,
+  timelineTime,
+  isPlaying,
+  startTime,
+  duration,
+  inPoint = 0,
+  style,
+  className
+}: any) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    // 1. Calculate the local time for the video based on global timeline
+    // (Current Global Time) - (When this clip starts) + (Trimming offset)
+    const relativeTimeMs = timelineTime - startTime + inPoint;
+    const relativeTimeSec = relativeTimeMs / 1000;
+
+    // 2. Check if the timeline cursor is currently inside this specific clip
+    const isInsideClip = relativeTimeMs >= 0 && relativeTimeMs < duration;
+
+    if (isInsideClip) {
+      // A. Sync Playback
+      if (Math.abs(video.currentTime - relativeTimeSec) > 0.15) {
+        // Only seek if we drifted more than 0.15s to prevent stuttering
+        video.currentTime = relativeTimeSec;
+      }
+
+      if (isPlaying) {
+        if (video.paused) video.play().catch(() => { });
+      } else {
+        video.pause();
+      }
+
+      // Ensure it's visible
+      video.style.opacity = '1';
+    } else {
+      // B. Cursor outside clip: Pause and Reset
+      video.pause();
+      // Optional: Hide video if not active, or just freeze at start/end
+      if (relativeTimeMs < 0) video.currentTime = inPoint / 1000;
+    }
+  }, [timelineTime, isPlaying, startTime, duration, inPoint, src]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      className={className}
+      style={style}
+      playsInline
+      muted={false} // Allow audio
+    />
+  );
+};
 
 const Editor: React.FC = () => {
   const navigate = useNavigate();
@@ -180,6 +241,8 @@ const Editor: React.FC = () => {
   const [designTitle, setDesignTitle] = useState('My Design');
   const [newElementIds, setNewElementIds] = useState<Set<string>>(new Set());
 
+  // new for upload state (video / image)
+  const [isUploading, setIsUploading] = useState(false);
   // Local save state (UI-only)
   const [isSavingDesign, setIsSavingDesign] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -217,7 +280,7 @@ const Editor: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const videoInputRef = useRef<HTMLInputElement>(null); // ✅ NEW: For Videos
   // Helper functions for element rendering (must be defined before elementRenderers)
   const getYouTubeEmbedUrl = (url: string): string | null => {
     if (!url) return null;
@@ -319,6 +382,115 @@ const Editor: React.FC = () => {
     }
   };
 
+  // Helper: Get video duration with a timeout safety net
+  const getVideoDuration = (url: string): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.crossOrigin = 'anonymous'; // Critical for S3 CORS
+      video.src = url;
+
+      const finish = (duration: number) => {
+        // Clean up to prevent memory leaks
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        resolve(duration);
+      };
+
+      video.onloadedmetadata = () => finish(video.duration * 1000 || 5000);
+      video.onerror = () => {
+        console.warn('Frontend: Could not read video metadata, using default 5s.');
+        finish(5000);
+      };
+
+      // Force finish after 2 seconds if browser hangs
+      setTimeout(() => {
+        console.warn('Frontend: Metadata check timed out, forcing default 5s.');
+        finish(5000);
+      }, 2000);
+    });
+  };
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 1. Capture the ID *before* the upload starts
+    // This ensures we don't lose track of which element we are editing
+    const targetId = selectedId;
+
+    if (videoInputRef.current) videoInputRef.current.value = '';
+    setIsUploading(true);
+    setSuccessMessage('Uploading video...');
+
+    try {
+      // 2. Upload to S3
+      const response = await import('../services/designService').then(m => m.uploadAsset(file));
+
+      if (response.success && response.url) {
+
+        // 3. Get Duration
+        const actualDuration = await getVideoDuration(response.url);
+        console.log(`Video uploaded: ${response.url}`);
+
+        // 4. CRITICAL FIX: Use 'setElements(prev => ...)'
+        // This guarantees we update the LIVE state, not the "stale" state from 2 seconds ago
+        setElements(prevElements => {
+          return prevElements.map(el => {
+            // Find the specific element we were editing
+            if (el.id === targetId) {
+              console.log(`Updating Element ${el.id} with new URL`);
+              return {
+                ...el,
+                content: response.url, // Force the new S3 URL
+                widgetSettings: {
+                  ...el.widgetSettings,
+                  duration: actualDuration
+                }
+              };
+            }
+            return el;
+          });
+        });
+
+        // 5. Update Timeline (so the purple bar grows)
+        if (targetId) {
+          const timelineItem = timeline.tracks
+            .flatMap(t => t.items)
+            .find(i => i.elementId === targetId);
+
+          if (timelineItem) {
+            updateItem(timelineItem.id, { duration: actualDuration });
+          } else {
+            // Fallback: If for some reason it's not in timeline
+            // (This handles the case where you might have deleted the timeline item manually)
+            const currentEl = elements.find(e => e.id === targetId);
+            if (currentEl) {
+              addElementToTimeline({
+                ...currentEl,
+                content: response.url,
+                widgetSettings: { ...currentEl.widgetSettings, duration: actualDuration }
+              });
+            }
+          }
+        }
+        // Case: If nothing was selected (rare for the button, but good for safety)
+        else {
+          addElement(ElementType.VIDEO, 100, 100, undefined, response.url, actualDuration);
+        }
+
+        setSuccessMessage('Video updated successfully!');
+      } else {
+        throw new Error(response.msg || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload Error:', error);
+      alert('Failed to upload video.');
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setSuccessMessage(null), 2000);
+    }
+  };
+
   // Text element renderer function (to avoid circular reference)
   const renderTextElement = (el: CanvasElement) => (
     <div
@@ -366,50 +538,131 @@ const Editor: React.FC = () => {
       component: (el) => elementRenderers[ElementType.IMAGE].component(el)
     },
     [ElementType.VIDEO]: {
-      component: (el) => el.content && (el.content.startsWith('http') || el.content.startsWith('blob:')) ? (
-        <video
-          src={el.content}
-          className="w-full h-full object-cover"
-          style={{ pointerEvents: 'none' }}
-          muted
-          loop
-          autoPlay={el.widgetSettings?.autoplay}
-        />
-      ) : (
-        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-          Video (Add URL)
-        </div>
-      )
+      component: (el) => {
+        const hasContent = el.content && (el.content.startsWith('http') || el.content.startsWith('blob:'));
+
+        if (hasContent) {
+          // Find in timeline
+          const timelineItem = timeline.tracks
+            .flatMap(t => t.items)
+            .find(item => item.elementId === el.id);
+
+          if (timelineItem) {
+            // ✅ USE SYNCED VIDEO
+            return (
+              <SyncedVideo
+                src={el.content}
+                timelineTime={timeline.currentTime}
+                isPlaying={timeline.isPlaying}
+                startTime={timelineItem.startTime}
+                duration={timelineItem.duration}
+                inPoint={timelineItem.inPoint || 0}
+                className="w-full h-full object-cover pointer-events-none"
+                style={{ borderRadius: el.borderRadius }}
+              />
+            );
+          }
+
+          // Fallback (If just dragged onto canvas but not in timeline yet)
+          return (
+            <video
+              src={el.content}
+              className="w-full h-full object-cover pointer-events-none"
+              style={{ borderRadius: el.borderRadius }}
+              muted
+            // Don't autoplay loop in editor unless specific preview mode, 
+            // otherwise it creates noise while designing
+            />
+          );
+        }
+
+        // Empty State: Show Upload Button
+        return (
+          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white border-2 border-dashed border-slate-700 hover:border-blue-500 transition-colors group">
+            <div className="p-3 bg-slate-800 rounded-full mb-3 group-hover:scale-110 transition-transform">
+              <Video size={32} className="text-blue-400" />
+            </div>
+            <span className="font-bold text-sm mb-2 text-slate-200">Video Player</span>
+
+            <button
+              className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-all text-xs font-bold flex items-center gap-2 pointer-events-auto shadow-lg shadow-blue-900/20 active:scale-95"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedIds([el.id]);
+                videoInputRef.current?.click();
+              }}
+            >
+              <Upload size={14} />
+              Upload Video
+            </button>
+            <span className="text-[10px] text-gray-500 mt-3 font-medium">MP4, WebM • Drag & Drop supported</span>
+          </div>
+        );
+      }
     },
+
     [ElementType.WEB_VIDEO]: {
-      component: (el) => el.content && el.content.startsWith('http') ? (
-        <iframe
-          src={el.content}
-          className="w-full h-full border-0"
-          style={{ pointerEvents: 'none' }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      ) : (
-        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-          Web Video (Add URL)
-        </div>
-      )
+      component: (el) => {
+        const hasContent = el.content && el.content.startsWith('http');
+
+        if (hasContent) {
+          return (
+            <div className="w-full h-full relative group">
+              {/* Overlay to allow dragging/selecting the iframe in editor */}
+              <div className="absolute inset-0 z-10 bg-transparent group-hover:bg-blue-500/10 border-2 border-transparent group-hover:border-blue-500/50 transition-all pointer-events-none" />
+              <iframe
+                src={el.content}
+                className="w-full h-full border-0"
+                style={{ borderRadius: el.borderRadius }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white border-2 border-dashed border-slate-700">
+            <div className="p-3 bg-slate-800 rounded-full mb-3">
+              <Video size={32} className="text-purple-400" />
+            </div>
+            <span className="font-bold text-sm text-slate-200">Web Video</span>
+            <span className="text-[10px] text-gray-500 mt-1">Paste URL in Properties</span>
+          </div>
+        );
+      }
     },
+
     [ElementType.YOUTUBE]: {
-      component: (el) => getYouTubeEmbedUrl(el.content) ? (
-        <iframe
-          src={getYouTubeEmbedUrl(el.content) || ''}
-          className="w-full h-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          style={{ pointerEvents: 'none' }}
-        />
-      ) : (
-        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-          YouTube (Add URL)
-        </div>
-      )
+      component: (el) => {
+        const embedUrl = getYouTubeEmbedUrl(el.content);
+
+        if (embedUrl) {
+          return (
+            <div className="w-full h-full relative group">
+              {/* Overlay to allow dragging */}
+              <div className="absolute inset-0 z-10 bg-transparent group-hover:bg-red-500/10 border-2 border-transparent group-hover:border-red-500/50 transition-all pointer-events-none" />
+              <iframe
+                src={embedUrl}
+                className="w-full h-full border-0"
+                style={{ borderRadius: el.borderRadius }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white border-2 border-dashed border-slate-700">
+            <div className="p-3 bg-slate-800 rounded-full mb-3">
+              <Video size={32} className="text-red-500" />
+            </div>
+            <span className="font-bold text-sm text-slate-200">YouTube</span>
+            <span className="text-[10px] text-gray-500 mt-1">Paste YouTube Link in Properties</span>
+          </div>
+        );
+      }
     },
     [ElementType.TICKER]: {
       component: (el) => (
@@ -906,30 +1159,65 @@ const Editor: React.FC = () => {
     }
   };
 
-  const handleDropOnCanvas = (e: React.DragEvent) => {
+  const handleDropOnCanvas = async (e: React.DragEvent) => {
     e.preventDefault();
     setDraggingFromSidebar(false);
 
-    // Handle local file drop
+    // 1. Handle File Drops (Images & Videos)
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
+
+      // VIDEO DROP
+      if (file.type.startsWith('video/')) {
+        setIsUploading(true);
+        setSuccessMessage('Uploading video...');
+
+        try {
+          const response = await import('../services/designService').then(m => m.uploadAsset(file));
+
+          if (response.success && response.url) {
+            const actualDuration = await getVideoDuration(response.url);
+
+            // Calculate drop position
+            const rect = canvasRef.current?.getBoundingClientRect();
+            const scale = zoom / 100;
+            const x = rect ? snapValue((e.clientX - rect.left) / scale) : 100;
+            const y = rect ? snapValue((e.clientY - rect.top) / scale) : 100;
+
+            addElement(ElementType.VIDEO, x, y, undefined, response.url, actualDuration);
+            setSuccessMessage('Video added!');
+          } else {
+            alert('Upload failed.');
+          }
+        } catch (err) {
+          console.error('Drop Error:', err);
+          alert('Error processing video.');
+        } finally {
+          setIsUploading(false);
+          setTimeout(() => setSuccessMessage(null), 2000);
+        }
+        return;
+      }
+
+      // IMAGE DROP
       if (file.type.startsWith('image/')) {
+        // We can optionally upload images too, but for now keeping your Blob logic is faster for testing
         const reader = new FileReader();
         reader.onload = (event) => {
           const rect = canvasRef.current?.getBoundingClientRect();
           if (!rect || !event.target?.result) return;
-
           const scale = zoom / 100;
           const x = snapValue((e.clientX - rect.left) / scale);
           const y = snapValue((e.clientY - rect.top) / scale);
-
           addElement(ElementType.IMAGE, x, y, undefined, event.target.result as string);
         };
         reader.readAsDataURL(file);
+        return;
       }
       return;
     }
 
+    // 2. Handle Widget Drag from Sidebar (Existing Logic)
     const type = e.dataTransfer.getData('widgetType') as ElementType;
     const fontSize = e.dataTransfer.getData('fontSize');
     if (!type) return;
@@ -986,7 +1274,7 @@ const Editor: React.FC = () => {
     y: number = 100,
     customFontSize?: number,
     customContent?: string,
-    customDuration?: number // <--- NEW ARGUMENT
+    customDuration?: number // <--- Pass actual video length here (in ms)
   ) => {
     const isShape = [
       ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR,
@@ -1088,6 +1376,9 @@ const Editor: React.FC = () => {
       }
     };
 
+    // Determine duration: Use custom if provided, otherwise default to 5000ms (5s)
+    const finalDuration = customDuration || 5000;
+
     const newElement: CanvasElement = {
       id: Math.random().toString(36).substr(2, 9),
       type,
@@ -1106,13 +1397,13 @@ const Editor: React.FC = () => {
       visible: true,
       locked: false,
       animation: undefined,
-      animationDuration: 1, // Animation speed (fade in etc)
+      animationDuration: 1,
       animationSpeed: 1,
 
-      // ✅ UPDATE: Store the actual video/element duration here
+      // Store settings including the correct duration
       widgetSettings: {
         ...initWidgetSettings(),
-        duration: customDuration || 5000 // Uses actual video length, or defaults to 5s
+        duration: finalDuration
       },
 
       textStyle: isTextBased || type === ElementType.CLOCK || type === ElementType.TIMER ? {
@@ -1125,13 +1416,24 @@ const Editor: React.FC = () => {
         lineHeight: 1.2,
       } : undefined
     };
+
     const newElements = [...elements, newElement];
     setElements(newElements);
     updateHistory(newElements);
     setSelectedIds([newElement.id]);
     setNewElementIds(prev => new Set([...prev, newElement.id]));
 
-    // Timeline will auto-sync the new element via useEffect
+    // ✅ FORCE TIMELINE UPDATE: 
+    // Instead of waiting for useEffect sync (which might default to 5s),
+    // we manually add it to the timeline with the correct duration immediately.
+    addElementToTimeline({
+      ...newElement,
+      // Ensure the timeline hook receives the correct duration
+      widgetSettings: {
+        ...newElement.widgetSettings,
+        duration: finalDuration
+      }
+    });
 
     // Remove from new elements set after animation completes
     setTimeout(() => {
@@ -1143,7 +1445,6 @@ const Editor: React.FC = () => {
     }, 400);
     setRightSidebarOpen(true);
   };
-
   const getDefaultContent = (type: ElementType) => {
     switch (type) {
       // Essential
@@ -2378,6 +2679,13 @@ const Editor: React.FC = () => {
         ref={fileInputRef}
         onChange={handleImageUpload}
         accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={videoInputRef}
+        onChange={handleVideoUpload}
+        accept="video/mp4,video/webm,video/ogg"
         className="hidden"
       />
 
@@ -3649,18 +3957,95 @@ const Editor: React.FC = () => {
                             Video Settings
                           </h4>
 
+                          {selectedElement.type === ElementType.VIDEO && (
+                            <div className="mb-3">
+                              <label className="text-xs text-gray-600 mb-2 block font-medium">Source File</label>
+                              <button
+                                onClick={() => videoInputRef.current?.click()}
+                                disabled={isUploading}
+                                className="w-full px-3 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                              >
+                                {isUploading ? <RefreshCw className="animate-spin" size={14} /> : <Upload size={14} />}
+                                {isUploading ? 'Uploading...' : 'Upload Video'}
+                              </button>
+                            </div>
+                          )}
+
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">
                               {selectedElement.type === ElementType.YOUTUBE ? 'YouTube URL/ID' : 'Video URL'}
                             </label>
                             <input
                               type="text"
-                              value={selectedElement.widgetSettings?.videoUrl || selectedElement.content || ''}
-                              onChange={(e) => {
-                                updateSelectedElement('content', e.target.value);
-                                updateWidgetSettings('videoUrl', e.target.value);
+                              // Use key to prevent input freezing, defaultValue to allow typing
+                              key={selectedElement.id}
+                              defaultValue={selectedElement.widgetSettings?.videoUrl || selectedElement.content || ''}
+                              onBlur={async (e) => {
+                                const url = e.target.value.trim();
+                                if (!url) return;
+
+                                // Capture ID to avoid bugs if you click away fast
+                                const targetId = selectedElement.id;
+                                console.log(`🔗 Processing URL: ${url}`);
+
+                                try {
+                                  let duration = 5000; // Default 5s
+
+                                  // 1. Calculate Duration (Video Only)
+                                  if (selectedElement.type !== ElementType.YOUTUBE) {
+                                    try {
+                                      duration = await getVideoDuration(url);
+                                      console.log(`⏱️ Duration detected: ${duration}ms`);
+                                    } catch (err) {
+                                      console.warn("Could not fetch duration, using default.");
+                                    }
+                                  }
+
+                                  // 2. FORCE UPDATE CANVAS STATE (Functional Update)
+                                  // This fixes the "Link Disappears" bug
+                                  setElements(prevElements => {
+                                    const newElements = prevElements.map(el => {
+                                      if (el.id === targetId) {
+                                        return {
+                                          ...el,
+                                          content: url, // Save URL
+                                          widgetSettings: {
+                                            ...el.widgetSettings,
+                                            videoUrl: url,
+                                            duration: duration // Save Duration
+                                          }
+                                        };
+                                      }
+                                      return el;
+                                    });
+
+                                    // Save to Undo/Redo History
+                                    updateHistory(newElements);
+                                    return newElements;
+                                  });
+
+                                  // 3. RESIZE TIMELINE CLIP
+                                  const timelineItem = timeline.tracks
+                                    .flatMap(t => t.items)
+                                    .find(i => i.elementId === targetId);
+
+                                  if (timelineItem) {
+                                    // Resize existing clip
+                                    updateItem(timelineItem.id, { duration: duration });
+                                  } else {
+                                    // Or create new clip if missing
+                                    addElementToTimeline({
+                                      ...selectedElement,
+                                      content: url,
+                                      widgetSettings: { ...selectedElement.widgetSettings, duration }
+                                    });
+                                  }
+
+                                } catch (error) {
+                                  console.error("URL Update Failed:", error);
+                                  alert("Could not load video from URL.");
+                                }
                               }}
-                              onBlur={() => updateHistory(elements)}
                               placeholder={selectedElement.type === ElementType.YOUTUBE ? '...' : 'https://example.com/video.mp4'}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
@@ -5239,6 +5624,17 @@ const Editor: React.FC = () => {
               <p className="font-semibold">{successMessage}</p>
               <p className="text-sm text-green-100">Your design has been saved</p>
             </div>
+          </div>
+        </div>
+      )}
+
+
+      {isUploading && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-2xl text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900 mx-auto mb-4"></div>
+            <h3 className="text-lg font-bold text-slate-900">Uploading Video...</h3>
+            <p className="text-sm text-gray-500">Please wait while we process your file.</p>
           </div>
         </div>
       )}

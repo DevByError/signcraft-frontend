@@ -195,4 +195,29 @@ export const convertBackendToLocal = (backendDesign: DesignData): any => {
 /**
  * Alias for backward compatibility
  */
+
+/**
+ * Upload an asset (Video/Image) to the backend
+ */
+export const uploadAsset = async (file: File): Promise<{ success: boolean; url?: string; msg?: string }> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // api is your axios instance from '../utils/api'
+    const response = await api.post('/design/postuploadasset', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [DESIGN_SERVICE] Upload failed:', error);
+    return {
+      success: false,
+      msg: error.response?.data?.msg || 'Upload failed'
+    };
+  }
+};
 export const saveDesign = postsaveDesign;
