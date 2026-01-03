@@ -1,7 +1,7 @@
-// src/services/designService.ts
+
 import api from '../utils/api'; // ✅ Centralized API with Interceptors
 
-// --- Interfaces (Kept exactly as they were) ---
+// --- Interfaces ---
 export interface DesignMetadata {
   title: string;
   canvasWidth: number;
@@ -77,8 +77,6 @@ export const getAllDesigns = async (): Promise<GetDesignsResponse> => {
     const response = await api.get('/design/getalldesigns');
     return response.data;
   } catch (error: any) {
-    // We re-throw the error so the Component stops its loading spinner.
-    // The Global Modal will handle the UI if it's an Auth error.
     throw error;
   }
 };
@@ -87,8 +85,9 @@ export const getAllDesigns = async (): Promise<GetDesignsResponse> => {
  * Get a specific design by ID
  */
 export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> => {
+  if (!id) throw new Error("Design ID is required");
+
   try {
-    // Uses query parameter ?id=...
     const response = await api.get(`/design/getdesignbyid`, {
       params: { id }
     });
@@ -101,11 +100,6 @@ export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> 
 
 /**
  * Save a new design or update existing one
- * Backend verifies user identity via Cookie Token
- */
-
-/**
- * Save a new design or update existing one
  */
 export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
   try {
@@ -113,13 +107,9 @@ export const postsaveDesign = async (designData: SaveDesignRequest): Promise<Sav
     console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
     return response.data;
   } catch (error: any) {
-    // ✅ FIX: If it's a Auth error, DO NOT log it. 
-    // The global modal is about to appear, so we keep the console clean.
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       throw error;
     }
-
-    // Only log real errors (like 500 or Network Error)
     console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
     throw error;
   }
@@ -127,7 +117,6 @@ export const postsaveDesign = async (designData: SaveDesignRequest): Promise<Sav
 
 /**
  * Delete a design
- * Backend checks ownership via Cookie Token + Design ID
  */
 export const deleteDesign = async (id: string): Promise<DeleteDesignResponse> => {
   try {
@@ -152,50 +141,6 @@ export const exportDesignVideo = async (id: string): Promise<ExportVideoResponse
   }
 };
 
-// --- Helper Functions (Pure Logic, No API) ---
-
-/**
- * Helper function to convert local design format to backend format
- */
-export const convertLocalToBackend = (localDesign: any): SaveDesignRequest => {
-  return {
-    id: localDesign.id,
-    title: localDesign.metadata?.title || 'Untitled Design',
-    canvasData: localDesign.designJSON?.elements || localDesign.designJSON || [],
-    timelineData: localDesign.designJSON?.timeline || null,
-    userID: localDesign.metadata?.createdBy || undefined,
-  };
-};
-
-/**
- * Helper function to convert backend design format to local format
- */
-export const convertBackendToLocal = (backendDesign: DesignData): any => {
-  return {
-    id: backendDesign.id,
-    metadata: {
-      title: backendDesign.title,
-      canvasWidth: 1920,
-      canvasHeight: 1080,
-      canvasColor: '#ffffff',
-      createdAt: backendDesign.createdAt || new Date().toISOString(),
-      updatedAt: backendDesign.updatedAt || new Date().toISOString(),
-      createdBy: backendDesign.userId,
-      version: 1,
-    },
-    designJSON: {
-      elements: backendDesign.canvasData || [],
-      timeline: backendDesign.timelineData || null,
-      totalElements: Array.isArray(backendDesign.canvasData) ? backendDesign.canvasData.length : 0,
-      version: '1.0.0',
-    },
-  };
-};
-
-/**
- * Alias for backward compatibility
- */
-
 /**
  * Upload an asset (Video/Image) to the backend
  */
@@ -204,7 +149,6 @@ export const uploadAsset = async (file: File): Promise<{ success: boolean; url?:
     const formData = new FormData();
     formData.append('file', file);
 
-    // api is your axios instance from '../utils/api'
     const response = await api.post('/design/postuploadasset', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -220,4 +164,62 @@ export const uploadAsset = async (file: File): Promise<{ success: boolean; url?:
     };
   }
 };
+
+// --- Helper Functions ---
+
+/**
+ * Helper function to convert local design format to backend format
+ */
+export const convertLocalToBackend = (localDesign: any): SaveDesignRequest => {
+  return {
+    id: localDesign.id,
+    title: localDesign.metadata?.title || 'Untitled Design',
+    // We send elements directly, or inside a structure if your backend expects it.
+    // Usually, keeping metadata alongside elements in the JSON blob is safer for consistency.
+    canvasData: localDesign.designJSON?.elements || localDesign.designJSON || [],
+    timelineData: localDesign.designJSON?.timeline || null,
+    userID: localDesign.metadata?.createdBy || undefined,
+  };
+};
+
+/**
+ * Helper function to convert backend design format to local format
+ * ✅ UPDATED: Now dynamically reads Width/Height/Color from saved data
+ */
+export const convertBackendToLocal = (backendDesign: DesignData): any => {
+  if (!backendDesign) return null;
+
+  // 1. Check if metadata is nested inside canvasData (common pattern)
+  const savedMetadata = backendDesign.canvasData?.metadata || {};
+
+  // 2. Normalize Elements (handle if it's an array or an object)
+  const elementsArray = Array.isArray(backendDesign.canvasData)
+    ? backendDesign.canvasData
+    : (backendDesign.canvasData?.elements || []);
+
+  return {
+    id: backendDesign.id,
+    metadata: {
+      title: backendDesign.title || 'Untitled',
+      // ✅ Dynamic Dimensions (Fallback to 1920x1080 only if missing)
+      canvasWidth: Number(savedMetadata.canvasWidth) || 1920,
+      canvasHeight: Number(savedMetadata.canvasHeight) || 1080,
+      canvasColor: savedMetadata.canvasColor || '#ffffff',
+      createdAt: backendDesign.createdAt || new Date().toISOString(),
+      updatedAt: backendDesign.updatedAt || new Date().toISOString(),
+      createdBy: backendDesign.userId,
+      version: 1,
+    },
+    designJSON: {
+      elements: elementsArray,
+      timeline: backendDesign.timelineData || null,
+      totalElements: elementsArray.length,
+      version: '1.0.0',
+    },
+  };
+};
+
+/**
+ * Alias for backward compatibility
+ */
 export const saveDesign = postsaveDesign;

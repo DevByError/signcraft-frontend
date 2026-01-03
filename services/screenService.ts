@@ -210,3 +210,15 @@ export const deployToScreenViaBackend = async (screenId: string): Promise<{
     };
   }
 };
+
+import api from '../utils/api';
+
+export const getAllScreens = async () => {
+  try {
+    const response = await api.get('/screen/getallscreens'); // Adjust endpoint if needed
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching screens:", error);
+    return { success: false, data: [] };
+  }
+};

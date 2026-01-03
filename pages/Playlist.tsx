@@ -1,14 +1,12 @@
+// export default SchedulePlaylist;
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Edit2, Search, PlayCircle, AlertCircle, Copy, Clock, Image, RefreshCw } from 'lucide-react';
-import { 
+import { ArrowLeft, Plus, Trash2, Search, PlayCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import {
   getPlaylistsFromBackend,
   savePlaylistToBackend,
-  deletePlaylistFromBackend,
-  getUserPlaylists,
-  duplicatePlaylist
+  deletePlaylistFromBackend
 } from '../services/playlistService';
-import { listDesignLocals } from '../services/localDesignStore';
 import authService from '../services/authService';
 
 interface PlaylistItem {
@@ -29,453 +27,193 @@ const SchedulePlaylist: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isOnlineMode, setIsOnlineMode] = useState(false);
-  
-  const [playlists, setPlaylists] = useState<PlaylistItem[]>([]);
-  const [availableDesignCount, setAvailableDesignCount] = useState(0);
 
-  // Fetch playlists from backend with localStorage fallback
+  const [playlists, setPlaylists] = useState<PlaylistItem[]>([]);
+
   const fetchData = async (isRefresh = false) => {
+    if (isRefresh) setIsRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
     try {
-      if (isRefresh) {
-        setIsRefreshing(true);
+      const response = await getPlaylistsFromBackend();
+
+      if (response.success && response.data) {
+        const items = response.data.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || '',
+          itemCount: p.itemCount || 0,
+          totalDuration: p.totalDuration || 0,
+          lastModified: p.updatedAt
+        }));
+        setPlaylists(items);
       } else {
-        setLoading(true);
+        setError(response.msg || 'Failed to load playlists');
       }
-      setError(null);
-      console.log('📋 [PLAYLIST] Attempting to load from backend...');
-      
-      // Get current user
-      const currentUser = authService.getUser();
-      const currentUserId = currentUser?.id;
-      
-      if (!currentUserId) {
-        setError('User not authenticated');
-        setLoading(false);
-        return;
-      }
-      
-      // Try backend first
-      const backendResponse = await getPlaylistsFromBackend();
-      let playlistsData: any[] = [];
-      
-      if (backendResponse.success && backendResponse.data) {
-        console.log(`✅ [PLAYLIST] Loaded ${backendResponse.data.length} playlists from backend`);
-        // Filter by current user
-        playlistsData = backendResponse.data.filter((p: any) => p.userId === currentUserId);
-        setIsOnlineMode(true);
-      } else {
-        // Fallback to localStorage
-        console.log('⚠️ [PLAYLIST] Backend unavailable, using localStorage...');
-        playlistsData = await getUserPlaylists(100);
-        // Filter by current user
-        playlistsData = playlistsData.filter((p: any) => p.userId === currentUserId);
-        setIsOnlineMode(false);
-        if (!backendResponse.success) {
-          setError('Using local storage (backend unavailable)');
-        }
-      }
-      
-      // Fetch available designs count and filter by userId
-      const designs = await listDesignLocals();
-      const userDesigns = designs.filter((d: any) => d.userId === currentUserId || !d.userId);
-      setAvailableDesignCount(userDesigns.length);
-      console.log(`✅ [PLAYLIST] Found ${userDesigns.length} available designs for user`);
-      
-      // Convert backend data to UI format
-      const playlistItems: PlaylistItem[] = playlistsData.map(playlist => {
-        // Backend format has different structure
-        const itemCount = playlist.tblplaylistitems?.length || playlist.designReferences?.length || 0;
-        const totalDuration = playlist.totalDuration || 0;
-        
-        return {
-          id: playlist.id,
-          name: playlist.name,
-          itemCount,
-          totalDuration,
-          lastModified: playlist.updatedAt || new Date().toISOString(),
-          description: playlist.description || 'No description',
-        };
-      });
-      
-      setPlaylists(playlistItems);
-    } catch (err) {
-      console.error('❌ [PLAYLIST] Error fetching data:', err);
-      setError(`Failed to load playlists: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setPlaylists([]);
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const filteredPlaylists = playlists.filter(playlist =>
-    playlist.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleCreatePlaylist = async () => {
-    if (!newPlaylistName.trim()) {
-      alert('Please enter a playlist name');
-      return;
-    }
-    
+  const handleCreate = async () => {
+    if (!newPlaylistName.trim()) return;
     try {
-      console.log('📋 [PLAYLIST] Creating new playlist:', newPlaylistName);
-      
-      const currentUser = authService.getUser();
-      const currentUserId = currentUser?.id || 'guest-user-123';
-      const currentUserEmail = currentUser?.email || 'guest@signcraft.com';
-      
-      // Create playlist via backend
-      const backendResult = await savePlaylistToBackend({
+      const user = authService.getUser();
+      const res = await savePlaylistToBackend({
         name: newPlaylistName,
         description: newPlaylistDescription,
-        userID: currentUserId,
-        userId: currentUserId
+        userID: user?.id
       });
-      
-      if (backendResult.success && backendResult.data?.id) {
-        const playlistId = backendResult.data.id;
-        console.log('✅ [PLAYLIST] Created on backend:', playlistId);
-        
-        // Add new playlist to local state
-        const newPlaylist: PlaylistItem = {
-          id: playlistId,
-          name: newPlaylistName,
-          itemCount: 0,
-          totalDuration: 0,
-          lastModified: new Date().toISOString(),
-          description: newPlaylistDescription || 'No description',
-        };
-        
-        setPlaylists(prev => [newPlaylist, ...prev]);
-        setNewPlaylistName('');
-        setNewPlaylistDescription('');
-        setShowCreateForm(false);
-        setError(null);
-        
-        // Navigate to playlist editor to add designs
-        setTimeout(() => {
-          navigate(`/playlist/edit/${playlistId}`);
-        }, 300);
+
+      if (res.success && res.data) {
+        navigate(`/playlist/edit/${res.data.id}`);
       } else {
-        console.error('❌ [PLAYLIST] Backend create failed:', backendResult.msg);
-        setError(backendResult.msg || 'Failed to create playlist. Please ensure backend is running.');
+        alert('Failed to create: ' + res.msg);
       }
     } catch (err) {
-      console.error('❌ [PLAYLIST] Error creating playlist:', err);
-      setError(`Failed to create playlist: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error(err);
     }
   };
 
   const handleDelete = async (id: string) => {
-    const playlistName = playlists.find(p => p.id === id)?.name || 'this playlist';
-    
-    if (window.confirm(`Are you sure you want to delete "${playlistName}"? This action cannot be undone.`)) {
-      try {
-        console.log('🗑️ [PLAYLIST] Deleting playlist:', id);
-        
-        // Delete from backend only
-        const backendResult = await deletePlaylistFromBackend(id);
-        if (backendResult.success) {
-          setPlaylists(prev => prev.filter(p => p.id !== id));
-          console.log('✅ [PLAYLIST] Deleted successfully');
-        } else {
-          console.error('❌ [PLAYLIST] Failed to delete:', backendResult.msg);
-          setError(backendResult.msg || 'Failed to delete playlist');
-        }
-      } catch (err) {
-        console.error('❌ [PLAYLIST] Error deleting:', err);
-        setError('Failed to delete playlist');
-      }
-    }
-  };
-
-  const handleDuplicate = async (playlist: PlaylistItem) => {
+    if (!window.confirm('Delete this playlist?')) return;
     try {
-      console.log('📋 [PLAYLIST] Duplicating playlist:', playlist.id);
-      const result = await duplicatePlaylist(playlist.id);
-      
-      if (result.success && result.playlistId) {
-        // Add duplicated playlist to local state
-        const duplicated: PlaylistItem = {
-          ...playlist,
-          id: result.playlistId,
-          name: `${playlist.name} (Copy)`,
-          lastModified: new Date().toLocaleDateString(),
-        };
-        
-        setPlaylists(prev => [duplicated, ...prev]);
-        console.log('✅ [PLAYLIST] Duplicated successfully');
-      } else {
-        console.error('❌ [PLAYLIST] Failed to duplicate:', result.error);
-        setError(result.error || 'Failed to duplicate playlist');
-      }
-    } catch (err) {
-      console.error('❌ [PLAYLIST] Error duplicating:', err);
-      setError('Failed to duplicate playlist');
-    }
+      const res = await deletePlaylistFromBackend(id);
+      if (res.success) setPlaylists(prev => prev.filter(p => p.id !== id));
+    } catch (err) { console.error(err); }
   };
 
-  const handleEdit = (id: string) => {
-    navigate(`/playlist/edit/${id}`);
-  };
+  const filtered = playlists.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-primary hover:text-primaryLight mb-4 transition-colors font-semibold"
-          >
-            <ArrowLeft size={20} />
-            Back to Dashboard
+          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors">
+            <ArrowLeft size={20} /> Back to Dashboard
           </button>
-          
-          <div className="flex items-center justify-between">
+
+          <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Playlists</h1>
-              <p className="text-gray-600">
-                Create slideshows from your designs • {availableDesignCount} designs available
-                {isOnlineMode && <span className="text-green-600 ml-2">• Connected to backend</span>}
-                {!isOnlineMode && <span className="text-yellow-600 ml-2">• Offline mode</span>}
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900">Playlists</h1>
+              <p className="text-gray-500 mt-1">Manage your slideshows and schedules</p>
             </div>
-            
             <div className="flex gap-3">
-              <button
-                onClick={() => fetchData(true)}
-                disabled={isRefreshing}
-                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => fetchData(true)} className="p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-all">
                 <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </button>
-              <button
-                onClick={() => setShowCreateForm(!showCreateForm)}
-                className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-              >
-                <Plus size={20} />
-                New Slideshow
+              <button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 px-6 py-3 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">
+                <Plus size={20} /> New Playlist
               </button>
             </div>
           </div>
         </div>
 
-        {/* Info Banner */}
-        {!loading && playlists.length === 0 && !showCreateForm && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
-            <div className="flex items-start gap-3">
-              <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-blue-800 font-medium">Create Your Slideshow</p>
-                <p className="text-blue-700 text-sm mt-1">
-                  Playlists are slideshows of your designs. Create a playlist, select which designs to include, 
-                  set how long each design displays, and arrange them in your preferred order.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Create Playlist Form */}
+        {/* Create Form */}
         {showCreateForm && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border-2 border-primary/20">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Slideshow</h3>
+          <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-100 animate-slideDown">
+            <h3 className="font-bold text-lg mb-4 text-gray-800">Create New Playlist</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Slideshow Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., Morning Announcements, Product Showcase"
-                  value={newPlaylistName}
-                  onChange={(e) => setNewPlaylistName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleCreatePlaylist()}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description (optional)
-                </label>
-                <textarea
-                  placeholder="Describe this slideshow..."
-                  value={newPlaylistDescription}
-                  onChange={(e) => setNewPlaylistDescription(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-4">
-                <button
-                  onClick={handleCreatePlaylist}
-                  disabled={!newPlaylistName.trim()}
-                  className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create & Add Designs
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateForm(false);
-                    setNewPlaylistName('');
-                    setNewPlaylistDescription('');
-                  }}
-                  className="px-6 py-3 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
-                >
-                  Cancel
-                </button>
-              </div>
-              <p className="text-sm text-gray-600">
-                💡 After creating, you'll select designs to build your slideshow sequence.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Search */}
-        <div className="mb-8">
-          <div className="relative">
-            <Search size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search playlists..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Stats Bar */}
-        {!loading && !error && (
-          <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div>
-                  <p className="text-sm text-gray-600">Total Playlists</p>
-                  <p className="text-2xl font-bold text-primary">{playlists.length}</p>
-                </div>
-                <div className="h-10 w-px bg-gray-300"></div>
-                <div>
-                  <p className="text-sm text-gray-600">Available Designs</p>
-                  <p className="text-2xl font-bold text-gray-900">{availableDesignCount}</p>
-                </div>
-                {searchTerm && (
-                  <>
-                    <div className="h-10 w-px bg-gray-300"></div>
-                    <div>
-                      <p className="text-sm text-gray-600">Search Results</p>
-                      <p className="text-2xl font-bold text-gray-900">{filteredPlaylists.length}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-gray-600">Local Playlists</span>
+              <input
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition-all"
+                placeholder="Playlist Name"
+                value={newPlaylistName}
+                onChange={e => setNewPlaylistName(e.target.value)}
+                autoFocus
+              />
+              <input
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition-all"
+                placeholder="Description (Optional)"
+                value={newPlaylistDescription}
+                onChange={e => setNewPlaylistDescription(e.target.value)}
+              />
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleCreate} disabled={!newPlaylistName.trim()} className="px-6 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 font-medium transition-all disabled:opacity-50">Create</button>
+                <button onClick={() => setShowCreateForm(false)} className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-all">Cancel</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Playlists Display */}
-        {loading ? (
-          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Loading Playlists</h3>
-            <p className="text-gray-600">Loading your playlists from local storage...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-white rounded-xl shadow-lg p-16 text-center border-2 border-red-200">
-            <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Error Loading Playlists</h3>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-            >
-              Retry
+        {/* Empty State */}
+        {!loading && filtered.length === 0 && !showCreateForm && (
+          <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
+            <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <PlayCircle className="text-blue-500" size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">No Playlists Yet</h3>
+            <p className="text-gray-500 mt-1">Create your first playlist to start scheduling content.</p>
+            <button onClick={() => setShowCreateForm(true)} className="mt-6 text-blue-600 font-medium hover:underline">
+              Create one now
             </button>
           </div>
-        ) : filteredPlaylists.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-lg p-16 text-center">
-            <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">
-              {playlists.length === 0 ? 'No Playlists Yet' : 'No Match Found'}
-            </h3>
-            <p className="text-gray-600 mb-6">
-              {playlists.length === 0
-                ? 'Create your first slideshow to organize your designs'
-                : 'Try a different search term'}
-            </p>
-            {playlists.length === 0 && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors font-semibold"
-              >
-                Create First Playlist
-              </button>
-            )}
+        )}
+
+        {/* Grid List */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-48 bg-gray-200 rounded-xl animate-pulse"></div>
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlaylists.map(playlist => (
-              <div key={playlist.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                <div className="bg-gradient-to-r from-primary to-primaryLight p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <PlayCircle size={40} className="text-white" />
-                    <div className="text-right">
-                      <p className="text-3xl font-bold text-white">{playlist.itemCount}</p>
-                      <p className="text-white/80 text-sm">items</p>
+            {filtered.map(p => (
+              <div key={p.id} className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-50 p-3 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                        <PlayCircle className="text-blue-600" size={24} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900 leading-tight">{p.name}</h3>
+                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium">{p.itemCount} Items</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{playlist.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4">{playlist.description || 'No description'}</p>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 mb-6 pb-6 border-b border-gray-200">
-                    <p>Duration: <span className="font-semibold text-gray-900">{Math.floor(playlist.totalDuration / 60)}m {playlist.totalDuration % 60}s</span></p>
-                    <p>Modified: <span className="font-semibold text-gray-900">{new Date(playlist.lastModified).toLocaleDateString()}</span></p>
+
+                  <p className="text-gray-500 text-sm mb-6 line-clamp-2 min-h-[2.5em]">
+                    {p.description || 'No description provided.'}
+                  </p>
+
+                  <div className="flex items-center gap-4 text-xs text-gray-400 mb-6 pb-6 border-b border-gray-100">
+                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded">
+                      <Clock size={12} />
+                      {Math.floor(p.totalDuration / 60)}m {p.totalDuration % 60}s
+                    </span>
+                    <span>{new Date(p.lastModified).toLocaleDateString()}</span>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => navigate(`/playlist/preview/${playlist.id}`)}
-                      className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primaryLight transition-colors text-sm font-semibold flex items-center justify-center gap-2"
+                  {/* ✅ UPDATED BUTTONS: Modify (Blue) & Preview (Gray) */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/playlist/edit/${p.id}`)}
+                      className="flex-1 bg-[#1e293b] text-white py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                     >
-                      <PlayCircle size={18} />
+                      Modify
+                    </button>
+
+                    <button
+                      onClick={() => window.open(`/#/playlist/preview/${p.id}`, '_blank')}
+                      className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                    >
                       Preview
                     </button>
+
                     <button
-                      onClick={() => handleEdit(playlist.id)}
-                      className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
-                      title="Edit Slideshow"
-                    >
-                      <Edit2 size={18} />
-                      <span className="text-xs font-semibold hidden sm:inline">Edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDuplicate(playlist)}
-                      className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors"
-                      title="Duplicate"
-                    >
-                      <Copy size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(playlist.id)}
-                      className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                      title="Delete"
+                      onClick={() => handleDelete(p.id)}
+                      className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete Playlist"
                     >
                       <Trash2 size={18} />
                     </button>

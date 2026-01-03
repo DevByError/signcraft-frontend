@@ -7,7 +7,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // const { user, logout } = useAuth(); // Authentication removed
   const user = { name: 'Guest Designer', email: 'guest@signcraft.com' };
-  const logout = () => {};
+  const logout = () => { };
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -69,11 +69,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <Link
                       key={link.path}
                       to={link.path}
-                      className={`inline-flex items-center px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-                        location.pathname === link.path
+                      className={`inline-flex items-center px-3 py-2 text-sm font-medium border-b-2 transition-colors ${location.pathname === link.path
                           ? 'border-vanilla text-white'
                           : 'border-transparent text-gray-300 hover:text-white hover:border-gray-400'
-                      }`}
+                        }`}
                     >
                       {link.label}
                     </Link>
@@ -83,18 +82,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <div className="hidden md:flex items-center space-x-4">
                 {user ? (
                   <>
-                    <Link 
-                      to="/dashboard" 
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        location.pathname === '/dashboard'
+                    <Link
+                      to="/dashboard"
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${location.pathname === '/dashboard'
                           ? 'bg-primaryLight text-white'
                           : 'text-gray-300 hover:text-white hover:bg-primaryLight'
-                      }`}
+                        }`}
                     >
                       Dashboard
                     </Link>
-                    <Link 
-                      to="/editor" 
+                    <Link
+                      to="/editor"
                       className="bg-vanilla text-primary hover:bg-yellow-100 px-4 py-2 rounded-md text-sm font-bold transition-colors shadow-sm"
                     >
                       New Design
@@ -113,14 +111,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   </>
                 ) : (
                   <>
-                    <Link 
-                      to="/login" 
+                    <Link
+                      to="/login"
                       className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
                     >
                       Login
                     </Link>
-                    <Link 
-                      to="/editor" 
+                    <Link
+                      to="/editor"
                       className="bg-vanilla text-primary hover:bg-yellow-100 px-4 py-2 rounded-md text-sm font-bold transition-colors shadow-sm"
                     >
                       New Design
@@ -149,11 +147,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     key={link.path}
                     to={link.path}
                     onClick={() => setIsMenuOpen(false)}
-                    className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${
-                      location.pathname === link.path
+                    className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${location.pathname === link.path
                         ? 'border-vanilla bg-primaryLight text-white'
                         : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
-                    }`}
+                      }`}
                   >
                     {link.label}
                   </Link>
@@ -163,11 +160,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <Link
                       to="/dashboard"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${
-                        location.pathname === '/dashboard'
+                      className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${location.pathname === '/dashboard'
                           ? 'border-vanilla bg-primaryLight text-white'
                           : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
-                      }`}
+                        }`}
                     >
                       Dashboard
                     </Link>
@@ -229,8 +225,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div className="col-span-1 md:col-span-1">
                 <div className="flex items-center gap-2 mb-4">
-                   <img src="/sc.png" alt="SignCraft" className="h-6 w-6" />
-                   <span className="font-bold text-xl">SignCraft</span>
+                  <img src="/sc.png" alt="SignCraft" className="h-6 w-6" />
+                  <span className="font-bold text-xl">SignCraft</span>
                 </div>
                 <p className="text-gray-400 text-sm">
                   Empowering businesses to communicate effectively through digital displays.
@@ -254,10 +250,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </ul>
               </div>
               <div>
-                 <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase mb-4">Start Creating</h3>
-                 <Link to="/editor" className="block w-full text-center bg-vanilla text-primary hover:bg-yellow-100 font-bold py-2 px-4 rounded transition-colors">
-                    New Project
-                 </Link>
+                <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase mb-4">Start Creating</h3>
+                <Link to="/editor" className="block w-full text-center bg-vanilla text-primary hover:bg-yellow-100 font-bold py-2 px-4 rounded transition-colors">
+                  New Project
+                </Link>
               </div>
             </div>
             <div className="mt-8 border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
