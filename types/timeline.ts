@@ -34,6 +34,8 @@ export interface TimelineItem {
   /** CapCut-style animations (clip-local time, keyframe-based) */
   animations?: Animation[];
   /** Visual properties snapshot */
+  // new one 
+
   properties?: {
     x?: number;
     y?: number;
@@ -60,6 +62,8 @@ export interface TimelineItem {
     fadeOut?: number; // Fade out duration in ms
     type?: 'fade' | 'slide' | 'zoom' | 'none';
   };
+  // new one
+  initialState?: any;
 }
 
 export interface TimelineTrack {
@@ -128,26 +132,26 @@ export interface TimelineConfig {
 // ==================== Timeline Actions ====================
 
 export interface TimelineAction {
-  type: 
-    | 'ADD_ITEM'
-    | 'REMOVE_ITEM'
-    | 'UPDATE_ITEM'
-    | 'MOVE_ITEM'
-    | 'RESIZE_ITEM'
-    | 'ADD_TRACK'
-    | 'REMOVE_TRACK'
-    | 'REORDER_TRACK'
-    | 'TOGGLE_TRACK_VISIBILITY'
-    | 'TOGGLE_TRACK_LOCK'
-    | 'UPDATE_PLAYBACK_POSITION'
-    | 'PLAY'
-    | 'PAUSE'
-    | 'STOP'
-    | 'SEEK'
-    | 'SET_LOOP'
-    | 'SET_SPEED'
-    | 'SET_ZOOM'
-    | 'SET_SNAP';
+  type:
+  | 'ADD_ITEM'
+  | 'REMOVE_ITEM'
+  | 'UPDATE_ITEM'
+  | 'MOVE_ITEM'
+  | 'RESIZE_ITEM'
+  | 'ADD_TRACK'
+  | 'REMOVE_TRACK'
+  | 'REORDER_TRACK'
+  | 'TOGGLE_TRACK_VISIBILITY'
+  | 'TOGGLE_TRACK_LOCK'
+  | 'UPDATE_PLAYBACK_POSITION'
+  | 'PLAY'
+  | 'PAUSE'
+  | 'STOP'
+  | 'SEEK'
+  | 'SET_LOOP'
+  | 'SET_SPEED'
+  | 'SET_ZOOM'
+  | 'SET_SNAP';
   payload?: any;
 }
 
@@ -155,11 +159,11 @@ export interface TimelineAction {
 
 export interface LayerAction {
   type:
-    | 'BRING_TO_FRONT'
-    | 'SEND_TO_BACK'
-    | 'BRING_FORWARD'
-    | 'SEND_BACKWARD'
-    | 'SET_LAYER_ORDER';
+  | 'BRING_TO_FRONT'
+  | 'SEND_TO_BACK'
+  | 'BRING_FORWARD'
+  | 'SEND_BACKWARD'
+  | 'SET_LAYER_ORDER';
   elementId: string;
   targetLayer?: number;
 }
@@ -203,16 +207,16 @@ export interface TimelineMarker {
 // ==================== Timeline Events ====================
 
 export interface TimelineEvent {
-  type: 
-    | 'itemAdded'
-    | 'itemRemoved'
-    | 'itemMoved'
-    | 'itemResized'
-    | 'playbackStarted'
-    | 'playbackPaused'
-    | 'playbackStopped'
-    | 'timeUpdated'
-    | 'durationChanged';
+  type:
+  | 'itemAdded'
+  | 'itemRemoved'
+  | 'itemMoved'
+  | 'itemResized'
+  | 'playbackStarted'
+  | 'playbackPaused'
+  | 'playbackStopped'
+  | 'timeUpdated'
+  | 'durationChanged';
   timestamp: number;
   data?: any;
 }

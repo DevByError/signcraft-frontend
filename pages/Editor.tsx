@@ -947,21 +947,47 @@ const Editor: React.FC = () => {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          addElement(ElementType.IMAGE, 100, 100, undefined, event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      // 1. Create a URL for the file
+      const objectUrl = URL.createObjectURL(file);
+
+      // 2. Check if it's a Video to get duration
+      if (file.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.src = objectUrl;
+
+        video.onloadedmetadata = () => {
+          window.URL.revokeObjectURL(objectUrl);
+          // 3. Add Element with ACTUAL duration (video.duration is in seconds, * 1000 for ms)
+          const actualDuration = video.duration * 1000;
+
+          // Pass this duration to a modified addElement function
+          addElement(ElementType.VIDEO, 100, 100, undefined, objectUrl, actualDuration);
+        };
+      } else {
+        // It's an image
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            addElement(ElementType.IMAGE, 100, 100, undefined, event.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
-    // Reset the input value so the same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const addElement = (type: ElementType, x: number = 100, y: number = 100, customFontSize?: number, customContent?: string) => {
+  const addElement = (
+    type: ElementType,
+    x: number = 100,
+    y: number = 100,
+    customFontSize?: number,
+    customContent?: string,
+    customDuration?: number // <--- NEW ARGUMENT
+  ) => {
     const isShape = [
       ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR,
       ElementType.HEART, ElementType.LINE, ElementType.PENTAGON, ElementType.HEXAGON,
@@ -1080,9 +1106,15 @@ const Editor: React.FC = () => {
       visible: true,
       locked: false,
       animation: undefined,
-      animationDuration: 1, // Default duration in seconds
-      animationSpeed: 1, // Default speed multiplier
-      widgetSettings: initWidgetSettings(),
+      animationDuration: 1, // Animation speed (fade in etc)
+      animationSpeed: 1,
+
+      // ✅ UPDATE: Store the actual video/element duration here
+      widgetSettings: {
+        ...initWidgetSettings(),
+        duration: customDuration || 5000 // Uses actual video length, or defaults to 5s
+      },
+
       textStyle: isTextBased || type === ElementType.CLOCK || type === ElementType.TIMER ? {
         textAlign: 'center',
         bold: type === ElementType.LABEL || type === ElementType.CLOCK,
@@ -2022,109 +2054,126 @@ const Editor: React.FC = () => {
   };
 
   // Load design from backend or local store if designId is provided
+  // Load design from backend or local store if designId is provided
   useEffect(() => {
     if (designId) {
       const loadDesign = async () => {
         try {
           console.log('Loading design:', designId);
 
-          // Try to load from backend first
           const backendResult = await getDesignById(designId);
           let design = null;
 
           if (backendResult.success && backendResult.data) {
-            console.log('Design loaded from backend:', backendResult.data);
+            console.log('✅ Design loaded from backend');
             design = convertBackendToLocal(backendResult.data);
           } else {
-            console.error('Failed to load design from backend:', backendResult.msg);
+            console.error('Failed to load design:', backendResult.msg);
             return;
           }
 
           if (design) {
-            console.log('Design loaded:', design);
             setDesignTitle(design.metadata.title);
-            setCanvasSize({ width: design.metadata.canvasWidth, height: design.metadata.canvasHeight });
-            setCanvasColor(design.metadata.canvasColor);
 
-            // Map the design elements to CanvasElement format
-            const loadedElements = design.designJSON.elements.map((el: any) => ({
-              id: el.id,
-              type: el.type as ElementType,
-              content: el.content,
-              x: el.x,
-              y: el.y,
-              width: el.width,
-              height: el.height,
-              fontSize: el.fontSize,
+            // --- 1. Robust Size Loading ---
+            // Check metadata first, then the canvasData wrapper we made in handleSaveDesign
+            const savedCanvasData = design.designJSON.elements || design.designJSON.canvasData;
+
+            let loadedWidth = Number(design.metadata.canvasWidth);
+            let loadedHeight = Number(design.metadata.canvasHeight);
+
+            // If we saved it as an object { width, height, elements }, extract it here
+            if (!Array.isArray(savedCanvasData) && savedCanvasData?.width) {
+              loadedWidth = Number(savedCanvasData.width);
+              loadedHeight = Number(savedCanvasData.height);
+            }
+
+            setCanvasSize({
+              width: loadedWidth || 1920,
+              height: loadedHeight || 1080
+            });
+
+            setCanvasColor(design.metadata.canvasColor || '#ffffff');
+
+            // --- 2. Extract Elements ---
+            const rawElements = Array.isArray(savedCanvasData)
+              ? savedCanvasData
+              : (savedCanvasData?.elements || []);
+
+            const loadedElements = rawElements.map((el: any) => ({
+              id: el.id || Math.random().toString(36).substr(2, 9),
+              type: el.type || 'text',
+              content: el.content || '',
+              x: Number(el.x) || 0,
+              y: Number(el.y) || 0,
+              width: Number(el.width) || 200,
+              height: Number(el.height) || 100,
+              fontSize: Number(el.fontSize) || 24,
               color: el.color,
               backgroundColor: el.backgroundColor,
               fillColor: el.fillColor,
               strokeColor: el.strokeColor,
-              strokeWidth: el.strokeWidth,
-              borderRadius: el.borderRadius,
-              opacity: el.opacity,
-              rotation: el.rotation,
-              zIndex: el.zIndex,
-              locked: el.locked,
-              visible: el.visible,
-              textStyle: el.textStyle,
-              widgetSettings: el.widgetSettings,
+              strokeWidth: Number(el.strokeWidth) || 0,
+              borderRadius: Number(el.borderRadius) || 0,
+              opacity: el.opacity !== undefined ? Number(el.opacity) : 1,
+              rotation: Number(el.rotation) || 0,
+              zIndex: Number(el.zIndex) || 1,
+              locked: Boolean(el.locked),
+              visible: true, // Force visible
+              textStyle: el.textStyle || {},
+              widgetSettings: el.widgetSettings || {},
               animation: el.animation,
               animationDuration: el.animationDuration,
               animationSpeed: el.animationSpeed,
-              shadow: el.shadow,
-              radius: el.radius,
             } as CanvasElement));
 
             setElements(loadedElements);
             setHistory([loadedElements]);
             setHistoryIndex(0);
 
-            // Restore timeline data if it exists
+            // --- 3. Restore Timeline ---
             if (design.designJSON.timeline) {
-              console.log('Restoring timeline data:', design.designJSON.timeline);
-              // Convert backend timeline format back to timeline state
               const restoredTimeline = design.designJSON.timeline;
-              if (restoredTimeline.tracks && Array.isArray(restoredTimeline.tracks)) {
-                const newTimeline: any = {
-                  id: restoredTimeline.id || `timeline-${Date.now()}`,
-                  designId: designId,
-                  fps: restoredTimeline.fps || 30,
-                  tracks: restoredTimeline.tracks.map((track: any) => ({
-                    id: track.id,
-                    name: track.name,
-                    type: track.type,
-                    items: (track.items || []).map((item: any) => ({
-                      id: item.id,
-                      elementId: item.elementId,
-                      startTime: item.startTime,
-                      duration: item.duration,
-                      inPoint: item.inPoint || 0,
-                      outPoint: item.outPoint || item.duration,
-                      layer: item.layer,
-                      properties: item.properties || {},
-                      animations: item.animations || [],
-                    })),
+
+              const newTimeline: any = {
+                id: restoredTimeline.id || `timeline-${Date.now()}`,
+                designId: designId,
+                fps: Number(restoredTimeline.fps) || 30,
+                tracks: (restoredTimeline.tracks || []).map((track: any) => ({
+                  id: track.id,
+                  name: track.name,
+                  type: track.type,
+                  items: (track.items || []).map((item: any) => ({
+                    id: item.id,
+                    elementId: item.elementId,
+                    startTime: Number(item.startTime) || 0,
+                    duration: Number(item.duration) || 5000,
+                    inPoint: Number(item.inPoint) || 0,
+                    outPoint: Number(item.outPoint) || (Number(item.duration) || 5000),
+                    layer: Number(item.layer) || 0,
+                    properties: item.properties || {},
+                    animations: item.animations || [],
                   })),
-                  totalDuration: restoredTimeline.totalDuration || 0,
-                  currentTime: 0,
-                  isPlaying: false,
-                  loop: false,
-                  playbackSpeed: 1.0,
-                  snapInterval: 100,
-                  zoom: 1,
-                };
-                updateTimeline(newTimeline);
-              }
+                })),
+                totalDuration: Number(restoredTimeline.totalDuration) || 5000,
+                currentTime: 0,
+                isPlaying: false,
+                loop: false,
+                playbackSpeed: 1.0,
+                snapInterval: 100,
+                // ✅ FIX: Restore saved zoom, or default to 10 (Close up view)
+                // Never use '1' as default, that causes the "3 hour" view.
+                zoom: Number(restoredTimeline.zoom) || 10,
+              };
+
+              updateTimeline(newTimeline);
+            } else {
+              // Default sync if no timeline
+              setTimeout(() => syncElementsToTimeline(), 100);
             }
-          } else {
-            console.error('Design not found:', designId);
           }
         } catch (error: any) {
-          // ✅ IGNORE 401/403 Errors - The Global Modal will handle them
-          if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-            return;
-          }
+          if (error.response && (error.response.status === 401 || error.response.status === 403)) return;
           console.error('Failed to load design:', error);
         }
       };
@@ -2164,19 +2213,59 @@ const Editor: React.FC = () => {
 
   // Timeline: Apply property playback - show/hide elements based on timeline position
   useEffect(() => {
-    // Only apply if we have timeline items
-    const hasTimelineItems = timeline.tracks.some(t => t.items.length > 0);
+    // 1. Get all timeline items
+    const allTimelineItems = timeline.tracks.flatMap(t => t.items);
 
-    if (hasTimelineItems) {
-      // Apply timeline playback (hybrid mode handles visibility automatically)
-      const updatedElements = propertyPlaybackService.applyTimelineToElements(elements as any, timeline);
-      setElements(updatedElements as any);
-    } else if (elements.length > 0) {
-      // Ensure all elements are visible when no timeline items yet
-      const visibleElements = elements.map(el => ({ ...el, visible: true }));
-      setElements(visibleElements);
+    // 2. If no timeline items exist yet, make sure everything is visible
+    if (allTimelineItems.length === 0) {
+      const allVisible = elements.every(el => el.visible);
+      if (!allVisible) {
+        setElements(prev => prev.map(el => ({ ...el, visible: true })));
+      }
+      return;
     }
-  }, [timeline.currentTime, timeline.isPlaying, timeline.tracks.flatMap(t => t.items).length]);
+
+    // 3. Calculate visibility for each element based on current time
+    let hasChanges = false;
+    const updatedElements = elements.map(el => {
+      // Find the timeline item corresponding to this element
+      const item = allTimelineItems.find(i => i.elementId === el.id);
+
+      // Rule 1: If element is NOT in timeline, keep it visible (Safety Fallback)
+      if (!item) {
+        if (el.visible === false) {
+          hasChanges = true;
+          return { ...el, visible: true };
+        }
+        return el;
+      }
+
+      // Rule 2: If element IS in timeline, check if Current Time is inside its range
+      const startTime = item.startTime || 0;
+      const duration = item.duration || 5000;
+      const endTime = startTime + duration;
+
+      const shouldBeVisible = timeline.currentTime >= startTime && timeline.currentTime < endTime;
+
+      // Only update state if visibility actually changes (prevents lag)
+      if (el.visible !== shouldBeVisible) {
+        hasChanges = true;
+        // Also apply interpolated properties if visible (optional, uses playback service)
+        if (shouldBeVisible) {
+          // If you have propertyPlaybackService working, use it here, otherwise just toggle visible
+          return { ...el, visible: true };
+        } else {
+          return { ...el, visible: false };
+        }
+      }
+
+      return el;
+    });
+
+    if (hasChanges) {
+      setElements(updatedElements);
+    }
+  }, [timeline.currentTime, timeline.tracks, elements.length]);
 
   // Timeline handlers
   const handleTimelineItemSelect = (itemId: string) => {

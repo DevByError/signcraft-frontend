@@ -32,11 +32,8 @@ const ScheduleCreative: React.FC = () => {
 
       console.log('🎨 [CREATIVE] Attempting to load designs from backend...');
 
-      // ✅ Call service (which uses api.ts interceptors)
       const response = await getAllDesigns();
 
-      // Check success
-      // Note: response.data is the array of designs based on your Service definition
       const designsArray = Array.isArray(response.data) ? response.data : [];
 
       if (!response.success && designsArray.length === 0) {
@@ -46,9 +43,53 @@ const ScheduleCreative: React.FC = () => {
 
       // Convert backend designs to Creative objects
       const convertedCreatives: Creative[] = designsArray.slice(0, 100).map((design: any) => {
-        const numElements = design.canvasData?.elements?.length || 0;
+
+        // --- 1. SAFE PARSING ---
+        // Sequelize sometimes returns JSON fields as strings. Parse them if needed.
+        let parsedCanvas = design.canvasData;
+        let parsedTimeline = design.timelineData;
+
+        if (typeof parsedCanvas === 'string') {
+          try { parsedCanvas = JSON.parse(parsedCanvas); } catch (e) { parsedCanvas = []; }
+        }
+        if (typeof parsedTimeline === 'string') {
+          try { parsedTimeline = JSON.parse(parsedTimeline); } catch (e) { parsedTimeline = {}; }
+        }
+
+        // --- 2. CALCULATE RESOLUTION ---
+        // Priority: 1. videoSize column, 2. metadata inside canvas, 3. Default 1920x1080
+        let sizeString = "1920x1080"; // Default
+
+        if (design.videoSize && design.videoSize !== "NULL") {
+          sizeString = design.videoSize;
+        } else if (parsedCanvas && !Array.isArray(parsedCanvas) && parsedCanvas.width) {
+          // If canvasData was saved as an object { width, height, elements }
+          sizeString = `${parsedCanvas.width}x${parsedCanvas.height}`;
+        }
+
+        // --- 3. CALCULATE DURATION ---
+        // Priority: 1. timelineData.totalDuration, 2. Default 5s
+        let durationSec = 5;
+
+        if (parsedTimeline && parsedTimeline.totalDuration) {
+          // Database stores milliseconds (e.g. 15000), convert to seconds (15)
+          durationSec = Math.round(Number(parsedTimeline.totalDuration) / 1000);
+        } else if (parsedTimeline && parsedTimeline.tracks) {
+          // Fallback: Calculate from tracks if totalDuration is missing
+          // (Find the end time of the last item)
+          let maxTime = 5000;
+          parsedTimeline.tracks.forEach((t: any) => {
+            t.items?.forEach((i: any) => {
+              const end = (i.startTime || 0) + (i.duration || 0);
+              if (end > maxTime) maxTime = end;
+            });
+          });
+          durationSec = Math.round(maxTime / 1000);
+        }
+
+        // --- 4. THUMBNAIL LOGIC ---
+        const numElements = Array.isArray(parsedCanvas) ? parsedCanvas.length : (parsedCanvas?.elements?.length || 0);
         const colors = ['#4ECDC4', '#FF6B6B', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3'];
-        // Safe charCode check
         const charCode = design.id && typeof design.id === 'string' ? design.id.charCodeAt(0) : 0;
         const colorIndex = charCode % colors.length;
         const thumbnailColor = colors[colorIndex];
@@ -58,8 +99,8 @@ const ScheduleCreative: React.FC = () => {
           name: design.title || 'Untitled Design',
           thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${numElements} elements%3C/text%3E%3C/svg%3E`,
           createdDate: design.createdAt || new Date().toISOString(),
-          duration: numElements * 5,
-          size: design.videoSize || `${design.canvasData?.width || 0}x${design.canvasData?.height || 0}`,
+          duration: durationSec, // ✅ Uses real timeline duration
+          size: sizeString,      // ✅ Uses safe resolution logic
         };
       });
 
@@ -67,15 +108,11 @@ const ScheduleCreative: React.FC = () => {
       setLastUpdated(new Date());
 
     } catch (err: any) {
-      // ✅ VITAL: Ignore 401/403 errors
-      // The Global Interceptor (api.ts) handles these by showing the Modal.
-      // We return early so we don't show the "Failed to load" error text behind the modal.
       if (err.response && (err.response.status === 401 || err.response.status === 403)) {
         setLoading(false);
         setIsRefreshing(false);
         return;
       }
-
       console.error('❌ [CREATIVE] Error loading designs:', err);
       setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {

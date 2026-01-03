@@ -68,7 +68,7 @@ export enum ElementType {
  * Union type that accepts both ElementType enum values and string literals matching enum values.
  * This allows flexibility in how element types are specified throughout the codebase.
  */
-export type ElementTypeValue = ElementType | 
+export type ElementTypeValue = ElementType |
   'text' | 'image' | 'slideshow' | 'ticker' | 'rss' | 'weather' |
   'video' | 'gif' | 'media_rss' | 'youtube' | 'ustream' | 'ftp' | 'instagram' | 'streaming' |
   'label' | 'clock' | 'timer' | 'shape' | 'touch' | 'weather_2' |
@@ -106,6 +106,8 @@ export interface WidgetSettings {
   fitMode?: string;
   videoUrl?: string;
   embedCode?: string;
+  duration?: number;
+
 
   // Slideshow
   transitionDuration?: number;
@@ -141,14 +143,14 @@ export interface WidgetSettings {
   direction?: string;
   pauseOnHover?: boolean;
   showImages?: boolean;
-  
+
   // Calendar
   calendarSource?: 'google' | 'outlook' | 'ical';
   calendarUrl?: string;
   viewMode?: 'monthly' | 'weekly' | 'agenda';
   colorScheme?: string;
   showWeekends?: boolean;
-  
+
   // Table
   rows?: number;
   columns?: number;
