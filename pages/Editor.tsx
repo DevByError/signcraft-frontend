@@ -1996,11 +1996,17 @@ const Editor: React.FC = () => {
       const payload = {
         id: designId || undefined,
         title: data.title,
-        canvasData: elementsWithDefaults,
+        // ✅ Wrap elements and metadata together
+        canvasData: {
+          elements: elementsWithDefaults,
+          metadata: {
+            canvasWidth: canvasSize.width,
+            canvasHeight: canvasSize.height,
+            canvasColor: canvasColor
+          }
+        },
         timelineData: timelineVideoData,
-        // Backend extracts user ID from cookie
       };
-
       console.log(designId ? '🔄 Updating...' : '💾 Creating...');
 
       // ✅ Use renamed API import
@@ -2356,6 +2362,7 @@ const Editor: React.FC = () => {
 
   // Load design from backend or local store if designId is provided
   // Load design from backend or local store if designId is provided
+  // Load design from backend
   useEffect(() => {
     if (designId) {
       const loadDesign = async () => {
@@ -2363,114 +2370,98 @@ const Editor: React.FC = () => {
           console.log('Loading design:', designId);
 
           const backendResult = await getDesignById(designId);
-          let design = null;
 
           if (backendResult.success && backendResult.data) {
             console.log('✅ Design loaded from backend');
-            design = convertBackendToLocal(backendResult.data);
-          } else {
-            console.error('Failed to load design:', backendResult.msg);
-            return;
-          }
 
-          if (design) {
-            setDesignTitle(design.metadata.title);
+            // This service handles the structural normalization
+            const design = convertBackendToLocal(backendResult.data);
 
-            // --- 1. Robust Size Loading ---
-            // Check metadata first, then the canvasData wrapper we made in handleSaveDesign
-            const savedCanvasData = design.designJSON.elements || design.designJSON.canvasData;
+            if (design) {
+              // 1. Set Metadata & Title
+              setDesignTitle(design.metadata.title);
+              setCanvasColor(design.metadata.canvasColor || '#ffffff');
 
-            let loadedWidth = Number(design.metadata.canvasWidth);
-            let loadedHeight = Number(design.metadata.canvasHeight);
+              // 2. Set Canvas Size (FIX: Pull directly from the mapped metadata)
+              const loadedWidth = Number(design.metadata.canvasWidth);
+              const loadedHeight = Number(design.metadata.canvasHeight);
 
-            // If we saved it as an object { width, height, elements }, extract it here
-            if (!Array.isArray(savedCanvasData) && savedCanvasData?.width) {
-              loadedWidth = Number(savedCanvasData.width);
-              loadedHeight = Number(savedCanvasData.height);
-            }
+              setCanvasSize({
+                width: loadedWidth || 1920,
+                height: loadedHeight || 1080
+              });
 
-            setCanvasSize({
-              width: loadedWidth || 1920,
-              height: loadedHeight || 1080
-            });
+              // 3. Extract & Process Elements
+              const rawElements = design.designJSON.elements || [];
+              const processedElements = rawElements.map((el: any) => ({
+                id: el.id || Math.random().toString(36).substr(2, 9),
+                type: el.type || 'text',
+                content: el.content || '',
+                x: Number(el.x) || 0,
+                y: Number(el.y) || 0,
+                width: Number(el.width) || 200,
+                height: Number(el.height) || 100,
+                fontSize: Number(el.fontSize) || 24,
+                color: el.color,
+                backgroundColor: el.backgroundColor,
+                fillColor: el.fillColor,
+                strokeColor: el.strokeColor,
+                strokeWidth: Number(el.strokeWidth) || 0,
+                borderRadius: Number(el.borderRadius) || 0,
+                opacity: el.opacity !== undefined ? Number(el.opacity) : 1,
+                rotation: Number(el.rotation) || 0,
+                zIndex: Number(el.zIndex) || 1,
+                locked: Boolean(el.locked),
+                visible: true,
+                textStyle: el.textStyle || {},
+                widgetSettings: el.widgetSettings || {},
+                animation: el.animation,
+                animationDuration: el.animationDuration,
+                animationSpeed: el.animationSpeed,
+              } as CanvasElement));
 
-            setCanvasColor(design.metadata.canvasColor || '#ffffff');
+              setElements(processedElements);
+              setHistory([processedElements]);
+              setHistoryIndex(0);
 
-            // --- 2. Extract Elements ---
-            const rawElements = Array.isArray(savedCanvasData)
-              ? savedCanvasData
-              : (savedCanvasData?.elements || []);
+              // 4. Restore Timeline
+              if (design.designJSON.timeline) {
+                const restoredTimeline = design.designJSON.timeline;
 
-            const loadedElements = rawElements.map((el: any) => ({
-              id: el.id || Math.random().toString(36).substr(2, 9),
-              type: el.type || 'text',
-              content: el.content || '',
-              x: Number(el.x) || 0,
-              y: Number(el.y) || 0,
-              width: Number(el.width) || 200,
-              height: Number(el.height) || 100,
-              fontSize: Number(el.fontSize) || 24,
-              color: el.color,
-              backgroundColor: el.backgroundColor,
-              fillColor: el.fillColor,
-              strokeColor: el.strokeColor,
-              strokeWidth: Number(el.strokeWidth) || 0,
-              borderRadius: Number(el.borderRadius) || 0,
-              opacity: el.opacity !== undefined ? Number(el.opacity) : 1,
-              rotation: Number(el.rotation) || 0,
-              zIndex: Number(el.zIndex) || 1,
-              locked: Boolean(el.locked),
-              visible: true, // Force visible
-              textStyle: el.textStyle || {},
-              widgetSettings: el.widgetSettings || {},
-              animation: el.animation,
-              animationDuration: el.animationDuration,
-              animationSpeed: el.animationSpeed,
-            } as CanvasElement));
-
-            setElements(loadedElements);
-            setHistory([loadedElements]);
-            setHistoryIndex(0);
-
-            // --- 3. Restore Timeline ---
-            if (design.designJSON.timeline) {
-              const restoredTimeline = design.designJSON.timeline;
-
-              const newTimeline: any = {
-                id: restoredTimeline.id || `timeline-${Date.now()}`,
-                designId: designId,
-                fps: Number(restoredTimeline.fps) || 30,
-                tracks: (restoredTimeline.tracks || []).map((track: any) => ({
-                  id: track.id,
-                  name: track.name,
-                  type: track.type,
-                  items: (track.items || []).map((item: any) => ({
-                    id: item.id,
-                    elementId: item.elementId,
-                    startTime: Number(item.startTime) || 0,
-                    duration: Number(item.duration) || 5000,
-                    inPoint: Number(item.inPoint) || 0,
-                    outPoint: Number(item.outPoint) || (Number(item.duration) || 5000),
-                    layer: Number(item.layer) || 0,
-                    properties: item.properties || {},
-                    animations: item.animations || [],
+                const newTimeline: any = {
+                  id: restoredTimeline.id || `timeline-${Date.now()}`,
+                  designId: designId,
+                  fps: Number(restoredTimeline.fps) || 30,
+                  tracks: (restoredTimeline.tracks || []).map((track: any) => ({
+                    id: track.id,
+                    name: track.name,
+                    type: track.type,
+                    items: (track.items || []).map((item: any) => ({
+                      id: item.id,
+                      elementId: item.elementId,
+                      startTime: Number(item.startTime) || 0,
+                      duration: Number(item.duration) || 5000,
+                      inPoint: Number(item.inPoint) || 0,
+                      outPoint: Number(item.outPoint) || (Number(item.duration) || 5000),
+                      layer: Number(item.layer) || 0,
+                      properties: item.properties || {},
+                      animations: item.animations || [],
+                    })),
                   })),
-                })),
-                totalDuration: Number(restoredTimeline.totalDuration) || 5000,
-                currentTime: 0,
-                isPlaying: false,
-                loop: false,
-                playbackSpeed: 1.0,
-                snapInterval: 100,
-                // ✅ FIX: Restore saved zoom, or default to 10 (Close up view)
-                // Never use '1' as default, that causes the "3 hour" view.
-                zoom: Number(restoredTimeline.zoom) || 10,
-              };
+                  totalDuration: Number(restoredTimeline.totalDuration) || 5000,
+                  currentTime: 0,
+                  isPlaying: false,
+                  loop: false,
+                  playbackSpeed: 1.0,
+                  snapInterval: 100,
+                  zoom: Number(restoredTimeline.zoom) || 10,
+                };
 
-              updateTimeline(newTimeline);
-            } else {
-              // Default sync if no timeline
-              setTimeout(() => syncElementsToTimeline(), 100);
+                updateTimeline(newTimeline);
+              } else {
+                // Default sync if no timeline data exists
+                setTimeout(() => syncElementsToTimeline(), 100);
+              }
             }
           }
         } catch (error: any) {
@@ -3046,46 +3037,31 @@ const Editor: React.FC = () => {
           <div
             className={`flex-1 overflow-auto transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''} ${spacePressed || isPanning ? 'cursor-grab' : ''} ${isPanning ? 'cursor-grabbing' : ''}`}
             onClick={() => setSelectedIds([])}
-            onMouseDown={(e) => {
-              // Start panning with Space + Click or Middle Mouse Button
-              if (spacePressed || e.button === 1) {
-                e.preventDefault();
-                setIsPanning(true);
-                setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y });
-              }
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDraggingFromSidebar(true);
-            }}
-            onDragLeave={(e) => {
-              if (e.target === e.currentTarget) {
-                setDraggingFromSidebar(false);
-              }
-            }}
+            onMouseDown={handleCanvasBackgroundMouseDown}
+            onDragOver={(e) => { e.preventDefault(); setDraggingFromSidebar(true); }}
             onDrop={handleDropOnCanvas}
-            onContextMenu={(e) => {
-              // Prevent context menu on right click to allow potential future use
-              if (e.button === 2) e.preventDefault();
-            }}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '48px',
+              padding: '100px', // Increased padding for better breathing room
               userSelect: isPanning ? 'none' : 'auto',
+              position: 'relative'
             }}
           >
+            <div style={{ width: 0, height: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}></div>
             <div
               ref={canvasRef}
-              className="shadow-2xl relative"
+              className="shadow-[0_0_50px_rgba(0,0,0,0.3)] relative bg-white"
               style={{
+                // Use flex-shrink-0 to prevent the browser from trying to squash the canvas
+                flexShrink: 0,
                 width: `${canvasSize.width}px`,
                 height: `${canvasSize.height}px`,
                 backgroundColor: canvasColor,
                 transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoom / 100})`,
                 transformOrigin: 'center center',
-                transition: isPanning ? 'none' : 'transform 0.2s ease-out',
+                transition: isPanning ? 'none' : 'transform 0.15s ease-out',
               }}
             >
               {/* Timeline Position Indicator - CapCut Style */}
