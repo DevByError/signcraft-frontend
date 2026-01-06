@@ -9,9 +9,9 @@ import {
 import { getPlaylistDetailsFromBackend } from '../services/playlistService';
 import { getAllDesigns, convertBackendToLocal } from '../services/designService';
 
-// ==========================================
+
 // 1. HELPERS & SYNCED COMPONENTS
-// ==========================================
+
 
 const getAnimationClass = (animation?: string) => {
   if (!animation) return '';
@@ -55,9 +55,9 @@ const SyncedPreviewVideo = ({ src, currentTime, isPlaying, startTime, duration, 
   return <video ref={videoRef} src={src} className={className} style={style} muted={false} playsInline />;
 };
 
-// ==========================================
+
 // 2. MAIN COMPONENT
-// ==========================================
+
 const PlaylistPreview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
