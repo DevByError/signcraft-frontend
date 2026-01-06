@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, Home, Maximize2, Minimize2 } from 'lucide-react';
-// import { useAuth } from '../contexts/AuthContext'; // Authentication removed
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // const { user, logout } = useAuth(); // Authentication removed
   const user = { name: 'Guest Designer', email: 'guest@signcraft.com' };
   const logout = () => { };
   const location = useLocation();
   const navigate = useNavigate();
 
+  // ✅ NEW: Detect if we are in recording mode to hide ALL UI
+  const isRecording = new URLSearchParams(location.search).get('recording') === 'true';
+
   // Hide header/footer on editor page for maximizing space
   const isEditor = location.pathname === '/editor';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/auth';
+
+  // ✅ Updated Logic: Hide UI if it's Editor, Auth page, OR Recording mode
+  const shouldHideUI = isEditor || isAuthPage || isRecording;
 
   const navLinks = [
     { label: 'Home', path: '/', icon: Home },
@@ -36,7 +40,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   React.useEffect(() => {
     document.addEventListener('fullscreenchange', syncFullscreenState);
-    // initial state
     syncFullscreenState();
     return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
   }, []);
@@ -55,7 +58,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-ivory">
-      {!isEditor && !isAuthPage && (
+      {/* ✅ Hides Nav if Recording */}
+      {!shouldHideUI && (
         <nav className="sticky top-0 z-50 bg-primary border-b border-gray-800 shadow-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
@@ -70,8 +74,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                       key={link.path}
                       to={link.path}
                       className={`inline-flex items-center px-3 py-2 text-sm font-medium border-b-2 transition-colors ${location.pathname === link.path
-                          ? 'border-vanilla text-white'
-                          : 'border-transparent text-gray-300 hover:text-white hover:border-gray-400'
+                        ? 'border-vanilla text-white'
+                        : 'border-transparent text-gray-300 hover:text-white hover:border-gray-400'
                         }`}
                     >
                       {link.label}
@@ -85,8 +89,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <Link
                       to="/dashboard"
                       className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${location.pathname === '/dashboard'
-                          ? 'bg-primaryLight text-white'
-                          : 'text-gray-300 hover:text-white hover:bg-primaryLight'
+                        ? 'bg-primaryLight text-white'
+                        : 'text-gray-300 hover:text-white hover:bg-primaryLight'
                         }`}
                     >
                       Dashboard
@@ -148,8 +152,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     to={link.path}
                     onClick={() => setIsMenuOpen(false)}
                     className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${location.pathname === link.path
-                        ? 'border-vanilla bg-primaryLight text-white'
-                        : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
+                      ? 'border-vanilla bg-primaryLight text-white'
+                      : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
                       }`}
                   >
                     {link.label}
@@ -161,8 +165,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                       to="/dashboard"
                       onClick={() => setIsMenuOpen(false)}
                       className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium transition-colors ${location.pathname === '/dashboard'
-                          ? 'border-vanilla bg-primaryLight text-white'
-                          : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
+                        ? 'border-vanilla bg-primaryLight text-white'
+                        : 'border-transparent text-gray-300 hover:bg-primaryLight hover:text-white'
                         }`}
                     >
                       Dashboard
@@ -209,17 +213,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
 
-      {/* Fullscreen toggle - visible on every page */}
-      <button
-        onClick={toggleFullscreen}
-        aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-        title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-        className="fixed right-4 bottom-4 z-50 bg-primaryLight text-white p-3 rounded-full shadow-lg hover:bg-primary transition-colors"
-      >
-        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-      </button>
+      {/* ✅ FIXED: Fullscreen toggle now also hidden during recording */}
+      {!isRecording && (
+        <button
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          className="fixed right-4 bottom-4 z-50 bg-primaryLight text-white p-3 rounded-full shadow-lg hover:bg-primary transition-colors"
+        >
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
+      )}
 
-      {!isEditor && !isAuthPage && (
+      {/* ✅ FIXED: Footer now hidden during recording */}
+      {!shouldHideUI && (
         <footer className="bg-black text-white mt-auto">
           <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
