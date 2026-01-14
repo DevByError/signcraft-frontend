@@ -1,5 +1,5 @@
 import { MediaUpload } from '../types';
-import authService from './authService';
+import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -7,26 +7,33 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
  * Upload media to the server
  * @param file - File to upload
  * @param userId - User ID uploading the file
+ * @param onProgress - Callback for upload progress (0-100)
  * @returns MediaUpload object with server URL
  */
-export async function uploadMedia(file: File, userId: string): Promise<MediaUpload> {
+export async function uploadMedia(
+  file: File, 
+  userId: string,
+  onProgress?: (progress: number) => void
+): Promise<MediaUpload> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('userId', userId);
 
   try {
-    const response = await authService.authFetch(`${API_BASE}/media/upload`, {
-      method: 'POST',
-      body: formData,
-      // Don't set Content-Type for multipart/form-data; browser will set boundary
-      headers: {},
+    const response = await axios.post(`${API_BASE}/media/upload`, formData, {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percent);
+        }
+      },
     });
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = response.data;
     return {
       id: data.id,
       fileName: file.name,

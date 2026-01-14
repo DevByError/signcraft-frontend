@@ -144,7 +144,10 @@ export const exportDesignVideo = async (id: string): Promise<ExportVideoResponse
 /**
  * Upload an asset (Video/Image) to the backend
  */
-export const uploadAsset = async (file: File): Promise<{ success: boolean; url?: string; msg?: string }> => {
+export const uploadAsset = async (
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ success: boolean; url?: string; msg?: string }> => {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -153,6 +156,12 @@ export const uploadAsset = async (file: File): Promise<{ success: boolean; url?:
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percent);
+        }
+      }
     });
 
     return response.data;

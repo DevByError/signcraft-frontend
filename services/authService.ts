@@ -10,10 +10,17 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   data?: {
-    msg: string | string[]; // Can be a string or array of validation errors
+    msg?: string | string[];
     authtoken?: string;
     userId?: string;
     email?: string;
@@ -23,115 +30,133 @@ export interface AuthResponse {
 }
 
 /**
- * Login user with email and password
+ * 1. Login user
  */
 export const login = async (credentials: LoginRequest): Promise<AuthResponse> => {
   console.log('🔐 [AUTH_SERVICE] Attempting login for:', credentials.email);
-  
+
   try {
     const response = await fetch(`${API_BASE}/accounts/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // ✅ Critical: Sends/Receives cookies
       body: JSON.stringify(credentials),
     });
 
     const result = await response.json();
-    
+
     if (!response.ok || !result.success) {
-      console.error('❌ [AUTH_SERVICE] Login failed:', {
-        status: response.status,
-        result
-      });
-      
-      // Format error message (handle array of validation errors)
-      if (result.data?.msg) {
-        if (Array.isArray(result.data.msg)) {
-          result.data.msg = result.data.msg.join(', ');
-        }
+      // Restore error formatting from old code
+      if (result.data?.msg && Array.isArray(result.data.msg)) {
+        result.data.msg = result.data.msg.join(', ');
       }
-      
       return result;
     }
 
-    console.log('✅ [AUTH_SERVICE] Login successful:', {
-      success: result.success,
-      hasToken: !!result.data?.authtoken,
-      msg: result.data?.msg
-    });
-
     return result;
   } catch (error) {
-    console.error('❌ [AUTH_SERVICE] Network/Parse error:', error);
-    return {
-      success: false,
-      data: {
-        msg: error instanceof Error ? error.message : 'Network error. Please check your connection.',
-      },
-    };
+    console.error('❌ [AUTH_SERVICE] Network error:', error);
+    return { success: false, data: { msg: 'Network error. Please check your connection.' } };
   }
 };
 
+/**
+ * 2. Verify Session (The Fix)
+ * Calls backend to see if HttpOnly cookie is valid
+ */
+export const verifySession = async (): Promise<UserProfile | null> => {
+  try {
+    const response = await fetch(`${API_BASE}/accounts/profile`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // ✅ Critical: Sends the HttpOnly cookie
+    });
 
+    // If 401, simply return null (not logged in)
+    if (response.status === 401 || response.status === 403) {
+      return null;
+    }
+
+    const result = await response.json();
+
+    if (response.ok && result.success && result.data) {
+      return {
+        id: result.data.userId,
+        email: result.data.email,
+        name: result.data.username,
+        role: result.data.role || 'designer'
+      };
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+};
 
 /**
- * Logout user (clear session)
+ * 3. Logout
  */
 export const logout = async (): Promise<{ success: boolean; msg?: string }> => {
   try {
-    // Optionally call backend logout endpoint if it exists
-    // await fetch(`${API_BASE}/accounts/logout`, {
-    //   method: 'GET',
-    //   credentials: 'include',
-    // });
-
+    await fetch(`${API_BASE}/accounts/logout`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    localStorage.removeItem('user_cache'); // Clear cache
     return { success: true };
   } catch (error) {
-    console.error('❌ [AUTH_SERVICE] Logout error:', error);
-    return {
-      success: false,
-      msg: error instanceof Error ? error.message : 'Failed to logout',
-    };
+    return { success: false, msg: 'Logout failed' };
   }
 };
 
-// -------------------- Auth helpers --------------------
-/** Get stored JWT token (if any) */
+/** 
+ * 4. Get user from LocalStorage (Sync fallback for UI flickering)
+ */
+export const getUser = (): UserProfile | null => {
+  const u = localStorage.getItem('user_cache');
+  return u ? JSON.parse(u) : null;
+};
+
+// -------------------- Legacy Helpers (Kept for compatibility) --------------------
+
+/** 
+ * Get stored JWT token
+ * Returns null because we now use HttpOnly cookies.
+ * Kept so other files calling this don't crash.
+ */
 export const getToken = (): string | null => {
-  // Token is managed by the backend via HTTP-only cookies
   return null;
 };
 
-/** Get stored user object (if any) */
-export const getUser = (): { id: string; email?: string; name?: string } | null => {
-  // User data should be fetched from backend or managed by context
-  return null;
-};
-
-/** Convenience: build auth headers */
+/** 
+ * Build auth headers 
+ * Adjusted to just return Content-Type, since Auth is now handled by Cookies
+ */
 export const getAuthHeaders = (extra?: Record<string, string>) => {
-  const token = getToken();
-  const headers: Record<string, string> = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return headers;
+  return Object.assign({ 'Content-Type': 'application/json' }, extra || {});
 };
 
-/** Wrapper around fetch that injects Authorization header and default options */
+/** 
+ * Wrapper around fetch
+ * ✅ UPDATED: Forces credentials: 'include' so your other API calls (designs, playlists) works
+ */
 export const authFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
-  const token = getToken();
-  const headers = Object.assign({}, init.headers || {}, token ? { Authorization: `Bearer ${token}` } : {});
+  // We don't need to manually inject Bearer token anymore
+  // But we MUST ensure credentials are set to 'include'
+  const merged: RequestInit = Object.assign({}, init, {
+    credentials: 'include',
+    headers: Object.assign({}, init.headers || {}, { 'Content-Type': 'application/json' })
+  });
 
-  const merged: RequestInit = Object.assign({}, init, { headers, credentials: init.credentials ?? 'include' });
   return fetch(input, merged);
 };
 
 export default {
   login,
   logout,
-  getToken,
+  verifySession,
   getUser,
+  getToken,
   getAuthHeaders,
   authFetch,
 };

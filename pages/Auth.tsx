@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Monitor, Mail, Lock, Sparkles, Eye, EyeOff, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+// ✅ ADDED: ArrowLeft
+import { Monitor, Mail, Lock, Sparkles, Eye, EyeOff, CheckCircle, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 
 const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -46,7 +47,19 @@ const Auth: React.FC = () => {
   const isFormValid = email.trim() !== '' && password.trim() !== '';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-black flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-black flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 overflow-hidden relative">
+
+      {/* ✅ NEW: Back to Home Button */}
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-6 left-6 z-50 flex items-center gap-2 text-gray-400 hover:text-white transition-colors group animate-fade-in"
+      >
+        <div className="p-2 rounded-full bg-white/5 border border-white/10 group-hover:bg-white/10 group-hover:border-white/20 transition-all">
+          <ArrowLeft className="h-5 w-5" />
+        </div>
+        <span className="text-sm font-medium">Back to Home</span>
+      </button>
+
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-blue-900 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
@@ -154,8 +167,8 @@ const Auth: React.FC = () => {
                 type="submit"
                 disabled={isSubmitting || !isFormValid}
                 className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all duration-300 flex items-center justify-center gap-2 mt-8 ${isSubmitting || !isFormValid
-                    ? 'bg-gray-400 opacity-50 cursor-not-allowed'
-                    : 'bg-blue-900 hover:bg-blue-800 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 active:scale-95'
+                  ? 'bg-gray-400 opacity-50 cursor-not-allowed'
+                  : 'bg-blue-900 hover:bg-blue-800 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 active:scale-95'
                   }`}
               >
                 {isSubmitting ? (
@@ -176,7 +189,7 @@ const Auth: React.FC = () => {
           {/* Footer Badge */}
           <div className="px-8 py-4 bg-gradient-to-r from-blue-100 to-blue-50 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-600">
-              ✨ Secure sign-in powered by advanced encryption
+              Secure sign-in powered by advanced encryption
             </p>
           </div>
         </div>

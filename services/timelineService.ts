@@ -116,11 +116,8 @@ export function createTimelineItem(
   layer: number,
   trackType: TimelineTrackType = 'visual'
 ): TimelineItem {
-  // Create default fade-in animation (CapCut behavior)
-  const defaultFadeInDuration = Math.min(300, duration * 0.15); // 300ms or 15% of duration
-  const animations = [
-    animationEngine.createFadeInAnimation(defaultFadeInDuration)
-  ];
+  // No default animations
+  const animations: any[] = [];
 
   return {
     id: `item-${element.id}-${Date.now()}`,

@@ -37,6 +37,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Swal from 'sweetalert2';
 import {
   Play,
   Pause,
@@ -258,10 +259,20 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     onTimelineChange(timelineService.addTrack(timeline, name, type));
   };
 
-  const handleRemoveTrack = (trackId: string) => {
+  const handleRemoveTrack = async (trackId: string) => {
     const track = timeline.tracks.find(t => t.id === trackId);
     if (track && track.items.length > 0) {
-      if (!confirm(`Track "${track.name}" has ${track.items.length} items. Delete anyway?`)) {
+      const result = await Swal.fire({
+          title: 'Are you sure?',
+          text: `Track "${track.name}" has ${track.items.length} items. Delete anyway?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#3085d6',
+          cancelButtonColor: '#d33',
+          confirmButtonText: 'Yes, delete it!'
+      });
+      
+      if (!result.isConfirmed) {
         return;
       }
       // Remove all items first
@@ -274,7 +285,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
       try {
         onTimelineChange(timelineService.removeTrack(timeline, trackId));
       } catch (error) {
-        alert(error instanceof Error ? error.message : 'Cannot remove track');
+        Swal.fire('Error', error instanceof Error ? error.message : 'Cannot remove track', 'error');
       }
     }
   };

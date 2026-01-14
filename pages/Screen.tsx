@@ -9,6 +9,7 @@ import {
 import { getAllScreens, saveScreen, deleteScreen, deploySchedule, ScreenData } from '../services/screenService';
 import { getAllPlaylists } from '../services/playlistService';
 import { useAuth } from '../contexts/AuthContext';
+import Swal from 'sweetalert2';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -65,40 +66,6 @@ const PodcastProgressModal: React.FC<ProgressModalProps> = ({ isOpen, progress, 
   );
 };
 
-// --- CUSTOM ALERT MODAL ---
-interface StatusModalProps {
-  isOpen: boolean;
-  type: 'success' | 'error' | 'info';
-  message: string;
-  onClose: () => void;
-}
-
-const StatusModal: React.FC<StatusModalProps> = ({ isOpen, type, message, onClose }) => {
-  if (!isOpen) return null;
-  const styles = {
-    success: { bg: 'bg-green-600', icon: <CheckCircle size={32} /> },
-    error: { bg: 'bg-red-600', icon: <AlertTriangle size={32} /> },
-    info: { bg: 'bg-slate-800', icon: <Info size={32} /> },
-  };
-  const currentStyle = styles[type];
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform scale-100 transition-all">
-        <div className={`${currentStyle.bg} text-white p-6 flex flex-col items-center justify-center`}>
-          <div className="bg-white/20 p-3 rounded-full mb-2">{currentStyle.icon}</div>
-          <h3 className="text-xl font-bold uppercase tracking-wider">{type}</h3>
-        </div>
-        <div className="p-6 text-center">
-          <p className="text-gray-700 font-medium text-lg leading-relaxed">{message}</p>
-        </div>
-        <div className="p-4 bg-gray-50 border-t border-gray-100">
-          <button onClick={onClose} className={`w-full py-3 rounded-xl font-bold text-white shadow-md transition-transform active:scale-95 ${currentStyle.bg} hover:opacity-90`}>Okay</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // --- MAIN PAGE COMPONENT ---
 const ScreenPage: React.FC = () => {
   const { user } = useAuth();
@@ -112,9 +79,6 @@ const ScreenPage: React.FC = () => {
   // UI State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
-  const [statusState, setStatusState] = useState<{ open: boolean; type: 'success' | 'error' | 'info'; msg: string }>({
-    open: false, type: 'info', msg: ''
-  });
 
   // Recording Progress State
   const [podcastProgress, setPodcastProgress] = useState({
@@ -186,8 +150,16 @@ const ScreenPage: React.FC = () => {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const showAlert = (type: 'success' | 'error' | 'info', msg: string) => setStatusState({ open: true, type, msg });
-  const closeAlert = () => setStatusState({ ...statusState, open: false });
+  const showAlert = (type: 'success' | 'error' | 'info', msg: string) => {
+    Swal.fire({
+      icon: type,
+      title: type.charAt(0).toUpperCase() + type.slice(1),
+      text: msg,
+      timer: type === 'success' ? 2000 : undefined,
+      showConfirmButton: type !== 'success'
+    });
+  };
+  
   const handleSelectScreen = (id: string) => setSelectedScreens(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   const handleSaveScreen = async () => {
@@ -198,9 +170,24 @@ const ScreenPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Permanently delete this screen?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       const res = await deleteScreen(id);
-      if (res.success) { loadData(); showAlert('success', 'Deleted.'); }
+      if (res.success) {
+        loadData();
+        showAlert('success', 'Deleted.');
+      } else {
+        showAlert('error', res.msg || 'Delete failed.');
+      }
     }
   };
 
@@ -270,8 +257,6 @@ const ScreenPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-ivory p-8">
       <div className="max-w-7xl mx-auto">
-        <StatusModal isOpen={statusState.open} type={statusState.type} message={statusState.msg} onClose={closeAlert} />
-
         <PodcastProgressModal
           isOpen={podcastProgress.isOpen}
           progress={podcastProgress.value}

@@ -10,6 +10,7 @@ import { useTimeline } from '../hooks/useTimeline';
 import { CanvasElement, ElementType } from '../types/canvas';
 import * as timelineService from '../services/timelineService';
 import * as propertyPlaybackService from '../services/propertyPlaybackService';
+import Swal from 'sweetalert2';
 
 interface EditorWithCapCutTimelineProps {
   designId: string;
@@ -165,7 +166,7 @@ export const EditorWithCapCutTimeline: React.FC<EditorWithCapCutTimelineProps> =
       updateTimeline(updated);
     } catch (error) {
       console.error('Split failed:', error);
-      alert(error instanceof Error ? error.message : 'Cannot split item');
+      Swal.fire('Error', error instanceof Error ? error.message : 'Cannot split item', 'error');
     }
   };
 

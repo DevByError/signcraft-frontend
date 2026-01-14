@@ -1,4 +1,5 @@
 import React, { useMemo, useRef } from 'react';
+import Swal from 'sweetalert2';
 import { useAssetsStore } from '../stores/assetsStore';
 import type { Asset, AssetType } from '../types/assets';
 import { Upload, Grid3X3, List, Search, Images, Trash2, Copy, Pencil, FileJson, Link as LinkIcon } from 'lucide-react';
@@ -61,8 +62,12 @@ export const AssetManagerPanel: React.FC<Props> = ({ onInsertAsset }) => {
     e.target.value = '';
   };
 
-  const handlePasteUrl = () => {
-    const url = window.prompt('Paste data: URL or blob: URL');
+  const handlePasteUrl = async () => {
+    const { value: url } = await Swal.fire({
+      title: 'Paste data: URL or blob: URL',
+      input: 'text',
+      showCancelButton: true
+    });
     if (url) addUrl(url);
   };
 
@@ -84,7 +89,7 @@ export const AssetManagerPanel: React.FC<Props> = ({ onInsertAsset }) => {
     try { 
       importJSON(JSON.parse(text)); 
     } catch { 
-      alert('Invalid JSON'); 
+      Swal.fire('Error', 'Invalid JSON', 'error');
     }
     e.target.value = '';
   };
@@ -176,14 +181,19 @@ export const AssetManagerPanel: React.FC<Props> = ({ onInsertAsset }) => {
                     <span>{(a.size/1024).toFixed(1)} KB</span>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
-                    <button className="px-2 py-1 bg-gray-100 rounded" onClick={() => {
-                      const name = prompt('Rename asset', a.name);
+                    <button className="px-2 py-1 bg-gray-100 rounded" onClick={async () => {
+                      const { value: name } = await Swal.fire({
+                        title: 'Rename asset',
+                        input: 'text',
+                        inputValue: a.name,
+                        showCancelButton: true
+                      });
                       if (name) renameAsset(a.id, name);
                     }}><Pencil size={14}/></button>
                     <button className="px-2 py-1 bg-gray-100 rounded" onClick={() => duplicateAsset(a.id)}><Copy size={14}/></button>
                     <button className="px-2 py-1 bg-red-100 text-red-700 rounded" onClick={() => {
                       const res = deleteAsset(a.id);
-                      if (!res.success) alert(`Asset used ${res.usageCount} times in designs`);
+                      if (!res.success) Swal.fire('Error', `Asset used ${res.usageCount} times in designs`, 'error');
                     }}><Trash2 size={14}/></button>
                   </div>
                 </div>
@@ -213,14 +223,19 @@ export const AssetManagerPanel: React.FC<Props> = ({ onInsertAsset }) => {
                   <div className="text-gray-500 text-xs">{typeLabel[a.type]} • {(a.size/1024).toFixed(1)} KB</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="px-2 py-1 bg-gray-100 rounded" onClick={() => {
-                    const name = prompt('Rename asset', a.name);
-                    if (name) renameAsset(a.id, name);
-                  }}><Pencil size={14}/></button>
+                  <button className="px-2 py-1 bg-gray-100 rounded" onClick={async () => {
+                      const { value: name } = await Swal.fire({
+                        title: 'Rename asset',
+                        input: 'text',
+                        inputValue: a.name,
+                        showCancelButton: true
+                      });
+                      if (name) renameAsset(a.id, name);
+                    }}><Pencil size={14}/></button>
                   <button className="px-2 py-1 bg-gray-100 rounded" onClick={() => duplicateAsset(a.id)}><Copy size={14}/></button>
                   <button className="px-2 py-1 bg-red-100 text-red-700 rounded" onClick={() => {
                     const res = deleteAsset(a.id);
-                    if (!res.success) alert(`Asset used ${res.usageCount} times in designs`);
+                    if (!res.success) Swal.fire('Error', `Asset used ${res.usageCount} times in designs`, 'error');
                   }}><Trash2 size={14}/></button>
                 </div>
               </div>

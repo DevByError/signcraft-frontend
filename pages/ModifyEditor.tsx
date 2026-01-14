@@ -15,6 +15,7 @@ import { downloadDesignAsJSON } from '../services/canvasExportService';
 import { getDesignLocalById, updateDesignLocal } from '../services/localDesignStore';
 import { modifyDesign, hasModificationPermission } from '../services/designModificationService';
 import { ElementType, ElementTypeValue, CanvasElement } from '../types/canvas';
+import Swal from 'sweetalert2';
 
 const TEMPLATES = [
   { name: 'Billboard', width: 1920, height: 480, icon: <RectangleHorizontal size={16} /> },
@@ -158,8 +159,6 @@ const Editor: React.FC = () => {
   
   // State for save operations
   const [isLoading, setIsLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_essential: true,
@@ -788,14 +787,17 @@ const Editor: React.FC = () => {
   // Handle saving design with metadata
   const handleSaveDesign = async (data: SaveDesignModalData) => {
     if (!designId) {
-      setErrorMessage('Design ID is required');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Design ID is required',
+        confirmButtonColor: '#0F172A'
+      });
       return;
     }
 
     try {
       setIsLoading(true);
-      setErrorMessage(null);
-      setSuccessMessage(null);
 
       console.log('🔄 [MODIFY_EDITOR] Saving design modifications:', designId);
 
@@ -874,22 +876,27 @@ const Editor: React.FC = () => {
           },
         });
         
-        setSuccessMessage(`✅ ${result.msg}`);
-        setErrorMessage(null);
-        
-        // Close modal after successful save
-        setTimeout(() => {
-          setSuccessMessage(null);
-          setShowSaveModal(false);
-        }, 1500);
+        setShowSaveModal(false);
+        await Swal.fire({
+          icon: 'success',
+          title: 'Success',
+          text: result.msg || 'Design modified successfully!',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        navigate('/dashboard');
       } else {
         throw new Error(result.msg || 'Failed to modify design');
       }
     } catch (error) {
       console.error('❌ [MODIFY_EDITOR] Error saving design:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
-      setErrorMessage(`❌ Error: ${errorMsg}`);
-      setSuccessMessage(null);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: errorMsg,
+        confirmButtonColor: '#0F172A'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1233,7 +1240,7 @@ const Editor: React.FC = () => {
         
         if (designId) {
           console.log('Loading design:', designId);
-          const design = getDesignLocalById(designId);
+          const design = await getDesignLocalById(designId);
           
           if (!design) {
             setDesignLoadError(`Design not found: ${designId}. Please check if the design exists.`);
@@ -1254,22 +1261,9 @@ const Editor: React.FC = () => {
           
           // Map the design elements to CanvasElement format
           const loadedElements = (design.designJSON?.elements || []).map(el => ({
+            ...el,
             id: el.id,
             type: el.type as ElementType,
-            content: el.content,
-            x: el.x,
-            y: el.y,
-            width: el.width,
-            height: el.height,
-            fontSize: el.fontSize,
-            color: el.color,
-            backgroundColor: el.backgroundColor,
-            fillColor: el.fillColor,
-            opacity: el.opacity,
-            rotation: el.rotation,
-            zIndex: el.zIndex,
-            locked: el.locked,
-            visible: el.visible,
           } as CanvasElement));
           
           setElements(loadedElements);
@@ -3917,42 +3911,12 @@ const Editor: React.FC = () => {
         {/* Save Design Modal */}
         <SaveDesignModal
           isOpen={showSaveModal}
-          onClose={() => {
-            setShowSaveModal(false);
-            setSuccessMessage(null);
-            setErrorMessage(null);
-          }}
+          onClose={() => setShowSaveModal(false)}
           onSave={handleSaveDesign}
-          successMessage={successMessage}
-          error={errorMessage}
           isLoading={isLoading}
           defaultTitle={designTitle}
           isModifying={true}
         />
-
-        {/* Toast Notification for Save Status */}
-        {successMessage && (
-          <div className="fixed top-20 right-6 z-50 animate-slideIn">
-            <div className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
-              <div className="text-2xl">✅</div>
-              <div>
-                <p className="font-semibold">{successMessage}</p>
-                <p className="text-sm text-green-100">Your changes have been saved</p>
-              </div>
-            </div>
-          </div>
-        )}
-        {errorMessage && (
-          <div className="fixed top-20 right-6 z-50 animate-slideIn">
-            <div className="bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
-              <div className="text-2xl">❌</div>
-              <div>
-                <p className="font-semibold">Save Failed</p>
-                <p className="text-sm text-red-100">{errorMessage}</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

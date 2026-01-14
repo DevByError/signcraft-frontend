@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle, RefreshCw } from 'lucide-react';
 // ✅ Import service functions
 import { getAllDesigns, deleteDesign } from '../services/designService';
+import Swal from 'sweetalert2';
 
 interface Creative {
   id: string;
@@ -123,17 +124,35 @@ const ScheduleCreative: React.FC = () => {
 
   // Delete creative
   const handleDelete = async (designId: string) => {
-    if (!confirm('Are you sure you want to delete this design?')) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
       // ✅ Use service function
       const response = await deleteDesign(designId);
 
       if (response.success) {
-        alert('Design deleted successfully');
+        Swal.fire(
+          'Deleted!',
+          'Your design has been deleted.',
+          'success'
+        );
         setCreatives(prev => prev.filter(c => c.id !== designId));
       } else {
-        alert('Failed to delete design: ' + response.msg);
+        Swal.fire(
+          'Error!',
+          'Failed to delete design: ' + response.msg,
+          'error'
+        );
       }
     } catch (err: any) {
       // ✅ Ignore 401/403 (Global Modal handles it)
@@ -142,7 +161,11 @@ const ScheduleCreative: React.FC = () => {
       }
 
       console.error('Error deleting design:', err);
-      alert('Error deleting design: ' + (err.response?.data?.msg || err.message));
+      Swal.fire(
+        'Error!',
+        'Error deleting design: ' + (err.response?.data?.msg || err.message),
+        'error'
+      );
     }
   };
 

@@ -1,23 +1,28 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, Home, Maximize2, Minimize2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import Swal from 'sweetalert2';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const user = { name: 'Guest Designer', email: 'guest@signcraft.com' };
-  const logout = () => { };
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ NEW: Detect if we are in recording mode to hide ALL UI
+  // 1. Check for Recording Mode
   const isRecording = new URLSearchParams(location.search).get('recording') === 'true';
 
-  // Hide header/footer on editor page for maximizing space
-  const isEditor = location.pathname === '/editor';
+  // 2. Check for Specific Pages
+  const isEditor = location.pathname === '/editor' || location.pathname.startsWith('/editor/');
   const isAuthPage = location.pathname === '/login' || location.pathname === '/auth';
 
-  // ✅ Updated Logic: Hide UI if it's Editor, Auth page, OR Recording mode
-  const shouldHideUI = isEditor || isAuthPage || isRecording;
+  // ✅ NEW: Check for Preview Pages (Single Design or Playlist)
+  const isPreview = location.pathname.startsWith('/preview') ||
+    location.pathname.startsWith('/playlist/preview');
+
+  // ✅ UPDATED LOGIC: Hide UI for Editor, Auth, Recording, AND Previews
+  const shouldHideUI = isEditor || isAuthPage || isRecording || isPreview;
 
   const navLinks = [
     { label: 'Home', path: '/', icon: Home },
@@ -25,11 +30,57 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { label: 'Templates', path: '/templates', icon: null },
   ];
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-    setIsMenuOpen(false);
+  const handleLogout = async () => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You will be logged out of your session.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, log out!'
+    });
+
+    if (result.isConfirmed) {
+      await logout();
+      await Swal.fire(
+        'Logged Out!',
+        'You have been successfully logged out.',
+        'success'
+      );
+      navigate('/login');
+      setIsMenuOpen(false);
+    }
   };
+  // const handleLogout = async () => {
+  //   const result = await Swal.fire({
+  //     title: 'Are you sure?',
+  //     text: "You will be logged out of your session.",
+  //     icon: 'warning',
+  //     showCancelButton: true,
+  //     confirmButtonColor: '#3085d6',
+  //     cancelButtonColor: '#d33',
+  //     confirmButtonText: 'Yes, log out!'
+  //   });
+
+  //   if (result.isConfirmed) {
+  //     // 1. Perform Logout
+  //     await logout(); 
+
+  //     // 2. Show Success
+  //     await Swal.fire({
+  //       title: 'Logged Out!',
+  //       text: 'You have been successfully logged out.',
+  //       icon: 'success',
+  //       timer: 1500,
+  //       showConfirmButton: false
+  //     });
+
+  //     // 3. Redirect to Login Page
+  //     navigate('/login'); 
+  //     setIsMenuOpen(false);
+  //   }
+  // };
 
   // Fullscreen toggle state and handlers
   const [isFullscreen, setIsFullscreen] = React.useState<boolean>(false);
@@ -58,7 +109,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-ivory">
-      {/* ✅ Hides Nav if Recording */}
+      {/* ✅ Hides Nav if shouldHideUI is true (now includes Previews) */}
       {!shouldHideUI && (
         <nav className="sticky top-0 z-50 bg-primary border-b border-gray-800 shadow-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -95,12 +146,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     >
                       Dashboard
                     </Link>
-                    <Link
-                      to="/editor"
-                      className="bg-vanilla text-primary hover:bg-yellow-100 px-4 py-2 rounded-md text-sm font-bold transition-colors shadow-sm"
-                    >
-                      New Design
-                    </Link>
                     <button
                       onClick={handleLogout}
                       className="text-gray-300 hover:text-white flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors"
@@ -110,7 +155,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                       Logout
                     </button>
                     <div className="h-8 w-8 rounded-full bg-primaryLight flex items-center justify-center text-white font-bold border border-gray-500 text-xs">
-                      {user.name.charAt(0).toUpperCase()}
+                      {user.name?.charAt(0).toUpperCase()}
                     </div>
                   </>
                 ) : (
@@ -120,12 +165,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                       className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
                     >
                       Login
-                    </Link>
-                    <Link
-                      to="/editor"
-                      className="bg-vanilla text-primary hover:bg-yellow-100 px-4 py-2 rounded-md text-sm font-bold transition-colors shadow-sm"
-                    >
-                      New Design
                     </Link>
                   </>
                 )}
@@ -171,13 +210,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     >
                       Dashboard
                     </Link>
-                    <Link
-                      to="/editor"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-vanilla hover:bg-primaryLight"
-                    >
-                      New Design
-                    </Link>
                     <button
                       onClick={handleLogout}
                       className="w-full text-left block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-300 hover:bg-primaryLight hover:text-white"
@@ -194,13 +226,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     >
                       Login
                     </Link>
-                    <Link
-                      to="/editor"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-vanilla hover:bg-primaryLight"
-                    >
-                      New Design
-                    </Link>
                   </>
                 )}
               </div>
@@ -213,7 +238,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
 
-      {/* ✅ FIXED: Fullscreen toggle now also hidden during recording */}
+      {/* ✅ HIDE FULLSCREEN BUTTON ON RECORDING */}
       {!isRecording && (
         <button
           onClick={toggleFullscreen}
@@ -225,7 +250,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </button>
       )}
 
-      {/* ✅ FIXED: Footer now hidden during recording */}
+      {/* ✅ HIDE FOOTER ON PREVIEW/EDITOR/AUTH */}
       {!shouldHideUI && (
         <footer className="bg-black text-white mt-auto">
           <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -256,15 +281,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   <li><Link to="/legal" className="text-gray-400 hover:text-vanilla text-sm transition-colors">Terms of Service</Link></li>
                 </ul>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase mb-4">Start Creating</h3>
-                <Link to="/editor" className="block w-full text-center bg-vanilla text-primary hover:bg-yellow-100 font-bold py-2 px-4 rounded transition-colors">
-                  New Project
-                </Link>
-              </div>
+              {(user as any)?.role?.toLowerCase() !== 'admin' && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-200 tracking-wider uppercase mb-4">Start Creating</h3>
+                  <Link to="/editor" className="block w-full text-center bg-vanilla text-primary hover:bg-yellow-100 font-bold py-2 px-4 rounded transition-colors">
+                    New Project
+                  </Link>
+                </div>
+              )}
             </div>
             <div className="mt-8 border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-gray-500 text-sm">&copy; 2024 SignCraft. All rights reserved.</p>
+              <p className="text-gray-500 text-sm">
+                &copy; {new Date().getFullYear()} SignCraft. All rights reserved.
+              </p>
+
               <div className="flex gap-6">
                 <Link to="/legal" className="text-gray-400 hover:text-vanilla text-sm transition-colors">Privacy</Link>
                 <Link to="/legal" className="text-gray-400 hover:text-vanilla text-sm transition-colors">Terms</Link>

@@ -1,13 +1,15 @@
-// export default SchedulePlaylist;
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Search, PlayCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, PlayCircle, Clock, RefreshCw } from 'lucide-react';
 import {
   getPlaylistsFromBackend,
   savePlaylistToBackend,
   deletePlaylistFromBackend
 } from '../services/playlistService';
 import authService from '../services/authService';
+import Swal from 'sweetalert2';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PlaylistItem {
   id: string;
@@ -20,6 +22,14 @@ interface PlaylistItem {
 
 const SchedulePlaylist: React.FC = () => {
   const navigate = useNavigate();
+
+  // 1. Get User
+  const { user } = useAuth();
+
+
+  // DEBUG: Check the console to see exactly what 'role' equals
+  // console.log("Current User Role:", (user as any)?.role);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -64,7 +74,6 @@ const SchedulePlaylist: React.FC = () => {
   const handleCreate = async () => {
     if (!newPlaylistName.trim()) return;
     try {
-      const user = authService.getUser();
       const res = await savePlaylistToBackend({
         name: newPlaylistName,
         description: newPlaylistDescription,
@@ -74,7 +83,7 @@ const SchedulePlaylist: React.FC = () => {
       if (res.success && res.data) {
         navigate(`/playlist/edit/${res.data.id}`);
       } else {
-        alert('Failed to create: ' + res.msg);
+        Swal.fire('Error', 'Failed to create: ' + res.msg, 'error');
       }
     } catch (err) {
       console.error(err);
@@ -82,19 +91,43 @@ const SchedulePlaylist: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this playlist?')) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       const res = await deletePlaylistFromBackend(id);
-      if (res.success) setPlaylists(prev => prev.filter(p => p.id !== id));
+      if (res.success) {
+        Swal.fire('Deleted!', 'Playlist has been deleted.', 'success');
+        setPlaylists(prev => prev.filter(p => p.id !== id));
+      } else {
+        Swal.fire('Error', 'Failed to delete.', 'error');
+      }
     } catch (err) { console.error(err); }
   };
 
   const filtered = playlists.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
+  const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors">
             <ArrowLeft size={20} /> Back to Dashboard
@@ -109,14 +142,15 @@ const SchedulePlaylist: React.FC = () => {
               <button onClick={() => fetchData(true)} className="p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-all">
                 <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
               </button>
-              <button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 px-6 py-3 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">
-                <Plus size={20} /> New Playlist
-              </button>
+              {(user as any)?.role?.toLowerCase() !== 'admin' && (
+                <button onClick={() => setShowCreateForm(!showCreateForm)} className="flex items-center gap-2 px-6 py-3 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">
+                  <Plus size={20} /> New Playlist
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Create Form */}
         {showCreateForm && (
           <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-100 animate-slideDown">
             <h3 className="font-bold text-lg mb-4 text-gray-800">Create New Playlist</h3>
@@ -142,7 +176,6 @@ const SchedulePlaylist: React.FC = () => {
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && filtered.length === 0 && !showCreateForm && (
           <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
             <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -150,13 +183,14 @@ const SchedulePlaylist: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-gray-900">No Playlists Yet</h3>
             <p className="text-gray-500 mt-1">Create your first playlist to start scheduling content.</p>
-            <button onClick={() => setShowCreateForm(true)} className="mt-6 text-blue-600 font-medium hover:underline">
-              Create one now
-            </button>
+            {(user as any)?.role?.toLowerCase() !== 'admin' && (
+              <button onClick={() => setShowCreateForm(true)} className="mt-6 text-blue-600 font-medium hover:underline">
+                Create one now
+              </button>
+            )}
           </div>
         )}
 
-        {/* Grid List */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
@@ -187,21 +221,25 @@ const SchedulePlaylist: React.FC = () => {
                   </p>
 
                   <div className="flex items-center gap-4 text-xs text-gray-400 mb-6 pb-6 border-b border-gray-100">
-                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded">
+                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-blue-100 text-blue-600 font-medium">
                       <Clock size={12} />
-                      {Math.floor(p.totalDuration / 60)}m {p.totalDuration % 60}s
+                      {formatDuration(p.totalDuration)}
                     </span>
                     <span>{new Date(p.lastModified).toLocaleDateString()}</span>
                   </div>
 
-                  {/* ✅ UPDATED BUTTONS: Modify (Blue) & Preview (Gray) */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => navigate(`/playlist/edit/${p.id}`)}
-                      className="flex-1 bg-[#1e293b] text-white py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
-                    >
-                      Modify
-                    </button>
+
+                    {/* ✅ FIXED CHECK: Case-Insensitive Check for Admin */}
+                    {/* If Role is NOT "admin" (in any case), SHOW the button */}
+                    {(user as any)?.role?.toLowerCase() !== 'admin' && (
+                      <button
+                        onClick={() => navigate(`/playlist/edit/${p.id}`)}
+                        className="flex-1 bg-[#1e293b] text-white py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                      >
+                        Modify
+                      </button>
+                    )}
 
                     <button
                       onClick={() => window.open(`/#/playlist/preview/${p.id}`, '_blank')}
@@ -210,13 +248,15 @@ const SchedulePlaylist: React.FC = () => {
                       Preview
                     </button>
 
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete Playlist"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {(user as any)?.role?.toLowerCase() !== 'admin' && (
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Playlist"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

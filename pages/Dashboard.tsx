@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Clock, Edit, Folder, Zap, Layers, Monitor, ArrowLeft } from 'lucide-react';
@@ -46,11 +47,7 @@ const Dashboard: React.FC = () => {
           const res = playlistsRes.value;
           let count = 0;
 
-          // Debugging log to see what the backend actually returns
-          // console.log("Playlist Response:", res);
-
           if (res.success) {
-            // Check if 'data' is the array, or if it's nested inside 'data.playlists'
             if (Array.isArray(res.data)) {
               count = res.data.length;
             } else if (res.data && Array.isArray(res.data.playlists)) {
@@ -109,9 +106,6 @@ const Dashboard: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-4">
           <div className="flex items-center gap-4">
-            {/* Dynamic Avatar */}
-
-
             <div>
               <h1 className="text-4xl font-bold text-primary">Dashboard</h1>
               <p className="text-gray-600 text-sm mt-1">
@@ -120,13 +114,16 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={handleNewDesign}
-            className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg hover:bg-primaryLight transition-colors shadow-md font-medium"
-          >
-            <Plus size={20} />
-            New Design
-          </button>
+          {/* RBAC Rule 2a: Hide New Design button for admin */}
+          {user?.role !== 'admin' && (
+            <button
+              onClick={handleNewDesign}
+              className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg hover:bg-primaryLight transition-colors shadow-md font-medium"
+            >
+              <Plus size={20} />
+              New Design
+            </button>
+          )}
         </div>
 
         {/* Error State */}
@@ -152,18 +149,20 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Screens Card */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Active Screens</p>
-                <p className="text-3xl font-bold text-orange-600 mt-2">
-                  {loading ? '...' : stats.totalScreens}
-                </p>
+          {/* RBAC Rule 1a: Hide Active Screens card for designer */}
+          {user?.role !== 'designer' && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Active Screens</p>
+                  <p className="text-3xl font-bold text-orange-600 mt-2">
+                    {loading ? '...' : stats.totalScreens}
+                  </p>
+                </div>
+                <Monitor className="text-orange-600 opacity-30" size={32} />
               </div>
-              <Monitor className="text-orange-600 opacity-30" size={32} />
             </div>
-          </div>
+          )}
 
           {/* Playlists Card */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -194,9 +193,9 @@ const Dashboard: React.FC = () => {
         <div className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-primary">Recent Designs</h2>
-            <Link to="/creative" className="text-primary hover:text-primaryLight font-medium transition-colors underline text-sm">
+            {/* <Link to="/creative" className="text-primary hover:text-primaryLight font-medium transition-colors underline text-sm">
               View All →
-            </Link>
+            </Link> */}
           </div>
 
           {loading ? (
@@ -209,21 +208,35 @@ const Dashboard: React.FC = () => {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
               <Folder className="mx-auto text-gray-400 mb-4" size={48} />
               <p className="text-gray-600 font-medium mb-4">No designs yet</p>
-              <button onClick={handleNewDesign} className="inline-flex items-center gap-2 bg-primary text-white px-6 py-2 rounded-lg hover:bg-primaryLight transition-colors font-medium">
-                <Plus size={18} /> Create Your First Design
-              </button>
+              {/* RBAC Rule 2a: Hide New Design button for admin */}
+              {user?.role !== 'admin' && (
+                <button onClick={handleNewDesign} className="inline-flex items-center gap-2 bg-primary text-white px-6 py-2 rounded-lg hover:bg-primaryLight transition-colors font-medium">
+                  <Plus size={18} /> Create Your First Design
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {designs.map((design) => (
                 <div key={design.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all group">
-                  <div className="h-40 bg-gray-200 relative overflow-hidden cursor-pointer" onClick={() => handleEditDesign(design.id)}>
+                  {/* RBAC Rule 2c: Disable click-to-edit for admin */}
+                  <div
+                    className="h-40 bg-gray-200 relative overflow-hidden cursor-pointer"
+                    onClick={() => {
+                      if (user?.role !== 'admin') {
+                        handleEditDesign(design.id);
+                      }
+                    }}
+                  >
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primaryLight/20">
                       <Layers className="text-primary/50" size={40} />
                     </div>
-                    <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/30 transition-all flex items-center justify-center">
-                      <Edit className="text-white drop-shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" size={36} />
-                    </div>
+                    {/* Show edit overlay only for non-admin users */}
+                    {user?.role !== 'admin' && (
+                      <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/30 transition-all flex items-center justify-center">
+                        <Edit className="text-white drop-shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" size={36} />
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
                     <h3 className="font-medium text-primary truncate text-lg">{design.metadata.title}</h3>
@@ -232,10 +245,14 @@ const Dashboard: React.FC = () => {
                       <span>Updated {new Date(design.metadata.updatedAt).toLocaleDateString()}</span>
                     </div>
                     <div className="flex gap-2 mt-4">
-                      <button onClick={() => handleEditDesign(design.id)} className="flex-1 px-4 py-2 bg-primary text-white rounded hover:bg-primaryLight transition-colors text-sm font-medium">
-                        Modify
-                      </button>
-                      <button onClick={() => handlePreviewDesign(design.id)} className="flex-1 px-4 py-2 bg-gray-100 text-primary rounded hover:bg-gray-200 transition-colors text-sm font-medium">
+                      {/* RBAC Rule 2b: Hide Modify button for admin */}
+                      {user?.role !== 'admin' && (
+                        <button onClick={() => handleEditDesign(design.id)} className="flex-1 px-4 py-2 bg-primary text-white rounded hover:bg-primaryLight transition-colors text-sm font-medium">
+                          Modify
+                        </button>
+                      )}
+                      {/* Preview button remains visible for all roles */}
+                      <button onClick={() => handlePreviewDesign(design.id)} className={`${user?.role === 'admin' ? 'flex-1' : 'flex-1'} px-4 py-2 bg-gray-100 text-primary rounded hover:bg-gray-200 transition-colors text-sm font-medium`}>
                         Preview
                       </button>
                     </div>
@@ -251,19 +268,21 @@ const Dashboard: React.FC = () => {
           <h2 className="text-2xl font-bold text-primary mb-8">Quick Actions</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Creative Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => navigate('/creative')}>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Zap size={24} className="text-blue-600" />
+            {/* RBAC Rule 1b: Hide Screen card for designer */}
+            {user?.role !== 'admin' && (
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => navigate('/creative')}>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Zap size={24} className="text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Creative</h3>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900">Creative</h3>
+                <p className="text-3xl font-bold text-blue-600 mb-4">{loading ? '-' : stats.totalDesigns}</p>
+                <div className="text-blue-600 font-semibold hover:text-blue-700 transition-colors flex items-center gap-1">
+                  Manage Creatives <ArrowLeft className="rotate-180" size={16} />
+                </div>
               </div>
-              <p className="text-3xl font-bold text-blue-600 mb-4">{loading ? '-' : stats.totalDesigns}</p>
-              <div className="text-blue-600 font-semibold hover:text-blue-700 transition-colors flex items-center gap-1">
-                Manage Creatives <ArrowLeft className="rotate-180" size={16} />
-              </div>
-            </div>
+            )}
 
             {/* Playlist Card */}
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => navigate('/playlist')}>
@@ -279,23 +298,25 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Screen Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => navigate('/screen')}>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
-                  <Monitor size={24} className="text-orange-600" />
+            {/* RBAC Rule 1b: Hide Screen card for designer */}
+            {user?.role !== 'designer' && (
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow cursor-pointer" onClick={() => navigate('/screen')}>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <Monitor size={24} className="text-orange-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Screen</h3>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900">Screen</h3>
+                <p className="text-3xl font-bold text-orange-600 mb-4">{loading ? '-' : stats.totalScreens}</p>
+                <div className="text-orange-600 font-semibold hover:text-orange-700 transition-colors flex items-center gap-1">
+                  Manage Screens <ArrowLeft className="rotate-180" size={16} />
+                </div>
               </div>
-              <p className="text-3xl font-bold text-orange-600 mb-4">{loading ? '-' : stats.totalScreens}</p>
-              <div className="text-orange-600 font-semibold hover:text-orange-700 transition-colors flex items-center gap-1">
-                Manage Screens <ArrowLeft className="rotate-180" size={16} />
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* ✅ RESTORED: Complete Schedule Management Section */}
+        {/* Schedule Management Section */}
         <div className="bg-slate-800 rounded-2xl shadow-xl p-8 md:p-12 text-white">
           <h2 className="text-3xl font-bold mb-8">Complete Schedule Management</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -352,7 +373,6 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

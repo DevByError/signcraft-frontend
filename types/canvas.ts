@@ -11,26 +11,18 @@ export enum ElementType {
   IMAGE = 'image',
   SLIDESHOW = 'slideshow',
   TICKER = 'ticker',
-  RSS = 'rss',
-  WEATHER = 'weather',
 
   // Media
   VIDEO = 'video',
   GIF = 'gif',
-  MEDIA_RSS = 'media_rss',
   YOUTUBE = 'youtube',
   USTREAM = 'ustream',
-  FTP = 'ftp',
-  INSTAGRAM = 'instagram',
-  STREAMING = 'streaming',
 
   // General
   LABEL = 'label',
   CLOCK = 'clock',
   TIMER = 'timer',
   SHAPE = 'shape',
-  TOUCH = 'touch',
-  WEATHER_2 = 'weather_2',
 
   // Primitive Shapes
   RECT = 'rect',
@@ -50,11 +42,7 @@ export enum ElementType {
   CROSS = 'cross',
 
   // Advanced
-  AD_SERVING = 'ad_serving',
   CALENDAR = 'calendar',
-  DASHBOARDS = 'dashboards',
-  TABLE = 'table',
-  SMART_SWITCH = 'smart_switch',
 
   // Embed
   WEB_IMAGE = 'web_image',
@@ -69,12 +57,12 @@ export enum ElementType {
  * This allows flexibility in how element types are specified throughout the codebase.
  */
 export type ElementTypeValue = ElementType |
-  'text' | 'image' | 'slideshow' | 'ticker' | 'rss' | 'weather' |
-  'video' | 'gif' | 'media_rss' | 'youtube' | 'ustream' | 'ftp' | 'instagram' | 'streaming' |
-  'label' | 'clock' | 'timer' | 'shape' | 'touch' | 'weather_2' |
+  'text' | 'image' | 'slideshow' | 'ticker' |
+  'video' | 'gif' | 'youtube' | 'ustream' |
+  'label' | 'clock' | 'timer' | 'shape' |
   'rect' | 'circle' | 'triangle' | 'star' | 'heart' | 'diamond' | 'pentagon' | 'hexagon' | 'octagon' | 'line' |
   'trapezoid' | 'crescent' | 'cross' |
-  'ad_serving' | 'calendar' | 'dashboards' | 'table' | 'smart_switch' |
+  'calendar' |
   'web_image' | 'web_video' | 'sub_creative' | 'embed' | 'html';
 
 export interface TextStyle {
@@ -103,13 +91,14 @@ export interface WidgetSettings {
   controls?: boolean;
   volume?: number;
   playbackSpeed?: number;
-  fitMode?: string;
+  fitMode?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
   videoUrl?: string;
   embedCode?: string;
   duration?: number;
 
 
   // Slideshow
+  slideDuration?: number;
   transitionDuration?: number;
   transitionEffect?: string;
 
@@ -150,6 +139,7 @@ export interface WidgetSettings {
   viewMode?: 'monthly' | 'weekly' | 'agenda';
   colorScheme?: string;
   showWeekends?: boolean;
+  selectedDate?: string; // ISO date string (YYYY-MM-DD)
 
   // Table
   rows?: number;

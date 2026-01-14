@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { X, AlertCircle, CheckCircle } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 export interface SaveDesignModalData {
   title: string;
@@ -46,7 +47,7 @@ export const SaveDesignModal: React.FC<SaveDesignModalProps> = ({
 
   const handleSave = async () => {
     if (!isModifying && !formData.title.trim()) {
-      alert('Please enter a design title');
+      Swal.fire('Error', 'Please enter a design title', 'error');
       return;
     }
     await onSave(formData);

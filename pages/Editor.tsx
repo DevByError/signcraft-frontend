@@ -11,8 +11,10 @@ import {
   RotateCw, Sparkles, Image, Shapes, FileText, MousePointer2, RectangleHorizontal, Sidebar, Zap,
   CheckCircle, AlertCircle,
   Upload,
-  RefreshCw
+  RefreshCw, Loader
 } from 'lucide-react';
+import { fetchWeather } from '../services/weatherService';
+import Swal from 'sweetalert2';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
 // ✅ FIX: Use 'saveDesignAPI' to distinguish from local function
@@ -24,6 +26,7 @@ import { useTimeline } from '../hooks/useTimeline';
 import * as timelineService from '../services/timelineService';
 import * as propertyPlaybackService from '../services/propertyPlaybackService';
 import { ElementType, ElementTypeValue, CanvasElement } from '../types/canvas';
+import { LiveClock, LiveTimer } from '../components/LiveWidgets';
 
 // Templates
 const TEMPLATES = [
@@ -52,8 +55,6 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.IMAGE, label: 'Image', icon: <ImageIcon size={18} /> },
       { type: ElementType.SLIDESHOW, label: 'Slideshow', icon: <Layout size={18} /> },
       { type: ElementType.TICKER, label: 'Ticker', icon: <Type size={18} /> },
-      { type: ElementType.RSS, label: 'RSS', icon: <FileText size={18} /> },
-      { type: ElementType.WEATHER, label: 'Weather', icon: <CloudSun size={18} /> },
     ]
   },
   {
@@ -63,12 +64,8 @@ const WIDGET_CATEGORIES = [
     items: [
       { type: ElementType.VIDEO, label: 'Video', icon: <Video size={18} /> },
       { type: ElementType.GIF, label: 'GIF', icon: <Image size={18} /> },
-      { type: ElementType.MEDIA_RSS, label: 'Media RSS', icon: <FileText size={18} /> },
       { type: ElementType.YOUTUBE, label: 'YouTube', icon: <Video size={18} /> },
       { type: ElementType.USTREAM, label: 'Ustream', icon: <Video size={18} /> },
-      { type: ElementType.FTP, label: 'FTP', icon: <FileText size={18} /> },
-      { type: ElementType.INSTAGRAM, label: 'Instagram', icon: <Image size={18} /> },
-      { type: ElementType.STREAMING, label: 'Streaming', icon: <Video size={18} /> },
     ]
   },
   {
@@ -79,8 +76,6 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.LABEL, label: 'Label', icon: <Type size={18} /> },
       { type: ElementType.CLOCK, label: 'Clock', icon: <Clock size={18} /> },
       { type: ElementType.TIMER, label: 'Timer', icon: <Clock size={18} /> },
-      { type: ElementType.TOUCH, label: 'Touch', icon: <MousePointer2 size={18} /> },
-      { type: ElementType.WEATHER_2, label: 'Weather 2.0', icon: <CloudSun size={18} /> },
     ]
   },
   {
@@ -107,11 +102,7 @@ const WIDGET_CATEGORIES = [
     label: '🔹 Advanced',
     icon: <Grid3x3 size={18} />,
     items: [
-      { type: ElementType.AD_SERVING, label: 'Ad Serving', icon: <ImageIcon size={18} /> },
       { type: ElementType.CALENDAR, label: 'Calendar', icon: <Grid3x3 size={18} /> },
-      { type: ElementType.DASHBOARDS, label: 'Dashboards', icon: <Layout size={18} /> },
-      { type: ElementType.TABLE, label: 'Table', icon: <Grid3x3 size={18} /> },
-      { type: ElementType.SMART_SWITCH, label: 'Smart Switch', icon: <Settings size={18} /> },
     ]
   },
   {
@@ -246,7 +237,9 @@ const Editor: React.FC = () => {
   // Local save state (UI-only)
   const [isSavingDesign, setIsSavingDesign] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Weather loading state
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     widgets_essential: true,
@@ -278,9 +271,17 @@ const Editor: React.FC = () => {
   } | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null); // ✅ NEW: For scroll control
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null); // ✅ NEW: For Videos
+  const previewWindowRef = useRef<Window | null>(null);
+  const isCreatingDesignRef = useRef(false); // ✅ Prevent refetch overwrite on creation
+
+  // ✅ NEW: Live Preview State & Sync
+  const [livePreviewOpen, setLivePreviewOpen] = useState(false);
+  const [livePreviewKey, setLivePreviewKey] = useState<string | null>(null);
+
   // Helper functions for element rendering (must be defined before elementRenderers)
   const getYouTubeEmbedUrl = (url: string): string | null => {
     if (!url) return null;
@@ -419,12 +420,38 @@ const Editor: React.FC = () => {
     const targetId = selectedId;
 
     if (videoInputRef.current) videoInputRef.current.value = '';
-    setIsUploading(true);
-    setSuccessMessage('Uploading video...');
+
+    // Show SweetAlert Loading with Progress Bar
+    let progressBar: HTMLElement | null = null;
+    let progressText: HTMLElement | null = null;
+
+    Swal.fire({
+      title: 'Uploading video...',
+      html: `
+        <div class="w-full bg-gray-200 rounded-full h-4 mb-4 dark:bg-gray-700 mt-4 overflow-hidden">
+          <div id="swal-upload-progress" class="bg-blue-600 h-4 rounded-full text-xs font-medium text-blue-100 text-center p-0.5 leading-none transition-all duration-300" style="width: 0%">0%</div>
+        </div>
+        <p id="swal-upload-text" class="text-sm text-gray-500">Starting upload...</p>
+      `,
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        progressBar = document.getElementById('swal-upload-progress');
+        progressText = document.getElementById('swal-upload-text');
+      }
+    });
 
     try {
       // 2. Upload to S3
-      const response = await import('../services/designService').then(m => m.uploadAsset(file));
+      const response = await import('../services/designService').then(m => m.uploadAsset(file, (percent) => {
+        if (progressBar) {
+          progressBar.style.width = `${percent}%`;
+          progressBar.innerText = `${percent}%`;
+        }
+        if (progressText) {
+          progressText.innerText = `Uploading: ${percent}%`;
+        }
+      }));
 
       if (response.success && response.url) {
 
@@ -478,16 +505,19 @@ const Editor: React.FC = () => {
           addElement(ElementType.VIDEO, 100, 100, undefined, response.url, actualDuration);
         }
 
-        setSuccessMessage('Video updated successfully!');
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: 'Video updated successfully!',
+          timer: 2000,
+          showConfirmButton: false
+        });
       } else {
         throw new Error(response.msg || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload Error:', error);
-      alert('Failed to upload video.');
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => setSuccessMessage(null), 2000);
+      Swal.fire('Error', 'Failed to upload video.', 'error');
     }
   };
 
@@ -694,20 +724,7 @@ const Editor: React.FC = () => {
         </div>
       )
     },
-    [ElementType.STREAMING]: {
-      component: (el) => el.content && el.content.startsWith('http') ? (
-        <iframe
-          src={el.content}
-          className="w-full h-full border-0"
-          style={{ pointerEvents: 'none' }}
-          allow="autoplay"
-        />
-      ) : (
-        <div className="w-full h-full bg-black flex items-center justify-center text-white font-bold">
-          Streaming (Add URL)
-        </div>
-      )
-    },
+
     [ElementType.WEB_IMAGE]: {
       component: (el) => el.content && el.content.startsWith('http') ? (
         <img
@@ -722,227 +739,63 @@ const Editor: React.FC = () => {
         </div>
       )
     },
-    [ElementType.INSTAGRAM]: {
-      component: (el) => el.widgetSettings?.embedCode ? (
-        <iframe
-          srcDoc={el.widgetSettings.embedCode}
-          className="w-full h-full border-0"
-          sandbox="allow-scripts allow-same-origin"
-          style={{ pointerEvents: 'none' }}
-        />
-      ) : el.content && el.content.startsWith('http') ? (
-        <img
-          src={el.content}
-          alt="Instagram"
-          className="w-full h-full object-cover"
-          style={{ pointerEvents: 'none' }}
-        />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500 flex items-center justify-center text-white font-bold">
-          Instagram (Add URL)
-        </div>
-      )
-    },
-    [ElementType.RSS]: {
-      component: (el) => (
-        <div className="w-full h-full bg-orange-50 border border-orange-200 p-3 flex flex-col gap-2 overflow-hidden">
-          <div className="text-xs font-bold text-orange-800">{el.content}</div>
-          <div className="text-xs text-gray-600">Latest updates...</div>
-        </div>
-      )
-    },
-    [ElementType.MEDIA_RSS]: {
-      component: (el) => elementRenderers[ElementType.RSS].component(el)
-    },
-    [ElementType.WEATHER]: {
-      component: (el) => (
-        <div className="w-full h-full bg-gradient-to-br from-sky-400 to-blue-500 p-4 text-white flex flex-col items-center justify-center gap-2">
-          <CloudSun size={48} className="mb-2" />
-          <div className="text-3xl font-bold">{el.widgetSettings?.temperature || '72'}°{el.widgetSettings?.temperatureUnit || 'F'}</div>
-          <div className="text-lg">{el.widgetSettings?.condition || 'Sunny'}</div>
-          <div className="text-sm opacity-90">{el.widgetSettings?.location || el.content || 'New York, NY'}</div>
-        </div>
-      )
-    },
-    [ElementType.WEATHER_2]: {
-      component: (el) => elementRenderers[ElementType.WEATHER].component(el)
-    },
+
+
+
     [ElementType.CLOCK]: {
-      component: (el) => (
-        <div
-          className="w-full h-full flex flex-col items-center justify-center gap-2"
-          style={{
-            backgroundColor: el.backgroundColor || '#1e293b',
-            color: el.color || '#f1f5f9',
-          }}
-        >
-          <Clock className="opacity-50" size={Math.min(el.fontSize || 24, 32)} />
-          <div
-            className="font-bold font-mono"
-            style={{ fontSize: el.fontSize || 24 }}
-          >
-            {el.content || new Date().toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: el.widgetSettings?.timeFormat !== '24'
-            })}
-          </div>
-        </div>
-      )
+      component: (el) => <LiveClock element={el} />
     },
     [ElementType.TIMER]: {
-      component: (el) => (
-        <div
-          className="w-full h-full flex flex-col items-center justify-center gap-2"
-          style={{
-            backgroundColor: el.backgroundColor || '#dc2626',
-            color: el.color || '#ffffff',
-          }}
-        >
-          <Clock className="opacity-75" size={Math.min(el.fontSize || 24, 32)} />
-          <div
-            className="font-bold font-mono"
-            style={{ fontSize: el.fontSize || 32 }}
-          >
-            {el.content || '00:00:00'}
-          </div>
-        </div>
-      )
+      component: (el) => <LiveTimer element={el} />
     },
     [ElementType.CALENDAR]: {
-      component: (el) => (
-        <div className="w-full h-full bg-white p-3 flex flex-col">
-          <div className="text-center font-bold text-gray-800 mb-2 pb-2 border-b border-gray-200">
-            {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </div>
-          <div className="grid grid-cols-7 gap-1 flex-1 text-xs">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-              <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
-            ))}
-            {Array.from({ length: 28 }, (_, i) => (
-              <div
-                key={i}
-                className={`text-center p-1 rounded ${i === new Date().getDate() - 1
-                  ? 'bg-green-500 text-white font-bold'
-                  : 'text-gray-700'
-                  }`}
-              >
-                {i + 1}
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    },
-    [ElementType.TABLE]: {
-      component: (el) => (
-        <div className="w-full h-full bg-white overflow-hidden">
-          <table className="w-full h-full text-xs border-collapse">
-            <thead>
-              <tr className="bg-amber-500 text-white">
-                <th className="p-2 text-left border border-amber-600">Name</th>
-                <th className="p-2 text-left border border-amber-600">Status</th>
-                <th className="p-2 text-left border border-amber-600">Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {['Item 1', 'Item 2', 'Item 3'].map((item, i) => (
-                <tr key={i} className="border-b border-gray-200 hover:bg-gray-50">
-                  <td className="p-2 border border-gray-200">{item}</td>
-                  <td className="p-2 border border-gray-200">
-                    <span className={`px-2 py-1 rounded text-xs ${i === 0 ? 'bg-green-100 text-green-700' :
-                      i === 1 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                      {i === 0 ? 'Active' : i === 1 ? 'Pending' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="p-2 border border-gray-200 font-mono">${(Math.random() * 1000).toFixed(2)}</td>
-                </tr>
+      component: (el) => {
+        const dateStr = el.widgetSettings?.selectedDate || new Date().toISOString().split('T')[0];
+        const displayDate = new Date(dateStr);
+        const currentDate = new Date();
+        const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
+        const firstDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1).getDay();
+
+        return (
+          <div className="w-full h-full bg-white p-3 flex flex-col">
+            <div className="text-center font-bold text-gray-800 mb-2 pb-2 border-b border-gray-200">
+              {displayDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </div>
+            <div className="grid grid-cols-7 gap-1 flex-1 text-xs">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )
-    },
-    [ElementType.DASHBOARDS]: {
-      component: (el) => (
-        <div className="w-full h-full bg-gradient-to-br from-gray-900 to-gray-800 p-3 text-white">
-          <div className="font-bold text-sm mb-3 pb-2 border-b border-gray-700">
-            {el.content || 'Dashboard'}
-          </div>
-          <div className="grid grid-cols-2 gap-2 h-3/4">
-            <div className="bg-cyan-600 rounded-lg p-2 flex flex-col">
-              <div className="text-xs opacity-75">Views</div>
-              <div className="text-2xl font-bold mt-auto">12.5K</div>
-            </div>
-            <div className="bg-green-600 rounded-lg p-2 flex flex-col">
-              <div className="text-xs opacity-75">Revenue</div>
-              <div className="text-2xl font-bold mt-auto">$8.2K</div>
-            </div>
-            <div className="bg-purple-600 rounded-lg p-2 flex flex-col">
-              <div className="text-xs opacity-75">Users</div>
-              <div className="text-2xl font-bold mt-auto">3.4K</div>
-            </div>
-            <div className="bg-orange-600 rounded-lg p-2 flex flex-col">
-              <div className="text-xs opacity-75">Growth</div>
-              <div className="text-2xl font-bold mt-auto">+24%</div>
+              {Array.from({ length: firstDay }, () => null).map((_, i) => (
+                <div key={`empty-${i}`} className="text-center p-1"></div>
+              ))}
+              {Array.from({ length: daysInMonth }, (_, i) => {
+                const day = i + 1;
+                const isSelected = displayDate.getDate() === day &&
+                  displayDate.getMonth() === currentDate.getMonth() &&
+                  displayDate.getFullYear() === currentDate.getFullYear();
+                return (
+                  <div
+                    key={day}
+                    className={`text-center p-1 rounded ${isSelected
+                      ? 'bg-green-500 text-white font-bold'
+                      : 'text-gray-700'
+                      }`}
+                  >
+                    {day}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      )
+        );
+      }
     },
-    [ElementType.AD_SERVING]: {
-      component: (el) => el.content && el.content.startsWith('http') ? (
-        <img
-          src={el.content}
-          alt="Advertisement"
-          className="w-full h-full object-cover"
-          style={{ pointerEvents: 'none' }}
-        />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center gap-3 text-white p-4">
-          <ImageIcon size={40} />
-          <div className="text-center">
-            <div className="font-bold text-lg">Advertisement</div>
-            <div className="text-xs opacity-75 mt-1">{el.content || 'Add image URL in properties'}</div>
-          </div>
-        </div>
-      )
-    },
-    [ElementType.SMART_SWITCH]: {
-      component: (el) => (
-        <div className="w-full h-full bg-gradient-to-br from-lime-400 to-green-500 flex flex-col items-center justify-center gap-4 p-4">
-          <div className="flex items-center gap-4">
-            <div className="text-white text-sm font-semibold">Option A</div>
-            <div className="relative w-14 h-7 bg-white rounded-full shadow-inner">
-              <div className="absolute top-1 left-1 w-5 h-5 bg-green-600 rounded-full transition-transform"></div>
-            </div>
-            <div className="text-white text-sm font-semibold">Option B</div>
-          </div>
-          <div className="text-white text-xs opacity-90">{el.content || 'Smart Switch'}</div>
-          <Settings className="text-white opacity-50" size={20} />
-        </div>
-      )
-    },
-    [ElementType.TOUCH]: {
-      component: (el) => (
-        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-blue-300 opacity-20 animate-pulse"></div>
-          <div className="z-10 flex flex-col items-center gap-3 text-white">
-            <MousePointer2 size={32} className="animate-bounce" />
-            <span className="text-sm font-semibold">{el.content || 'Touch Zone'}</span>
-          </div>
-        </div>
-      )
-    },
-    [ElementType.FTP]: {
-      component: (el) => (
-        <div className="w-full h-full bg-teal-50 border border-teal-300 p-3 flex items-center gap-2">
-          <div className="text-teal-800 text-sm">{el.content}</div>
-        </div>
-      )
-    },
+
+
+
+
+
+
     [ElementType.SUB_CREATIVE]: {
       component: (el) => (
         <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
@@ -1169,11 +1022,35 @@ const Editor: React.FC = () => {
 
       // VIDEO DROP
       if (file.type.startsWith('video/')) {
-        setIsUploading(true);
-        setSuccessMessage('Uploading video...');
+        let progressBar: HTMLElement | null = null;
+        let progressText: HTMLElement | null = null;
+
+        Swal.fire({
+          title: 'Uploading video...',
+          html: `
+            <div class="w-full bg-gray-200 rounded-full h-4 mb-4 dark:bg-gray-700 mt-4 overflow-hidden">
+              <div id="swal-upload-progress" class="bg-blue-600 h-4 rounded-full text-xs font-medium text-blue-100 text-center p-0.5 leading-none transition-all duration-300" style="width: 0%">0%</div>
+            </div>
+            <p id="swal-upload-text" class="text-sm text-gray-500">Starting upload...</p>
+          `,
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: () => {
+            progressBar = document.getElementById('swal-upload-progress');
+            progressText = document.getElementById('swal-upload-text');
+          }
+        });
 
         try {
-          const response = await import('../services/designService').then(m => m.uploadAsset(file));
+          const response = await import('../services/designService').then(m => m.uploadAsset(file, (percent) => {
+            if (progressBar) {
+              progressBar.style.width = `${percent}%`;
+              progressBar.innerText = `${percent}%`;
+            }
+            if (progressText) {
+              progressText.innerText = `Uploading: ${percent}%`;
+            }
+          }));
 
           if (response.success && response.url) {
             const actualDuration = await getVideoDuration(response.url);
@@ -1185,16 +1062,20 @@ const Editor: React.FC = () => {
             const y = rect ? snapValue((e.clientY - rect.top) / scale) : 100;
 
             addElement(ElementType.VIDEO, x, y, undefined, response.url, actualDuration);
-            setSuccessMessage('Video added!');
+            Swal.fire({
+              icon: 'success',
+              title: 'Video added!',
+              timer: 1500,
+              showConfirmButton: false
+            });
           } else {
-            alert('Upload failed.');
+            Swal.fire('Error', 'Upload failed.', 'error');
           }
         } catch (err) {
           console.error('Drop Error:', err);
-          alert('Error processing video.');
+          Swal.fire('Error', 'Error processing video.', 'error');
         } finally {
           setIsUploading(false);
-          setTimeout(() => setSuccessMessage(null), 2000);
         }
         return;
       }
@@ -1284,20 +1165,18 @@ const Editor: React.FC = () => {
     ].includes(type);
 
     const isTextBased = [
-      ElementType.TEXT, ElementType.LABEL, ElementType.TICKER,
-      ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP
+      ElementType.TEXT, ElementType.LABEL, ElementType.TICKER
     ].includes(type);
 
     const isMediaWidget = [
       ElementType.IMAGE, ElementType.VIDEO, ElementType.GIF, ElementType.SLIDESHOW,
-      ElementType.YOUTUBE, ElementType.USTREAM, ElementType.STREAMING,
-      ElementType.INSTAGRAM, ElementType.WEB_IMAGE, ElementType.WEB_VIDEO
+      ElementType.YOUTUBE, ElementType.USTREAM,
+      ElementType.WEB_IMAGE, ElementType.WEB_VIDEO
     ].includes(type);
 
     const isAdvancedWidget = [
-      ElementType.WEATHER, ElementType.WEATHER_2, ElementType.CLOCK, ElementType.TIMER,
-      ElementType.CALENDAR, ElementType.TABLE, ElementType.DASHBOARDS,
-      ElementType.AD_SERVING, ElementType.SMART_SWITCH, ElementType.TOUCH,
+      ElementType.CLOCK, ElementType.TIMER,
+      ElementType.CALENDAR,
       ElementType.SUB_CREATIVE, ElementType.EMBED
     ].includes(type);
 
@@ -1320,15 +1199,9 @@ const Editor: React.FC = () => {
       width = 250;
       height = 100;
       fontSize = 48;
-    } else if (type === ElementType.WEATHER || type === ElementType.WEATHER_2) {
-      width = 280;
-      height = 180;
     } else if (type === ElementType.CALENDAR) {
       width = 350;
       height = 300;
-    } else if (type === ElementType.TABLE || type === ElementType.DASHBOARDS) {
-      width = 400;
-      height = 250;
     } else if (isShape) {
       width = 150;
       height = 150;
@@ -1343,34 +1216,21 @@ const Editor: React.FC = () => {
       switch (type) {
         case ElementType.VIDEO:
         case ElementType.YOUTUBE:
-        case ElementType.STREAMING:
           return { autoplay: false, loop: true };
         case ElementType.SLIDESHOW:
           return { transitionDuration: 5, transitionEffect: 'fade' as const };
         case ElementType.TICKER:
           return { scrollSpeed: 'medium' as const };
-        case ElementType.RSS:
-        case ElementType.MEDIA_RSS:
-          return { updateInterval: 15, maxItems: 5 };
-        case ElementType.WEATHER:
-        case ElementType.WEATHER_2:
-          return { location: 'New York, NY', temperatureUnit: 'F' as const };
         case ElementType.CLOCK:
           return { timeFormat: '12' as const, timezone: 'America/New_York' };
         case ElementType.TIMER:
           return { displayFormat: 'HH:MM:SS' as const };
         case ElementType.CALENDAR:
-          return { calendarSource: 'google' as const, viewMode: 'monthly' as const };
-        case ElementType.TABLE:
-          return { rows: 5, columns: 3, dataSource: 'manual' as const };
-        case ElementType.DASHBOARDS:
-          return { refreshRate: 30 };
-        case ElementType.INSTAGRAM:
-          return { displayMode: 'grid' as const };
-        case ElementType.TOUCH:
-          return { actionType: 'url' as const };
-        case ElementType.SMART_SWITCH:
-          return { switchCondition: 'time' as const };
+          return {
+            calendarSource: 'google' as const,
+            viewMode: 'monthly' as const,
+            selectedDate: new Date().toISOString().split('T')[0]
+          };
         default:
           return {};
       }
@@ -1452,33 +1312,21 @@ const Editor: React.FC = () => {
       case ElementType.IMAGE: return 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400';
       case ElementType.SLIDESHOW: return '🖼️ Slideshow';
       case ElementType.TICKER: return '📰 Breaking News • Latest Updates • Top Stories';
-      case ElementType.RSS: return '📡 RSS Feed';
-      case ElementType.WEATHER: return '☀️ Weather';
 
       // Media
       case ElementType.VIDEO: return '🎬 Video Player';
       case ElementType.GIF: return 'https://media.giphy.com/media/26BRuo6sLetdllPAQ/giphy.gif';
-      case ElementType.MEDIA_RSS: return '📺 Media RSS';
       case ElementType.YOUTUBE: return '▶️ YouTube';
       case ElementType.USTREAM: return '📹 Ustream';
-      case ElementType.FTP: return '📁 FTP';
-      case ElementType.INSTAGRAM: return '📷 Instagram';
-      case ElementType.STREAMING: return '📡 Live Stream';
 
       // General
       case ElementType.LABEL: return 'Label Text';
       case ElementType.CLOCK: return '🕐 12:00 PM';
       case ElementType.TIMER: return '⏱️ 00:00:00';
       case ElementType.SHAPE: return '';
-      case ElementType.TOUCH: return '👆 Touch Zone';
-      case ElementType.WEATHER_2: return '🌤️ Weather 2.0';
 
       // Advanced
-      case ElementType.AD_SERVING: return '📊 Advertisement';
       case ElementType.CALENDAR: return '📅 Calendar';
-      case ElementType.DASHBOARDS: return '📈 Dashboard';
-      case ElementType.TABLE: return '📋 Data Table';
-      case ElementType.SMART_SWITCH: return '🔄 Smart Switch';
 
       // Embed
       case ElementType.WEB_IMAGE: return '🌐 Web Image';
@@ -1718,6 +1566,18 @@ const Editor: React.FC = () => {
     }
   };
 
+  // ✅ NEW: Wheel Zoom Handler with Scroll Support
+  const handleCanvasWheel = (e: React.WheelEvent) => {
+    // Ctrl/Cmd + Scroll = Zoom
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // Scroll down = zoom out, up = zoom in
+      const newZoom = Math.max(10, Math.min(300, zoom * zoomFactor));
+      setZoom(Math.round(newZoom));
+    }
+    // Regular scroll (horizontal/vertical) is handled by overflow-auto
+  };
+
   const handleResizeStart = (e: React.MouseEvent, id: string, handle: string) => {
     e.stopPropagation();
     const element = elements.find(el => el.id === id);
@@ -1799,53 +1659,90 @@ const Editor: React.FC = () => {
     // Timeline will auto-sync via useEffect
   };
 
-  const updateSelectedElement = (key: keyof CanvasElement, value: any) => {
+  // =========================================================================
+  // ✅ FIX #1: Unified Update Function (Syncs Canvas + Timeline + History)
+  // =========================================================================
+  const updateElementUnified = (
+    scope: 'root' | 'widgetSettings',
+    key: string,
+    value: any,
+    shouldSaveHistory: boolean
+  ) => {
     if (!selectedId) return;
+
+    // 1. Update Canvas Elements (Visual State)
     const newElements = elements.map(el => {
       if (el.id === selectedId) {
-        return { ...el, [key]: value };
+        if (scope === 'root') {
+          return { ...el, [key]: value };
+        } else {
+          // scope === 'widgetSettings'
+          return { ...el, widgetSettings: { ...el.widgetSettings, [key]: value } };
+        }
       }
       return el;
     });
+
     setElements(newElements);
+    if (shouldSaveHistory) updateHistory(newElements);
 
-    // Update timeline item properties for position, size, rotation, opacity, color
-    const visualProps = ['x', 'y', 'width', 'height', 'rotation', 'opacity', 'zIndex', 'color', 'backgroundColor', 'fillColor', 'fontSize'];
-    if (visualProps.includes(key as string)) {
-      const timelineItems = timeline.tracks
-        .flatMap(t => t.items)
-        .filter(item => item.elementId === selectedId);
+    // 2. Update Timeline Items (Playback State)
+    // Find all timeline items associated with this element
+    const timelineItems = timeline.tracks
+      .flatMap(t => t.items)
+      .filter(item => item.elementId === selectedId);
 
-      timelineItems.forEach(item => {
-        updateItem(item.id, {
-          properties: {
-            ...item.properties,
-            [key]: value
-          }
-        });
-      });
-    }
+    timelineItems.forEach(item => {
+      // Prepare the properties object for the timeline item
+      const updates: any = {
+        properties: {
+          ...item.properties
+        }
+      };
+
+      if (scope === 'root') {
+        // Update root property (e.g., x, y, color, width)
+        updates.properties[key] = value;
+      } else {
+        // Update widget setting (e.g., mute, loop, url)
+
+        // TS FIX: Cast properties to 'any' to allow access to widgetSettings
+        const currentSettings = (item.properties as any).widgetSettings || {};
+
+        (updates.properties as any).widgetSettings = {
+          ...currentSettings,
+          [key]: value
+        };
+
+        // SPECIAL CASE: Duration
+        if (key === 'duration') {
+          updates.duration = value;
+          // Update outPoint relative to current inPoint
+          updates.outPoint = (item.inPoint || 0) + value;
+        }
+      }
+
+      // Call the timeline hook to update the internal state
+      updateItem(item.id, updates);
+    });
+  };
+
+  // --- Wrapper Functions (Keep existing JSX compatible) ---
+
+  const updateSelectedElement = (key: keyof CanvasElement, value: any) => {
+    updateElementUnified('root', key as string, value, false);
   };
 
   const updateSelectedElementImmediate = (key: keyof CanvasElement, value: any) => {
-    updateSelectedElement(key, value);
-    updateHistory(elements);
+    updateElementUnified('root', key as string, value, true);
   };
 
   const updateWidgetSettings = (key: string, value: any) => {
-    if (!selectedId) return;
-    const newElements = elements.map(el => {
-      if (el.id === selectedId) {
-        return { ...el, widgetSettings: { ...el.widgetSettings, [key]: value } };
-      }
-      return el;
-    });
-    setElements(newElements);
+    updateElementUnified('widgetSettings', key, value, false);
   };
 
   const updateWidgetSettingsImmediate = (key: string, value: any) => {
-    updateWidgetSettings(key, value);
-    setTimeout(() => updateHistory(elements), 0);
+    updateElementUnified('widgetSettings', key, value, true);
   };
 
   const bringToFront = () => {
@@ -1939,8 +1836,7 @@ const Editor: React.FC = () => {
 
     // Allow editing for all text-based widgets
     const editableTypes = [
-      ElementType.TEXT, ElementType.LABEL, ElementType.TICKER,
-      ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP
+      ElementType.TEXT, ElementType.LABEL, ElementType.TICKER
     ];
 
     if (element && editableTypes.includes(element.type as ElementType)) {
@@ -1986,6 +1882,10 @@ const Editor: React.FC = () => {
             startTime: item.startTime,
             duration: item.duration,
             layer: item.layer,
+            inPoint: item.inPoint || 0,
+            outPoint: item.outPoint || item.duration,
+            animations: item.animations || [],
+            initialState: item.initialState || {},
             properties: item.properties || {}
           })),
         })),
@@ -2018,25 +1918,26 @@ const Editor: React.FC = () => {
           window.history.replaceState(null, '', `#/editor/${response.data.id}`);
         }
         setDesignTitle(data.title);
-        setSuccessMessage('Design saved successfully');
-        setTimeout(() => {
-          setSuccessMessage(null);
-          setShowSaveModal(false);
-        }, 1500);
+        await Swal.fire({
+          icon: 'success',
+          title: 'Design saved successfully',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        setShowSaveModal(false);
+        navigate('/dashboard');
       } else {
-        alert('Failed to save: ' + response.msg);
+        Swal.fire('Error', 'Failed to save: ' + response.msg, 'error');
       }
     } catch (error: any) {
       // ✅ IGNORE 401/403 Errors - The Global Modal will handle them
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         console.warn('🔒 Auth error caught, waiting for global modal...');
-        setSuccessMessage(null);
         return;
       }
 
       console.error('Error saving design:', error);
-      alert(`❌ Error saving design: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setSuccessMessage(null);
+      Swal.fire('Error', `Error saving design: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
 
@@ -2365,6 +2266,14 @@ const Editor: React.FC = () => {
   // Load design from backend
   useEffect(() => {
     if (designId) {
+      // ✅ PREVENT OVERWRITE: If we just created this design, don't refetch immediately
+      // This prevents local state (like canvasSize) from being overwritten by potentially stale data
+      if (isCreatingDesignRef.current) {
+        console.log('Skipping fetch for newly created design');
+        isCreatingDesignRef.current = false;
+        return;
+      }
+
       const loadDesign = async () => {
         try {
           console.log('Loading design:', designId);
@@ -2659,6 +2568,59 @@ const Editor: React.FC = () => {
     };
   }, [selectedIds, editingTextId, historyIndex, elements, spacePressed]);
 
+  // ✅ NEW: Live Preview Sync Effect
+  // This effect syncs the current design state to the live preview window in real-time
+  useEffect(() => {
+    if (!livePreviewOpen || !livePreviewKey) return;
+
+    try {
+      // Create the updated design data
+      const updatedPreviewData = {
+        id: 'temp-preview-' + Date.now(),
+        metadata: {
+          title: designTitle || 'Untitled Design',
+          description: '',
+          canvasWidth: canvasSize.width,
+          canvasHeight: canvasSize.height,
+          canvasColor: canvasColor,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        designJSON: {
+          elements: elements,
+          timeline: {
+            tracks: timeline.tracks.map(track => ({
+              ...track,
+              items: track.items.map(item => ({
+                ...item,
+                properties: item.properties || {}
+              }))
+            })),
+            totalDuration: timeline.totalDuration
+          }
+        }
+      };
+
+      // Update localStorage so the preview tab can read it
+      localStorage.setItem(livePreviewKey, JSON.stringify(updatedPreviewData));
+
+      // Send update to preview window via postMessage
+      // This ensures preview updates in real-time
+      if (previewWindowRef.current && !previewWindowRef.current.closed) {
+        previewWindowRef.current.postMessage({
+          type: 'LIVE_PREVIEW_UPDATE',
+          payload: updatedPreviewData
+        }, '*');
+      } else {
+        setLivePreviewOpen(false);
+        setLivePreviewKey(null);
+        previewWindowRef.current = null;
+      }
+    } catch (error) {
+      console.error('Failed to sync preview:', error);
+    }
+  }, [elements, timeline, canvasSize, canvasColor, designTitle, livePreviewOpen, livePreviewKey]);
+
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-gray-100"
@@ -2801,41 +2763,149 @@ const Editor: React.FC = () => {
           </button>
 
           <button
-            onClick={() => {
-              // Create a temporary design for live preview
-              const previewDesign = {
-                id: 'temp-preview-' + Date.now(),
-                metadata: {
-                  title: designTitle || 'Untitled Design',
-                  description: '',
-                  canvasWidth: canvasSize.width,
-                  canvasHeight: canvasSize.height,
-                  canvasColor: canvasColor,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                },
-                designJSON: {
-                  elements: elements,
-                  timeline: {
-                    tracks: timeline.tracks.map(track => ({
-                      ...track,
-                      items: track.items.map(item => ({
-                        ...item,
-                        properties: item.properties || {}
-                      }))
-                    })),
-                    totalDuration: timeline.totalDuration
-                  }
-                }
-              };
+            onClick={async () => {
+              // ✅ AUTO-SAVE: Save the design before opening preview
+              try {
+                // ... (Keep existing Swal loading logic) ...
+                Swal.fire({
+                  title: 'Saving design...',
+                  allowOutsideClick: false,
+                  didOpen: () => Swal.showLoading()
+                });
 
-              // Navigate to preview with live data
-              navigate(`/preview/live`, {
-                state: {
-                  livePreview: true,
-                  designData: previewDesign
+                // ... (Keep existing data preparation logic: elementsWithDefaults, timelineVideoData, payload) ...
+                const elementsWithDefaults = elements.map(el => ({
+                  ...el,
+                  content: el.content || '',
+                  visible: el.visible ?? true,
+                  textStyle: el.textStyle || { bold: false, italic: false, underline: false, textAlign: 'left', fontFamily: 'Arial', letterSpacing: 0, lineHeight: 1.2 }
+                }));
+
+                const timelineVideoData = {
+                  tracks: timeline.tracks.map(track => ({
+                    id: track.id,
+                    name: track.name,
+                    type: track.type,
+                    items: track.items.map(item => ({
+                      id: item.id,
+                      elementId: item.elementId,
+                      startTime: item.startTime,
+                      duration: item.duration,
+                      layer: item.layer,
+                      properties: item.properties || {}
+                    })),
+                  })),
+                  totalDuration: timeline.totalDuration,
+                  fps: 60,
+                };
+
+                const payload = {
+                  id: designId || undefined,
+                  title: designTitle || 'Untitled Design',
+                  canvasData: {
+                    elements: elementsWithDefaults,
+                    metadata: {
+                      canvasWidth: canvasSize.width,
+                      canvasHeight: canvasSize.height,
+                      canvasColor: canvasColor
+                    }
+                  },
+                  timelineData: timelineVideoData,
+                };
+
+                // Save design
+                const response = await saveDesignAPI(payload);
+
+                if (response.success) {
+                  if (!designId && response.data?.id) {
+                    isCreatingDesignRef.current = true;
+                    setDesignId(response.data.id);
+                    window.history.replaceState(null, '', `#/editor/${response.data.id}`);
+                  }
+                  Swal.fire({
+                    icon: 'success',
+                    title: 'Design saved! Opening preview...',
+                    timer: 1500,
+                    showConfirmButton: false
+                  });
+
+                  // ✅ OPEN LIVE PREVIEW
+                  const previewDesign = {
+                    id: designId || response.data?.id || 'temp-preview-' + Date.now(),
+                    metadata: {
+                      title: designTitle || 'Untitled Design',
+                      description: '',
+                      canvasWidth: canvasSize.width,
+                      canvasHeight: canvasSize.height,
+                      canvasColor: canvasColor,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString()
+                    },
+                    designJSON: {
+                      elements: elementsWithDefaults,
+                      timeline: {
+                        tracks: timeline.tracks.map(track => ({
+                          ...track,
+                          items: track.items.map(item => ({
+                            ...item,
+                            properties: item.properties || {}
+                          }))
+                        })),
+                        totalDuration: timeline.totalDuration
+                      }
+                    }
+                  };
+
+                  // ---------------------------------------------------------
+                  // ✅ FIX STARTS HERE: Clean up old previews before saving new one
+                  // ---------------------------------------------------------
+
+                  // 1. Clear ALL old preview keys to free up space
+                  Object.keys(localStorage).forEach((key) => {
+                    if (key.startsWith('livePreviewData_')) {
+                      localStorage.removeItem(key);
+                    }
+                  });
+
+                  // 2. Generate new key
+                  const previewKey = 'livePreviewData_' + Date.now();
+
+                  try {
+                    // 3. Attempt to save new data
+                    localStorage.setItem(previewKey, JSON.stringify(previewDesign));
+                    setLivePreviewKey(previewKey);
+
+                    const previewWindow = window.open(
+                      `${window.location.pathname}?previewKey=${previewKey}#/preview/live`,
+                      '_blank'
+                    );
+
+                    if (previewWindow) {
+                      previewWindowRef.current = previewWindow;
+                      setLivePreviewOpen(true);
+                    }
+                  } catch (storageError: any) {
+                    // 4. Handle "QuotaExceededError" gracefully
+                    console.error("Storage Error:", storageError);
+                    if (storageError.name === 'QuotaExceededError') {
+                      Swal.fire({
+                        icon: 'warning',
+                        title: 'Design Too Large for Live Preview',
+                        text: 'Your design contains too many large images or data to preview live in a new tab. Please try exporting instead, or use smaller images.',
+                      });
+                    }
+                  }
+                  // ---------------------------------------------------------
+                  // ✅ FIX ENDS HERE
+                  // ---------------------------------------------------------
+
+                } else {
+                  Swal.fire('Error', 'Failed to save design: ' + response.msg, 'error');
                 }
-              });
+              } catch (error: any) {
+                console.error('Error in preview:', error);
+                Swal.fire('Error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+              }
             }}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-medium flex items-center gap-2 shadow-lg shadow-purple-500/30 button-hover-scale"
           >
@@ -3035,11 +3105,13 @@ const Editor: React.FC = () => {
         {/* Canvas Area */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
           <div
+            ref={canvasContainerRef}
             className={`flex-1 overflow-auto transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''} ${spacePressed || isPanning ? 'cursor-grab' : ''} ${isPanning ? 'cursor-grabbing' : ''}`}
             onClick={() => setSelectedIds([])}
             onMouseDown={handleCanvasBackgroundMouseDown}
             onDragOver={(e) => { e.preventDefault(); setDraggingFromSidebar(true); }}
             onDrop={handleDropOnCanvas}
+            onWheel={handleCanvasWheel}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -3142,7 +3214,7 @@ const Editor: React.FC = () => {
                       onClick={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => handleDoubleClick(e, el.id)}
                     >
-                      {editingTextId === el.id && [ElementType.TEXT, ElementType.LABEL, ElementType.TICKER, ElementType.RSS, ElementType.MEDIA_RSS, ElementType.FTP].includes(el.type as ElementType) ? (
+                      {editingTextId === el.id && [ElementType.TEXT, ElementType.LABEL, ElementType.TICKER].includes(el.type as ElementType) ? (
                         <textarea
                           ref={textInputRef}
                           value={editingText}
@@ -3243,9 +3315,9 @@ const Editor: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setZoom(Math.max(25, zoom - 25))}
+                onClick={() => setZoom(Math.max(10, zoom - 10))}
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
-                title="Zoom Out"
+                title="Zoom Out (Ctrl/Cmd + Scroll)"
               >
                 <Minus size={16} />
               </button>
@@ -3253,17 +3325,17 @@ const Editor: React.FC = () => {
                 <span className="text-sm font-semibold">{zoom}%</span>
               </div>
               <button
-                onClick={() => setZoom(Math.min(200, zoom + 25))}
+                onClick={() => setZoom(Math.min(300, zoom + 10))}
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
-                title="Zoom In"
+                title="Zoom In (Ctrl/Cmd + Scroll)"
               >
                 <Plus size={16} />
               </button>
               <div className="w-px h-6 bg-gray-300 mx-1"></div>
               <button
-                onClick={() => setCanvasPan({ x: 0, y: 0 })}
+                onClick={() => { setCanvasPan({ x: 0, y: 0 }); setZoom(50); }}
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm text-gray-600 hover:text-gray-900"
-                title="Reset Pan (Space + Drag to move canvas)"
+                title="Reset Zoom & Pan (Fit to view)"
               >
                 <Maximize2 size={16} />
               </button>
@@ -3926,7 +3998,7 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Video & Streaming Properties */}
-                      {[ElementType.VIDEO, ElementType.WEB_VIDEO, ElementType.YOUTUBE, ElementType.USTREAM, ElementType.STREAMING].includes(selectedElement.type as ElementType) && (
+                      {[ElementType.VIDEO, ElementType.WEB_VIDEO, ElementType.YOUTUBE, ElementType.USTREAM].includes(selectedElement.type as ElementType) && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
                           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
                             <Video size={14} />
@@ -4019,7 +4091,7 @@ const Editor: React.FC = () => {
 
                                 } catch (error) {
                                   console.error("URL Update Failed:", error);
-                                  alert("Could not load video from URL.");
+                                  Swal.fire('Error', "Could not load video from URL.", 'error');
                                 }
                               }}
                               placeholder={selectedElement.type === ElementType.YOUTUBE ? '...' : 'https://example.com/video.mp4'}
@@ -4253,180 +4325,6 @@ const Editor: React.FC = () => {
                         </div>
                       )}
 
-                      {/* RSS & Media RSS Properties */}
-                      {[ElementType.RSS, ElementType.MEDIA_RSS].includes(selectedElement.type as ElementType) && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <FileText size={14} />
-                            RSS Feed Settings
-                          </h4>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Feed URL</label>
-                            <input
-                              type="text"
-                              value={selectedElement.content}
-                              onChange={(e) => updateSelectedElement('content', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="https://example.com/rss"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Update Interval (minutes)</label>
-                            <input
-                              type="number"
-                              value={selectedElement.widgetSettings?.updateInterval || 15}
-                              onChange={(e) => updateWidgetSettings('updateInterval', Number(e.target.value))}
-                              onBlur={() => updateHistory(elements)}
-                              min={1}
-                              max={1440}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Max Items to Display</label>
-                            <input
-                              type="number"
-                              value={selectedElement.widgetSettings?.maxItems || 5}
-                              onChange={(e) => updateWidgetSettings('maxItems', Number(e.target.value))}
-                              onBlur={() => updateHistory(elements)}
-                              min={1}
-                              max={50}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Display Mode</label>
-                            <select
-                              value={selectedElement.widgetSettings?.displayMode || 'scroll'}
-                              onChange={(e) => updateWidgetSettingsImmediate('displayMode', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="scroll">Scrolling List</option>
-                              <option value="static">Static List</option>
-                              <option value="fade">Fade In/Out</option>
-                              <option value="ticker">Ticker Style</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="rss-showImages"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.showImages ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('showImages', e.target.checked)}
-                            />
-                            <label htmlFor="rss-showImages" className="text-xs text-gray-600">Show images</label>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="rss-showDate"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.showDate ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('showDate', e.target.checked)}
-                            />
-                            <label htmlFor="rss-showDate" className="text-xs text-gray-600">Show publish date</label>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Weather Properties */}
-                      {[ElementType.WEATHER, ElementType.WEATHER_2].includes(selectedElement.type as ElementType) && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <CloudSun size={14} />
-                            Weather Settings
-                          </h4>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Location</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.location || 'New York, NY'}
-                              onChange={(e) => updateWidgetSettings('location', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="New York, NY"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Temperature Unit</label>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => updateWidgetSettingsImmediate('temperatureUnit', 'F')}
-                                className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'F' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
-                              >
-                                °F
-                              </button>
-                              <button
-                                onClick={() => updateWidgetSettingsImmediate('temperatureUnit', 'C')}
-                                className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'C' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
-                              >
-                                °C
-                              </button>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Update Interval (minutes)</label>
-                            <input
-                              type="number"
-                              value={selectedElement.widgetSettings?.updateInterval || 30}
-                              onChange={(e) => updateWidgetSettings('updateInterval', Number(e.target.value))}
-                              onBlur={() => updateHistory(elements)}
-                              min={5}
-                              max={1440}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Display Style</label>
-                            <select
-                              value={selectedElement.widgetSettings?.displayStyle || 'current'}
-                              onChange={(e) => updateWidgetSettingsImmediate('displayStyle', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="current">Current Conditions</option>
-                              <option value="forecast">5-Day Forecast</option>
-                              <option value="hourly">Hourly Forecast</option>
-                              <option value="detailed">Detailed View</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">API Key</label>
-                            <input
-                              type="password"
-                              value={selectedElement.widgetSettings?.apiKey || ''}
-                              onChange={(e) => updateWidgetSettings('apiKey', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="Enter weather API key"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="weather-showIcon"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.showIcon ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('showIcon', e.target.checked)}
-                            />
-                            <label htmlFor="weather-showIcon" className="text-xs text-gray-600">Show weather icon</label>
-                          </div>
-                        </div>
-                      )}
-
                       {/* Clock Properties */}
                       {selectedElement.type === ElementType.CLOCK && (
                         <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
@@ -4600,6 +4498,16 @@ const Editor: React.FC = () => {
                           </h4>
 
                           <div>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Display Date</label>
+                            <input
+                              type="date"
+                              value={selectedElement.widgetSettings?.selectedDate || new Date().toISOString().split('T')[0]}
+                              onChange={(e) => updateWidgetSettingsImmediate('selectedDate', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                            />
+                          </div>
+
+                          <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Calendar Source</label>
                             <select
                               value={selectedElement.widgetSettings?.calendarSource || 'google'}
@@ -4668,223 +4576,186 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Table Properties */}
-                      {selectedElement.type === ElementType.TABLE && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <Grid3x3 size={14} />
-                            Table Settings
-                          </h4>
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-xs text-gray-600 mb-2 block font-medium">Rows</label>
-                              <input
-                                type="number"
-                                value={selectedElement.widgetSettings?.rows || 5}
-                                onChange={(e) => updateWidgetSettings('rows', Number(e.target.value))}
-                                onBlur={() => updateHistory(elements)}
-                                min={1}
-                                max={100}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-600 mb-2 block font-medium">Columns</label>
-                              <input
-                                type="number"
-                                value={selectedElement.widgetSettings?.columns || 3}
-                                onChange={(e) => updateWidgetSettings('columns', Number(e.target.value))}
-                                onBlur={() => updateHistory(elements)}
-                                min={1}
-                                max={20}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                              />
-                            </div>
-                          </div>
+                      <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                          <Grid3x3 size={14} />
+                          Table Settings
+                        </h4>
 
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
-                            <select
-                              value={selectedElement.widgetSettings?.dataSource || 'manual'}
-                              onChange={(e) => updateWidgetSettingsImmediate('dataSource', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="manual">Manual Entry</option>
-                              <option value="csv">CSV Import</option>
-                              <option value="sheets">Google Sheets</option>
-                              <option value="api">API Endpoint</option>
-                              <option value="database">Database Query</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Data URL (for CSV/API/Sheets)</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.dataUrl || ''}
-                              onChange={(e) => updateWidgetSettings('dataUrl', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="https://example.com/data.csv"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Table Style</label>
-                            <select
-                              value={selectedElement.widgetSettings?.tableStyle || 'default'}
-                              onChange={(e) => updateWidgetSettingsImmediate('tableStyle', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="default">Default</option>
-                              <option value="striped">Striped Rows</option>
-                              <option value="bordered">Bordered</option>
-                              <option value="minimal">Minimal</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="table-showHeader"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.showHeader ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('showHeader', e.target.checked)}
-                            />
-                            <label htmlFor="table-showHeader" className="text-xs text-gray-600">Show header row</label>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="table-sortable"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.sortable ?? false}
-                              onChange={(e) => updateWidgetSettingsImmediate('sortable', e.target.checked)}
-                            />
-                            <label htmlFor="table-sortable" className="text-xs text-gray-600">Enable sorting</label>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Dashboards Properties */}
-                      {selectedElement.type === ElementType.DASHBOARDS && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <Layout size={14} />
-                            Dashboard Settings
-                          </h4>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Dashboard Type</label>
-                            <select
-                              value={selectedElement.widgetSettings?.dashboardType || 'metrics'}
-                              onChange={(e) => updateWidgetSettingsImmediate('dashboardType', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="metrics">Metrics Overview</option>
-                              <option value="analytics">Analytics</option>
-                              <option value="kpi">KPI Dashboard</option>
-                              <option value="custom">Custom Widgets</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.dataUrl || ''}
-                              onChange={(e) => updateWidgetSettings('dataUrl', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="API Endpoint URL"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Refresh Rate (seconds)</label>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Rows</label>
                             <input
                               type="number"
-                              value={selectedElement.widgetSettings?.refreshRate || 30}
-                              onChange={(e) => updateWidgetSettings('refreshRate', Number(e.target.value))}
+                              value={selectedElement.widgetSettings?.rows || 5}
+                              onChange={(e) => updateWidgetSettings('rows', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
-                              min={5}
-                              max={3600}
+                              min={1}
+                              max={100}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
-
                           <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Layout</label>
-                            <select
-                              value={selectedElement.widgetSettings?.layout || 'grid'}
-                              onChange={(e) => updateWidgetSettingsImmediate('layout', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="grid">Grid Layout</option>
-                              <option value="list">List Layout</option>
-                              <option value="compact">Compact View</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Columns</label>
                             <input
-                              type="checkbox"
-                              id="dashboard-showCharts"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.showCharts ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('showCharts', e.target.checked)}
-                            />
-                            <label htmlFor="dashboard-showCharts" className="text-xs text-gray-600">Show charts</label>
-                          </div>
-
-                          <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                            <input
-                              type="checkbox"
-                              id="dashboard-autoRefresh"
-                              className="rounded"
-                              checked={selectedElement.widgetSettings?.autoRefresh ?? true}
-                              onChange={(e) => updateWidgetSettingsImmediate('autoRefresh', e.target.checked)}
-                            />
-                            <label htmlFor="dashboard-autoRefresh" className="text-xs text-gray-600">Auto-refresh data</label>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Instagram Properties */}
-                      {selectedElement.type === ElementType.INSTAGRAM && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <ImageIcon size={14} />
-                            Instagram Settings
-                          </h4>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Username or Hashtag</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.username || ''}
-                              onChange={(e) => updateWidgetSettings('username', e.target.value)}
+                              type="number"
+                              value={selectedElement.widgetSettings?.columns || 3}
+                              onChange={(e) => updateWidgetSettings('columns', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
-                              placeholder="@username or #hashtag"
+                              min={1}
+                              max={20}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Display Mode</label>
-                            <select
-                              value={selectedElement.widgetSettings?.displayMode || 'grid'}
-                              onChange={(e) => updateWidgetSettingsImmediate('displayMode', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="grid">Grid</option>
-                              <option value="carousel">Carousel</option>
-                              <option value="single">Single Post</option>
-                            </select>
-                          </div>
                         </div>
-                      )}
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
+                          <select
+                            value={selectedElement.widgetSettings?.dataSource || 'manual'}
+                            onChange={(e) => updateWidgetSettingsImmediate('dataSource', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="manual">Manual Entry</option>
+                            <option value="csv">CSV Import</option>
+                            <option value="sheets">Google Sheets</option>
+                            <option value="api">API Endpoint</option>
+                            <option value="database">Database Query</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Data URL (for CSV/API/Sheets)</label>
+                          <input
+                            type="text"
+                            value={selectedElement.widgetSettings?.dataUrl || ''}
+                            onChange={(e) => updateWidgetSettings('dataUrl', e.target.value)}
+                            onBlur={() => updateHistory(elements)}
+                            placeholder="https://example.com/data.csv"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Table Style</label>
+                          <select
+                            value={selectedElement.widgetSettings?.tableStyle || 'default'}
+                            onChange={(e) => updateWidgetSettingsImmediate('tableStyle', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="default">Default</option>
+                            <option value="striped">Striped Rows</option>
+                            <option value="bordered">Bordered</option>
+                            <option value="minimal">Minimal</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <input
+                            type="checkbox"
+                            id="table-showHeader"
+                            className="rounded"
+                            checked={selectedElement.widgetSettings?.showHeader ?? true}
+                            onChange={(e) => updateWidgetSettingsImmediate('showHeader', e.target.checked)}
+                          />
+                          <label htmlFor="table-showHeader" className="text-xs text-gray-600">Show header row</label>
+                        </div>
+
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <input
+                            type="checkbox"
+                            id="table-sortable"
+                            className="rounded"
+                            checked={selectedElement.widgetSettings?.sortable ?? false}
+                            onChange={(e) => updateWidgetSettingsImmediate('sortable', e.target.checked)}
+                          />
+                          <label htmlFor="table-sortable" className="text-xs text-gray-600">Enable sorting</label>
+                        </div>
+                      </div>
+
+                      {/* Dashboards Properties */}
+
+                      <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                          <Layout size={14} />
+                          Dashboard Settings
+                        </h4>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Dashboard Type</label>
+                          <select
+                            value={selectedElement.widgetSettings?.dashboardType || 'metrics'}
+                            onChange={(e) => updateWidgetSettingsImmediate('dashboardType', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="metrics">Metrics Overview</option>
+                            <option value="analytics">Analytics</option>
+                            <option value="kpi">KPI Dashboard</option>
+                            <option value="custom">Custom Widgets</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
+                          <input
+                            type="text"
+                            value={selectedElement.widgetSettings?.dataUrl || ''}
+                            onChange={(e) => updateWidgetSettings('dataUrl', e.target.value)}
+                            onBlur={() => updateHistory(elements)}
+                            placeholder="API Endpoint URL"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Refresh Rate (seconds)</label>
+                          <input
+                            type="number"
+                            value={selectedElement.widgetSettings?.refreshRate || 30}
+                            onChange={(e) => updateWidgetSettings('refreshRate', Number(e.target.value))}
+                            onBlur={() => updateHistory(elements)}
+                            min={5}
+                            max={3600}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Layout</label>
+                          <select
+                            value={selectedElement.widgetSettings?.layout || 'grid'}
+                            onChange={(e) => updateWidgetSettingsImmediate('layout', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="grid">Grid Layout</option>
+                            <option value="list">List Layout</option>
+                            <option value="compact">Compact View</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <input
+                            type="checkbox"
+                            id="dashboard-showCharts"
+                            className="rounded"
+                            checked={selectedElement.widgetSettings?.showCharts ?? true}
+                            onChange={(e) => updateWidgetSettingsImmediate('showCharts', e.target.checked)}
+                          />
+                          <label htmlFor="dashboard-showCharts" className="text-xs text-gray-600">Show charts</label>
+                        </div>
+
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <input
+                            type="checkbox"
+                            id="dashboard-autoRefresh"
+                            className="rounded"
+                            checked={selectedElement.widgetSettings?.autoRefresh ?? true}
+                            onChange={(e) => updateWidgetSettingsImmediate('autoRefresh', e.target.checked)}
+                          />
+                          <label htmlFor="dashboard-autoRefresh" className="text-xs text-gray-600">Auto-refresh data</label>
+                        </div>
+                      </div>
 
                       {/* Embed Properties */}
                       {[ElementType.EMBED, ElementType.SUB_CREATIVE].includes(selectedElement.type as ElementType) && (
@@ -4908,201 +4779,119 @@ const Editor: React.FC = () => {
                       )}
 
                       {/* Touch Zone Properties */}
-                      {selectedElement.type === ElementType.TOUCH && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <MousePointer2 size={14} />
-                            Touch Settings
-                          </h4>
 
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Action Type</label>
-                            <select
-                              value={selectedElement.widgetSettings?.actionType || 'url'}
-                              onChange={(e) => updateWidgetSettingsImmediate('actionType', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="url">Navigate to URL</option>
-                              <option value="show">Show Layer</option>
-                              <option value="hide">Hide Layer</option>
-                              <option value="play">Play Video</option>
-                              <option value="custom">Custom Event</option>
-                            </select>
-                          </div>
+                      <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                          <MousePointer2 size={14} />
+                          Touch Settings
+                        </h4>
 
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Target URL / Action</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.targetAction || ''}
-                              onChange={(e) => updateWidgetSettings('targetAction', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="https://example.com"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Action Type</label>
+                          <select
+                            value={selectedElement.widgetSettings?.actionType || 'url'}
+                            onChange={(e) => updateWidgetSettingsImmediate('actionType', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="url">Navigate to URL</option>
+                            <option value="show">Show Layer</option>
+                            <option value="hide">Hide Layer</option>
+                            <option value="play">Play Video</option>
+                            <option value="custom">Custom Event</option>
+                          </select>
                         </div>
-                      )}
 
-                      {/* Smart Switch Properties */}
-                      {selectedElement.type === ElementType.SMART_SWITCH && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <Settings size={14} />
-                            Smart Switch Settings
-                          </h4>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Switch Condition</label>
-                            <select
-                              value={selectedElement.widgetSettings?.switchCondition || 'time'}
-                              onChange={(e) => updateWidgetSettingsImmediate('switchCondition', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="time">Time-based</option>
-                              <option value="day">Day of Week</option>
-                              <option value="weather">Weather Condition</option>
-                              <option value="custom">Custom Rule</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Content A (Default)</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.contentA || ''}
-                              onChange={(e) => updateWidgetSettings('contentA', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="Content to show by default"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Content B (Alternative)</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.contentB || ''}
-                              onChange={(e) => updateWidgetSettings('contentB', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="Content to show when condition met"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Target URL / Action</label>
+                          <input
+                            type="text"
+                            value={selectedElement.widgetSettings?.targetAction || ''}
+                            onChange={(e) => updateWidgetSettings('targetAction', e.target.value)}
+                            onBlur={() => updateHistory(elements)}
+                            placeholder="https://example.com"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
                         </div>
-                      )}
+                      </div>
 
-                      {/* Ad Serving Properties */}
-                      {selectedElement.type === ElementType.AD_SERVING && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <ImageIcon size={14} />
-                            Ad Serving Settings
-                          </h4>
 
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Ad Network</label>
-                            <select
-                              value={selectedElement.widgetSettings?.adNetwork || 'google'}
-                              onChange={(e) => updateWidgetSettingsImmediate('adNetwork', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-                            >
-                              <option value="google">Google Ad Manager</option>
-                              <option value="custom">Custom Ad Server</option>
-                              <option value="direct">Direct Upload</option>
-                            </select>
-                          </div>
+                      {/* Calendar Properties */}
 
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Ad Unit ID / Tag</label>
-                            <input
-                              type="text"
-                              value={selectedElement.widgetSettings?.adUnitId || ''}
-                              onChange={(e) => updateWidgetSettings('adUnitId', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="ca-pub-xxxxxxxxxxxxx"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                            />
-                          </div>
+                      <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                          <ImageIcon size={14} />
+                          Ad Serving Settings
+                        </h4>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Ad Network</label>
+                          <select
+                            value={selectedElement.widgetSettings?.adNetwork || 'google'}
+                            onChange={(e) => updateWidgetSettingsImmediate('adNetwork', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          >
+                            <option value="google">Google Ad Manager</option>
+                            <option value="custom">Custom Ad Server</option>
+                            <option value="direct">Direct Upload</option>
+                          </select>
                         </div>
-                      )}
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">Ad Unit ID / Tag</label>
+                          <input
+                            type="text"
+                            value={selectedElement.widgetSettings?.adUnitId || ''}
+                            onChange={(e) => updateWidgetSettings('adUnitId', e.target.value)}
+                            onBlur={() => updateHistory(elements)}
+                            placeholder="ca-pub-xxxxxxxxxxxxx"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
+                        </div>
+                      </div>
 
                       {/* FTP Properties */}
-                      {selectedElement.type === ElementType.FTP && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <FileText size={14} />
-                            FTP Settings
-                          </h4>
 
+                      <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+                          <FileText size={14} />
+                          FTP Settings
+                        </h4>
+
+                        <div>
+                          <label className="text-xs text-gray-600 mb-2 block font-medium">FTP Server</label>
+                          <input
+                            type="text"
+                            value={selectedElement.widgetSettings?.ftpServer || ''}
+                            onChange={(e) => updateWidgetSettings('ftpServer', e.target.value)}
+                            onBlur={() => updateHistory(elements)}
+                            placeholder="ftp://server.com"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">FTP Server</label>
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Username</label>
                             <input
                               type="text"
-                              value={selectedElement.widgetSettings?.ftpServer || ''}
-                              onChange={(e) => updateWidgetSettings('ftpServer', e.target.value)}
+                              value={selectedElement.widgetSettings?.ftpUsername || ''}
+                              onChange={(e) => updateWidgetSettings('ftpUsername', e.target.value)}
                               onBlur={() => updateHistory(elements)}
-                              placeholder="ftp://server.com"
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-xs text-gray-600 mb-2 block font-medium">Username</label>
-                              <input
-                                type="text"
-                                value={selectedElement.widgetSettings?.ftpUsername || ''}
-                                onChange={(e) => updateWidgetSettings('ftpUsername', e.target.value)}
-                                onBlur={() => updateHistory(elements)}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-600 mb-2 block font-medium">Password</label>
-                              <input
-                                type="password"
-                                value={selectedElement.widgetSettings?.ftpPassword || ''}
-                                onChange={(e) => updateWidgetSettings('ftpPassword', e.target.value)}
-                                onBlur={() => updateHistory(elements)}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Instagram Properties */}
-                      {selectedElement.type === ElementType.INSTAGRAM && (
-                        <div className="space-y-3 p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100">
-                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                            <Image size={14} />
-                            Instagram Settings
-                          </h4>
-
                           <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Image URL</label>
-                            <textarea
-                              value={selectedElement.content}
-                              onChange={(e) => updateSelectedElement('content', e.target.value)}
+                            <label className="text-xs text-gray-600 mb-2 block font-medium">Password</label>
+                            <input
+                              type="password"
+                              value={selectedElement.widgetSettings?.ftpPassword || ''}
+                              onChange={(e) => updateWidgetSettings('ftpPassword', e.target.value)}
                               onBlur={() => updateHistory(elements)}
-                              placeholder="Enter Instagram image URL"
-                              className="w-full h-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 mb-2 block font-medium">Or Embed Code (Optional)</label>
-                            <textarea
-                              value={selectedElement.widgetSettings?.embedCode || ''}
-                              onChange={(e) => updateWidgetSettings('embedCode', e.target.value)}
-                              onBlur={() => updateHistory(elements)}
-                              placeholder="<iframe src='...'></iframe>"
-                              className="w-full h-32 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all resize-none"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* GIF & Web Image Properties */}
                       {[ElementType.GIF, ElementType.WEB_IMAGE].includes(selectedElement.type as ElementType) && (
@@ -5392,10 +5181,39 @@ const Editor: React.FC = () => {
                       {selectedElement.animation && (
                         <button
                           onClick={() => {
+                            // ✅ FIXED: Properly remove animation and sync to timeline
                             setSelectedAnimation(null);
-                            updateSelectedElement('animation', undefined);
-                            updateSelectedElement('animationDuration', undefined);
-                            updateSelectedElement('animationSpeed', undefined);
+
+                            // Update canvas element
+                            const newElements = elements.map(el => {
+                              if (el.id === selectedId) {
+                                return {
+                                  ...el,
+                                  animation: undefined,
+                                  animationDuration: undefined,
+                                  animationSpeed: undefined
+                                };
+                              }
+                              return el;
+                            });
+                            setElements(newElements);
+                            updateHistory(newElements);
+
+                            // Sync to timeline
+                            const timelineItems = timeline.tracks
+                              .flatMap(t => t.items)
+                              .filter(item => item.elementId === selectedId);
+
+                            timelineItems.forEach(item => {
+                              const updatedProps = { ...item.properties } as any;
+                              delete updatedProps.animation;
+                              delete updatedProps.animationDuration;
+                              delete updatedProps.animationSpeed;
+
+                              updateItem(item.id, {
+                                properties: updatedProps
+                              });
+                            });
                           }}
                           className="mt-3 w-full px-3 py-2 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all border border-gray-200"
                         >
@@ -5505,7 +5323,6 @@ const Editor: React.FC = () => {
         onSave={handleSaveDesign}
         isLoading={isSavingDesign}
         error={saveError}
-        successMessage={successMessage}
         defaultTitle={designTitle}
       />
 
@@ -5591,29 +5408,7 @@ const Editor: React.FC = () => {
         </div>
       )}
 
-      {/* Toast Notification for Save Status */}
-      {successMessage && (
-        <div className="fixed top-20 right-6 z-50 animate-slideIn">
-          <div className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
-            <CheckCircle size={24} className="flex-shrink-0" />
-            <div>
-              <p className="font-semibold">{successMessage}</p>
-              <p className="text-sm text-green-100">Your design has been saved</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {isUploading && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-xl shadow-2xl text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900 mx-auto mb-4"></div>
-            <h3 className="text-lg font-bold text-slate-900">Uploading Video...</h3>
-            <p className="text-sm text-gray-500">Please wait while we process your file.</p>
-          </div>
-        </div>
-      )}
+      {/* Toast Notification/Uploading Modal REMOVED - Replaced by SweetAlert2 */}
     </div>
   );
 };

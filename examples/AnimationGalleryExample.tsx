@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { AnimationPresetGallery } from '../components/AnimationPresetGallery';
 import { applyPreset } from '../constants/animationPresets';
 import { CanvasElement, ElementType } from '../types/canvas';
+import Swal from 'sweetalert2';
 
 export function AnimationGalleryExample() {
   const [elements, setElements] = useState<CanvasElement[]>([
@@ -32,7 +33,7 @@ export function AnimationGalleryExample() {
 
   const handleSelectPreset = (presetId: string) => {
     if (!selectedId) {
-      alert('Please select an element first');
+      Swal.fire('Info', 'Please select an element first', 'info');
       return;
     }
 

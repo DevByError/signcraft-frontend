@@ -1,8 +1,7 @@
-// export default PlaylistEditor;
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Search, Clock, ImageIcon, Trash2, ExternalLink, Edit, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Search, Clock, ImageIcon, Trash2, Edit, Plus } from 'lucide-react';
 import {
   getPlaylistDetailsFromBackend,
   savePlaylistToBackend,
@@ -10,6 +9,7 @@ import {
 } from '../services/playlistService';
 import { getAllDesigns, convertBackendToLocal } from '../services/designService';
 import authService from '../services/authService';
+import Swal from 'sweetalert2';
 
 const PlaylistEditor: React.FC = () => {
   const navigate = useNavigate();
@@ -44,7 +44,8 @@ const PlaylistEditor: React.FC = () => {
               const d = designs.find(des => des.id === item.designId);
               return {
                 designId: item.designId,
-                duration: item.duration,
+                // Backend stores seconds, we use seconds internally
+                duration: item.duration || 60,
                 slno: item.slno,
                 designData: d
               };
@@ -62,12 +63,10 @@ const PlaylistEditor: React.FC = () => {
   }, [id]);
 
   const handleAddDesign = (design: any) => {
-    // Duration is determined by the design's timeline, NOT editable here
-    const duration = (design.designJSON?.timeline?.totalDuration / 1000) || 10;
-
+    // Default new item to 1 minute (60 seconds)
     setSelectedItems(prev => [...prev, {
       designId: design.id,
-      duration: Math.round(duration),
+      duration: 60,
       slno: prev.length,
       designData: design
     }]);
@@ -86,15 +85,21 @@ const PlaylistEditor: React.FC = () => {
     setSelectedItems(newItems);
   };
 
-  // ✅ New: Navigate to Editor
+  const handleDurationChange = (index: number, minutes: string) => {
+    const val = parseFloat(minutes);
+    if (isNaN(val) || val < 0.1) return; // Minimum limit
+
+    const newItems = [...selectedItems];
+    // Convert minutes to seconds for storage
+    newItems[index] = { ...newItems[index], duration: Math.floor(val * 60) };
+    setSelectedItems(newItems);
+  };
+
   const handleModify = (designId: string) => {
-    // We open in new tab so they don't lose unsaved playlist changes
     window.open(`/#/editor/${designId}`, '_blank');
   };
 
-  // ✅ New: Open Preview (Video Only)
   const handlePreviewItem = (designId: string) => {
-    // Open the Preview page for this specific design
     window.open(`/#/preview/${designId}`, '_blank');
   };
 
@@ -113,7 +118,7 @@ const PlaylistEditor: React.FC = () => {
         userID: user?.id
       });
 
-      // 2. Sync Items
+      // 2. Sync Items (Send duration in seconds)
       const itemsToSync = selectedItems.map((item, idx) => ({
         designId: item.designId,
         slno: idx,
@@ -121,9 +126,22 @@ const PlaylistEditor: React.FC = () => {
       }));
 
       await syncPlaylistItemsToBackend(id, itemsToSync, user?.id);
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Playlist Saved',
+        text: 'Your playlist has been successfully updated.',
+        timer: 1500,
+        showConfirmButton: false
+      });
+
       navigate('/playlist');
     } catch (err) {
-      alert('Save failed');
+      Swal.fire({
+        icon: 'error',
+        title: 'Save Failed',
+        text: 'An error occurred while saving the playlist.',
+      });
     } finally {
       setSaving(false);
     }
@@ -199,10 +217,10 @@ const PlaylistEditor: React.FC = () => {
 
         {/* Right: Selected Sequence */}
         <div className="flex-1 bg-gray-50 p-8 overflow-y-auto">
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-bold text-gray-700">Playback Sequence</h2>
-              <span className="text-sm text-gray-500">{selectedItems.length} Items • {selectedItems.reduce((acc, i) => acc + i.duration, 0)}s Total</span>
+              <span className="text-sm text-gray-500">{selectedItems.length} Items</span>
             </div>
 
             {selectedItems.length === 0 ? (
@@ -227,17 +245,31 @@ const PlaylistEditor: React.FC = () => {
                   {/* Design Info */}
                   <div className="flex-1">
                     <div className="font-bold text-gray-800">{item.designData?.metadata.title}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {/* Duration Display (Read Only) */}
-                      <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded text-xs text-gray-500 border border-gray-100">
-                        <Clock size={12} />
-                        <span className="font-medium">{item.duration}s</span>
-                      </div>
+                    <div className="text-xs text-gray-400">Design Duration: {Math.round((item.designData?.designJSON?.timeline?.totalDuration || 10000) / 1000)}s</div>
+                  </div>
+
+                  {/* DURATION INPUT (The Core Change) */}
+                  <div className="flex items-center gap-3 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <Clock size={16} className="text-blue-600" />
+                      <span className="text-xs font-bold text-blue-700 uppercase">Duration:</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        className="w-16 bg-white border border-blue-200 rounded px-2 py-1 text-sm font-bold text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={item.duration ? (item.duration / 60).toFixed(1) : ''}
+                        onChange={(e) => handleDurationChange(idx, e.target.value)}
+                      />
+                      <span className="text-xs text-gray-500 font-medium">Min</span>
                     </div>
                   </div>
 
-                  {/* ✅ ACTION BUTTONS */}
-                  <div className="flex items-center gap-2">
+                  {/* Action Buttons */}
+                  {/* ✅ OLD STYLE ACTION BUTTONS */}
+                  <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => handleModify(item.designId)}
                       className="bg-[#1e293b] text-white px-4 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 transition-colors flex items-center gap-2"
@@ -252,11 +284,19 @@ const PlaylistEditor: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Remove Button (Subtle) */}
+                  {/* Divider & Delete */}
                   <div className="w-px h-8 bg-gray-200 mx-2"></div>
-                  <button onClick={() => handleRemove(idx)} className="text-gray-300 hover:text-red-500 transition-colors" title="Remove from playlist">
+
+                  <button
+                    onClick={() => handleRemove(idx)}
+                    className="text-gray-300 hover:text-red-500 transition-colors p-2"
+                    title="Remove from playlist"
+                  >
                     <Trash2 size={18} />
                   </button>
+
+                  <div className="w-px h-8 bg-gray-200 mx-2"></div>
+
                 </div>
               ))
             )}

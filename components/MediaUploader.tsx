@@ -17,6 +17,7 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
   maxFileSize = 50, // 50MB default
 }) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +26,7 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
   const handleFileSelect = async (file: File) => {
     setError(null);
     setSuccess(false);
+    setUploadProgress(0);
 
     // Validate file size
     const fileSizeInMB = file.size / (1024 * 1024);
@@ -41,10 +43,15 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
 
     setIsUploading(true);
     try {
-      const media = await uploadMedia(file, userId);
+      const media = await uploadMedia(file, userId, (percent) => {
+        setUploadProgress(percent);
+      });
       onMediaUploaded(media);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 2000);
+      setTimeout(() => {
+        setSuccess(false);
+        setUploadProgress(0);
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -105,10 +112,19 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
         />
 
         {isUploading ? (
-          <>
-            <Loader size={32} className="text-primary animate-spin mb-2" />
-            <p className="text-sm text-gray-600">Uploading...</p>
-          </>
+          <div className="w-full max-w-xs flex flex-col items-center">
+            <div className="flex justify-between w-full mb-1">
+               <span className="text-sm font-medium text-primary">Uploading...</span>
+               <span className="text-sm font-bold text-gray-600">{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+              <div 
+                className="bg-primary h-2.5 rounded-full transition-all duration-300 ease-out" 
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Please wait while we process your file</p>
+          </div>
         ) : success ? (
           <>
             <Check size={32} className="text-green-500 mb-2" />

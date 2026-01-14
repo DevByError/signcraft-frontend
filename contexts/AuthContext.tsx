@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import * as authService from '../services/authService';
+import authService from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -10,80 +10,90 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Initialize with null - user will be fetched from backend if needed
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
 
+  // 1. INIT: Check Session on Load
+  useEffect(() => {
+    const initAuth = async () => {
+      // Fast load from cache
+      const cached = authService.getUser();
+      if (cached) setUser(cached);
+
+      // Verify with backend
+      const verifiedUser = await authService.verifySession();
+      if (verifiedUser) {
+        setUser(verifiedUser);
+        localStorage.setItem('user_cache', JSON.stringify(verifiedUser));
+      } else {
+        setUser(null);
+        localStorage.removeItem('user_cache');
+      }
+      setIsLoading(false);
+    };
+
+    initAuth();
+  }, []);
+
+  // 2. Login Logic - UPDATED FIX
   const login = async (email: string, password: string): Promise<{ success: boolean; msg?: string }> => {
     setIsLoading(true);
-    console.log('🔑 [AUTH_CONTEXT] Login attempt for:', email);
-
     try {
+      // Step A: Authenticate (Sets the HttpOnly Cookie)
       const response = await authService.login({ email, password });
 
-      if (response.success && response.data) {
-        // Decode JWT token to extract user info
-        if (response.data.authtoken) {
-          try {
-            const tokenPayload = JSON.parse(atob(response.data.authtoken.split('.')[1]));
-            console.log('🔓 [AUTH_CONTEXT] Token decoded:', {
-              userId: tokenPayload.userId,
-              email: tokenPayload.email,
-              username: tokenPayload.username,
-              role: tokenPayload.role
-            });
+      if (response.success) {
+        // Step B: ✅ IMMEDIATE FETCH of Profile Data
+        // We do this now so the UI updates with "Captain" instead of "User" instantly.
+        const fullProfile = await authService.verifySession();
 
-            const newUser: User = {
-              id: tokenPayload.userId || 'unknown',
-              email: tokenPayload.email || email,
-              name: tokenPayload.username || 'User',
-            };
-            setUser(newUser);
-            console.log('✅ [AUTH_CONTEXT] User authenticated:', newUser);
-          } catch (decodeError) {
-            console.error('❌ [AUTH_CONTEXT] Failed to decode token:', decodeError);
-            // Fallback user object
-            setUser({
-              id: response.data.userId || 'unknown',
-              email: response.data.email || email,
-              name: response.data.username || 'User',
-            });
-          }
+        if (fullProfile) {
+          setUser(fullProfile);
+          localStorage.setItem('user_cache', JSON.stringify(fullProfile));
+          return { success: true };
         }
 
+        // Fallback (Should rarely happen if login succeeded)
+        const fallbackUser: User = {
+          id: response.data?.userId || 'unknown',
+          email: email,
+          name: 'User',
+          role: 'designer'
+        };
+        setUser(fallbackUser);
         return { success: true };
+
       } else {
-        const errorMsg = typeof response.data?.msg === 'string'
-          ? response.data.msg
-          : Array.isArray(response.data?.msg)
-            ? response.data.msg.join(', ')
-            : 'Login failed';
-        console.error('❌ [AUTH_CONTEXT] Login failed:', errorMsg);
-        return { success: false, msg: errorMsg };
+        return { success: false, msg: String(response.data?.msg || 'Login failed') };
       }
-    } catch (error) {
-      console.error('❌ [AUTH_CONTEXT] Exception during login:', error);
-      return {
-        success: false,
-        msg: error instanceof Error ? error.message : 'Login failed'
-      };
+    } catch (error: any) {
+      return { success: false, msg: error.message };
     } finally {
       setIsLoading(false);
     }
   };
 
+  // 3. Logout Logic
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
+      // Call backend to clear cookie
       await authService.logout();
-      setUser(null);
+    } catch (e) {
+      console.error(e);
     } finally {
+      // 1. Clear frontend state
+      setUser(null);
+      localStorage.removeItem('user_cache');
+
+      // 2. Stop Loading
       setIsLoading(false);
+
+      // ❌ REMOVED: window.location.href = '/login'; 
+      // We let the component calling logout handle the redirect
     }
   };
 
