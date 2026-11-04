@@ -1,4 +1,4 @@
-const API_KEY = "REMOVED_OPENWEATHER_KEY";
+const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
 const API_URL = "https://api.openweathermap.org/data/2.5/weather?units=metric&q=";
 
 export const fetchWeather = async (location: string, temperatureUnit: 'F' | 'C' = 'C') => {
