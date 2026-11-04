@@ -5,7 +5,7 @@
 
 The browser front end of SignCraft, a digital signage system. Users design screen content in a canvas editor, group designs into playlists, and deploy playlists to registered display screens.
 
-This repository contains only the web app. It needs the SignCraft backend for login, storage and deployment, and the Android player app to show content on a display.
+This repository contains only the web app. It needs the [SignCraft backend](https://github.com/DevByError/signcraft-backend) for login, storage and deployment, and the [Android player](https://github.com/DevByError/android-screen) to show content on a display.
 
 ## Features
 
@@ -40,8 +40,8 @@ The backend opens `#/playlist/preview/:id?recording=true` in a headless browser 
 ## Installation
 
 ```bash
-git clone https://github.com/DevByError/ecoprse-fe.git
-cd ecoprse-fe
+git clone https://github.com/DevByError/signcraft-frontend.git
+cd signcraft-frontend
 npm install
 cp .env.example .env
 ```
