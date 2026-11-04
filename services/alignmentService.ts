@@ -5,7 +5,7 @@
 
 import { CanvasElement } from '../types/canvas';
 
-export type AlignmentType = 
+export type AlignmentType =
   | 'left' | 'center-x' | 'right'  // Horizontal
   | 'top' | 'center-y' | 'bottom'   // Vertical
   | 'distribute-x'                   // Horizontal distribution
@@ -248,7 +248,7 @@ export function arrangeGrid(
   if (elements.length === 0) return [];
 
   // Sort by y then x to maintain reading order
-  const sorted = [...elements].sort((a, b) => 
+  const sorted = [...elements].sort((a, b) =>
     a.y - b.y !== 0 ? a.y - b.y : a.x - b.x
   );
 

@@ -91,7 +91,7 @@ export function useTimeline({
   const addElementToTimeline = useCallback((
     element: CanvasElement,
     startTime: number = timeline.currentTime,
-    // ✅ FIX: Default to element settings duration if no specific duration passed
+    // Default to element settings duration if no specific duration passed
     duration: number = element.widgetSettings?.duration || 5000,
     trackType: 'visual' | 'audio' = 'visual'
   ) => {
@@ -285,14 +285,14 @@ export function useTimeline({
 
       if (existingItems.length === 0) {
 
-        // ✅ FIX: Check element settings for duration first!
+        // Check element settings for duration first!
         const itemDuration = element.widgetSettings?.duration || 5000;
 
         // Add new items to track 1 at the end of existing items
         const item = timelineService.createTimelineItem(
           element,
           lastEndTime, // Position at the end of track 1
-          itemDuration, // ✅ Use calculated duration
+          itemDuration, // Use calculated duration
           element.zIndex,
           'visual'
         );

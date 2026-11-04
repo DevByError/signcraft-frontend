@@ -86,11 +86,11 @@ export const LiveTimer: React.FC<WidgetProps> = ({ element }) => {
             diffMs = target.getTime() - now.getTime();
             if (diffMs < 0) diffMs = 0;
         } else if (timerType === 'countup' || timerType === 'stopwatch') {
-            // For countup, ideally we need a startTime. 
+            // For countup, ideally we need a startTime.
             // If stored in element, use it. If not, maybe use element.uploadedAt or just session start?
             // For now, let's look for a specialized start time prop or default to session
-            // A clearer behavior for "Count Up" in signage is usually "Time since X". 
-            // If no X is provided, maybe it's just a visual demo. 
+            // A clearer behavior for "Count Up" in signage is usually "Time since X".
+            // If no X is provided, maybe it's just a visual demo.
             // Let's rely on 'countdownTo' property being used as 'countFrom' if type is countup?
             // That's a common pattern to reuse the date picker.
             if (countdownTo) {
@@ -156,14 +156,14 @@ export const LiveSlideshow: React.FC<WidgetProps & { style?: React.CSSProperties
   if (!images.length) return <div style={style} className={`${className} bg-gray-200 flex items-center justify-center`}>No Images</div>;
 
   return (
-    <img 
-      src={images[index]} 
-      alt="Slideshow" 
+    <img
+      src={images[index]}
+      alt="Slideshow"
       className={className}
-      style={{ 
-        ...style, 
-        objectFit: (element.widgetSettings?.fitMode as any) || 'cover' 
-      }} 
+      style={{
+        ...style,
+        objectFit: (element.widgetSettings?.fitMode as any) || 'cover'
+      }}
     />
   );
 };
@@ -184,10 +184,10 @@ export const LiveRSS: React.FC<WidgetProps & { style?: React.CSSProperties, clas
     return (
         <div className={className} style={{ ...style, backgroundColor: element.backgroundColor || '#fff', overflow: 'hidden', whiteSpace: 'nowrap' }}>
              {isScrolling ? (
-                 <div style={{ 
-                     display: 'inline-block', 
+                 <div style={{
+                     display: 'inline-block',
                      animation: `marquee ${speed}s linear infinite`,
-                     paddingLeft: '100%' 
+                     paddingLeft: '100%'
                  }}>
                      {items.map((item, i) => (
                          <span key={i} className="mx-8 text-lg font-medium inline-block">• {item}</span>

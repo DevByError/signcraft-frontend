@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-// ✅ ADDED: ArrowLeft
 import { Monitor, Mail, Lock, Sparkles, Eye, EyeOff, CheckCircle, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 
 const Auth: React.FC = () => {
@@ -20,24 +19,22 @@ const Auth: React.FC = () => {
     setError('');
     setSuccess('');
     setIsSubmitting(true);
-    console.log('📝 [AUTH_PAGE] Form submitted');
 
     try {
       const result = await login(email, password);
       if (result.success) {
-        console.log('✅ [AUTH_PAGE] Login successful, redirecting to dashboard');
-        setSuccess('✓ Login successful! Redirecting...');
+        setSuccess('Login successful! Redirecting...');
         setTimeout(() => {
           navigate('/dashboard');
         }, 500);
       } else {
         const errorMsg = result.msg || 'Login failed. Please check your credentials.';
-        console.error('❌ [AUTH_PAGE] Login failed:', errorMsg);
+        console.error('[AUTH_PAGE] Login failed:', errorMsg);
         setError(errorMsg);
       }
     } catch (err) {
       const errorMsg = 'An unexpected error occurred. Please try again.';
-      console.error('❌ [AUTH_PAGE] Exception:', err);
+      console.error('[AUTH_PAGE] Exception:', err);
       setError(errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -49,7 +46,7 @@ const Auth: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-black flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 overflow-hidden relative">
 
-      {/* ✅ NEW: Back to Home Button */}
+      {/* Back to Home Button */}
       <button
         onClick={() => navigate('/')}
         className="absolute top-6 left-6 z-50 flex items-center gap-2 text-gray-400 hover:text-white transition-colors group animate-fade-in"

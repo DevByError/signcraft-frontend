@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Edit2, Search, Grid2x2, List, AlertCircle, RefreshCw } from 'lucide-react';
-// ✅ Import service functions
+// Import service functions
 import { getAllDesigns, deleteDesign } from '../services/designService';
 import Swal from 'sweetalert2';
 
@@ -31,14 +31,13 @@ const ScheduleCreative: React.FC = () => {
       else setLoading(true);
       setError(null);
 
-      console.log('🎨 [CREATIVE] Attempting to load designs from backend...');
 
       const response = await getAllDesigns();
 
       const designsArray = Array.isArray(response.data) ? response.data : [];
 
       if (!response.success && designsArray.length === 0) {
-        console.error('❌ [CREATIVE] Failed to load designs:', response.msg);
+        console.error('[CREATIVE] Failed to load designs:', response.msg);
         setError('Failed to load designs.');
       }
 
@@ -100,8 +99,8 @@ const ScheduleCreative: React.FC = () => {
           name: design.title || 'Untitled Design',
           thumbnail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect fill='${thumbnailColor}' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='white' font-weight='bold'%3E${encodeURIComponent(design.title || 'Untitled')}%3C/text%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' font-size='14' fill='white' opacity='0.8'%3E${numElements} elements%3C/text%3E%3C/svg%3E`,
           createdDate: design.createdAt || new Date().toISOString(),
-          duration: durationSec, // ✅ Uses real timeline duration
-          size: sizeString,      // ✅ Uses safe resolution logic
+          duration: durationSec, // Uses real timeline duration
+          size: sizeString,      // Uses safe resolution logic
         };
       });
 
@@ -114,7 +113,7 @@ const ScheduleCreative: React.FC = () => {
         setIsRefreshing(false);
         return;
       }
-      console.error('❌ [CREATIVE] Error loading designs:', err);
+      console.error('[CREATIVE] Error loading designs:', err);
       setError(`Failed to load creatives: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
@@ -137,7 +136,7 @@ const ScheduleCreative: React.FC = () => {
     if (!result.isConfirmed) return;
 
     try {
-      // ✅ Use service function
+      // Use service function
       const response = await deleteDesign(designId);
 
       if (response.success) {
@@ -155,7 +154,7 @@ const ScheduleCreative: React.FC = () => {
         );
       }
     } catch (err: any) {
-      // ✅ Ignore 401/403 (Global Modal handles it)
+      // Ignore 401/403 (Global Modal handles it)
       if (err.response && (err.response.status === 401 || err.response.status === 403)) {
         return;
       }

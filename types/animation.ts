@@ -1,7 +1,7 @@
 /**
  * Animation System Types - CapCut Style
  * Pure JSON-based animations with clip-local time
- * 
+ *
  * CRITICAL PRINCIPLES:
  * 1. All time values are clip-local (starting at 0)
  * 2. Animations use keyframes, not preset names
@@ -11,13 +11,13 @@
 
 // ==================== Easing Functions ====================
 
-export type EasingType = 
-  | 'linear' 
-  | 'easeIn' 
-  | 'easeOut' 
-  | 'easeInOut' 
-  | 'easeInCubic' 
-  | 'easeOutCubic' 
+export type EasingType =
+  | 'linear'
+  | 'easeIn'
+  | 'easeOut'
+  | 'easeInOut'
+  | 'easeInCubic'
+  | 'easeOutCubic'
   | 'easeInOutCubic'
   | 'easeInQuad'
   | 'easeOutQuad'
@@ -103,29 +103,8 @@ export interface EvaluatedAnimations {
 }
 
 // ==================== Legacy Animation Types (Deprecated) ====================
-// These are kept for backward compatibility but should not be used for new code
-  | 'power1.out'
-  | 'power1.inOut'
-  | 'power2.in'
-  | 'power2.out'
-  | 'power2.inOut'
-  | 'power3.in'
-  | 'power3.out'
-  | 'power3.inOut'
-  | 'power4.in'
-  | 'power4.out'
-  | 'power4.inOut'
-  | 'back.in'
-  | 'back.out'
-  | 'back.inOut'
-  | 'elastic.in'
-  | 'elastic.out'
-  | 'elastic.inOut'
-  | 'bounce.in'
-  | 'bounce.out'
-  | 'bounce.inOut';
 
-export type TriggerType = 
+export type TriggerType =
   | 'onLoad'        // Triggers when preview mode starts
   | 'afterPrevious' // Triggers after previous animation
   | 'manual'        // Manually triggered via code

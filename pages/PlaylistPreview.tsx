@@ -196,7 +196,7 @@ const PlaylistPreview: React.FC = () => {
     const interpolatedEl = getElementAtTime(originalEl, activeItem.designData);
     if (!interpolatedEl) return null;
 
-    // ✅ RENDER USING SHARED COMPONENT
+    // RENDER USING SHARED COMPONENT
     return (
       <ElementRenderer
         key={interpolatedEl.id}

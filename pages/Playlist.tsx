@@ -230,7 +230,7 @@ const SchedulePlaylist: React.FC = () => {
 
                   <div className="flex items-center gap-2">
 
-                    {/* ✅ FIXED CHECK: Case-Insensitive Check for Admin */}
+                    {/* FIXED CHECK: Case-Insensitive Check for Admin */}
                     {/* If Role is NOT "admin" (in any case), SHOW the button */}
                     {(user as any)?.role?.toLowerCase() !== 'admin' && (
                       <button

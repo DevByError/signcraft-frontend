@@ -1,7 +1,7 @@
 /**
  * Animation Engine - CapCut Style
  * Pure functional animation evaluation using clip-local time
- * 
+ *
  * CRITICAL RULES:
  * 1. All functions are stateless - same input = same output
  * 2. Time is always clip-local (0 = clip start)
@@ -262,12 +262,12 @@ function evaluateRotationAnimation(
 
 /**
  * Evaluate all animations for a clip at specific clip-local time
- * 
+ *
  * @param animations - Array of animations to evaluate
  * @param clipLocalTimeMs - Time relative to clip start (0 = clip start)
  * @param baseValues - Base values to use when no animation exists
  * @returns Evaluated animation values
- * 
+ *
  * CRITICAL: This function is stateless and pure
  * Same inputs always produce same outputs
  */

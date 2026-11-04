@@ -1,6 +1,6 @@
 /**
  * Canvas Types - Single Source of Truth
- * 
+ *
  * This file contains all type definitions for canvas elements.
  * ALL imports of CanvasElement and ElementType must come from this file.
  */

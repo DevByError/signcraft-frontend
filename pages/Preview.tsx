@@ -6,7 +6,7 @@ import {
 import { getDesignLocalById } from '../services/localDesignStore';
 import { getDesignById, convertBackendToLocal } from '../services/designService';
 import { CanvasElement, ElementTypeValue } from '../types/canvas';
-// ✅ IMPORT SHARED RENDERER
+// IMPORT SHARED RENDERER
 import { ElementRenderer } from '../components/ElementRenderer';
 
 // ==========================================
@@ -309,7 +309,7 @@ const Preview: React.FC = () => {
     const activeElement = getElementAtTime(element);
     if (!activeElement) return null;
 
-    // ✅ RENDER USING SHARED COMPONENT
+    // RENDER USING SHARED COMPONENT
     return (
       <ElementRenderer
         key={activeElement.id}

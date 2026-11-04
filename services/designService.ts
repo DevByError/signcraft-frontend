@@ -1,5 +1,5 @@
 
-import api from '../utils/api'; // ✅ Centralized API with Interceptors
+import api from '../utils/api'; // Centralized API with Interceptors
 
 // --- Interfaces ---
 export interface DesignMetadata {
@@ -93,7 +93,7 @@ export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> 
     });
     return response.data;
   } catch (error: any) {
-    console.error('❌ [DESIGN_SERVICE] Error fetching design:', error);
+    console.error('[DESIGN_SERVICE] Error fetching design:', error);
     throw error;
   }
 };
@@ -104,13 +104,12 @@ export const getDesignById = async (id: string): Promise<GetDesignByIdResponse> 
 export const postsaveDesign = async (designData: SaveDesignRequest): Promise<SaveDesignResponse> => {
   try {
     const response = await api.post('/design/postsavedesign', designData);
-    console.log('✅ [DESIGN_SERVICE] Design saved:', response.data);
     return response.data;
   } catch (error: any) {
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       throw error;
     }
-    console.error('❌ [DESIGN_SERVICE] Error saving design:', error);
+    console.error('[DESIGN_SERVICE] Error saving design:', error);
     throw error;
   }
 };
@@ -123,7 +122,7 @@ export const deleteDesign = async (id: string): Promise<DeleteDesignResponse> =>
     const response = await api.post('/design/postdeldesign', { id });
     return response.data;
   } catch (error: any) {
-    console.error('❌ [DESIGN_SERVICE] Error deleting design:', error);
+    console.error('[DESIGN_SERVICE] Error deleting design:', error);
     throw error;
   }
 };
@@ -136,7 +135,7 @@ export const exportDesignVideo = async (id: string): Promise<ExportVideoResponse
     const response = await api.post('/design/exportvideo', { id });
     return response.data;
   } catch (error: any) {
-    console.error('❌ [DESIGN_SERVICE] Error exporting video:', error);
+    console.error('[DESIGN_SERVICE] Error exporting video:', error);
     throw error;
   }
 };
@@ -166,7 +165,7 @@ export const uploadAsset = async (
 
     return response.data;
   } catch (error: any) {
-    console.error('❌ [DESIGN_SERVICE] Upload failed:', error);
+    console.error('[DESIGN_SERVICE] Upload failed:', error);
     return {
       success: false,
       msg: error.response?.data?.msg || 'Upload failed'
@@ -193,7 +192,7 @@ export const convertLocalToBackend = (localDesign: any): SaveDesignRequest => {
 
 /**
  * Helper function to convert backend design format to local format
- * ✅ UPDATED: Now dynamically reads Width/Height/Color from saved data
+ * Now dynamically reads Width/Height/Color from saved data
  */
 export const convertBackendToLocal = (backendDesign: DesignData): any => {
   if (!backendDesign) return null;
@@ -210,7 +209,7 @@ export const convertBackendToLocal = (backendDesign: DesignData): any => {
     id: backendDesign.id,
     metadata: {
       title: backendDesign.title || 'Untitled',
-      // ✅ Dynamic Dimensions (Fallback to 1920x1080 only if missing)
+      // Dynamic Dimensions (Fallback to 1920x1080 only if missing)
       canvasWidth: Number(savedMetadata.canvasWidth) || 1920,
       canvasHeight: Number(savedMetadata.canvasHeight) || 1080,
       canvasColor: savedMetadata.canvasColor || '#ffffff',

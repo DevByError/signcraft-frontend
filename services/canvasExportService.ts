@@ -242,15 +242,6 @@ export const serializeCanvasDesign = (
   const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
 
   // DEBUG: Log all elements before serialization
-  console.log('🔍 [SERIALIZATION DEBUG] Elements before serialization:', {
-    totalElements: sortedElements.length,
-    elements: sortedElements.map(el => ({
-      id: el.id,
-      type: el.type,
-      content: el.content,
-      contentLength: el.content ? String(el.content).length : 0,
-    }))
-  });
 
   // Strict serialization with exact values - capture ALL properties
   const cleanElements: CanvasElementData[] = sortedElements.map((el) => {
@@ -348,31 +339,12 @@ export const serializeCanvasDesign = (
 
     // DEBUG: Log each serialized text element
     if (el.type === 'TEXT') {
-      console.log('📝 [TEXT ELEMENT DEBUG]', {
-        id: element.id,
-        originalContent: el.content,
-        serializedContent: element.content,
-        contentPresent: !!element.content,
-        contentLength: element.content.length,
-        fontSize: element.fontSize,
-        hasTextStyle: !!element.textStyle,
-      });
     }
 
     return element;
   });
 
   // DEBUG: Log serialized elements
-  console.log('✅ [SERIALIZATION DEBUG] Elements after serialization:', {
-    totalElements: cleanElements.length,
-    textElements: cleanElements.filter(el => el.type === 'TEXT').length,
-    elements: cleanElements.map(el => ({
-      id: el.id,
-      type: el.type,
-      content: el.content,
-      contentLength: el.content ? el.content.length : 0,
-    }))
-  });
 
   const now = new Date().toISOString();
 

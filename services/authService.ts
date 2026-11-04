@@ -33,13 +33,12 @@ export interface AuthResponse {
  * 1. Login user
  */
 export const login = async (credentials: LoginRequest): Promise<AuthResponse> => {
-  console.log('🔐 [AUTH_SERVICE] Attempting login for:', credentials.email);
 
   try {
     const response = await fetch(`${API_BASE}/accounts/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // ✅ Critical: Sends/Receives cookies
+      credentials: 'include', // Critical: Sends/Receives cookies
       body: JSON.stringify(credentials),
     });
 
@@ -55,7 +54,7 @@ export const login = async (credentials: LoginRequest): Promise<AuthResponse> =>
 
     return result;
   } catch (error) {
-    console.error('❌ [AUTH_SERVICE] Network error:', error);
+    console.error('[AUTH_SERVICE] Network error:', error);
     return { success: false, data: { msg: 'Network error. Please check your connection.' } };
   }
 };
@@ -69,7 +68,7 @@ export const verifySession = async (): Promise<UserProfile | null> => {
     const response = await fetch(`${API_BASE}/accounts/profile`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // ✅ Critical: Sends the HttpOnly cookie
+      credentials: 'include', // Critical: Sends the HttpOnly cookie
     });
 
     // If 401, simply return null (not logged in)
@@ -109,7 +108,7 @@ export const logout = async (): Promise<{ success: boolean; msg?: string }> => {
   }
 };
 
-/** 
+/**
  * 4. Get user from LocalStorage (Sync fallback for UI flickering)
  */
 export const getUser = (): UserProfile | null => {
@@ -119,7 +118,7 @@ export const getUser = (): UserProfile | null => {
 
 // -------------------- Legacy Helpers (Kept for compatibility) --------------------
 
-/** 
+/**
  * Get stored JWT token
  * Returns null because we now use HttpOnly cookies.
  * Kept so other files calling this don't crash.
@@ -128,17 +127,17 @@ export const getToken = (): string | null => {
   return null;
 };
 
-/** 
- * Build auth headers 
+/**
+ * Build auth headers
  * Adjusted to just return Content-Type, since Auth is now handled by Cookies
  */
 export const getAuthHeaders = (extra?: Record<string, string>) => {
   return Object.assign({ 'Content-Type': 'application/json' }, extra || {});
 };
 
-/** 
+/**
  * Wrapper around fetch
- * ✅ UPDATED: Forces credentials: 'include' so your other API calls (designs, playlists) works
+ * Forces credentials: 'include' so your other API calls (designs, playlists) works
  */
 export const authFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   // We don't need to manually inject Bearer token anymore

@@ -1,36 +1,36 @@
 /**
  * Timeline Component - CapCut Style
- * 
+ *
  * CapCut Principles Implemented:
  * ================================
  * 1. TIME-FIRST ARCHITECTURE
  *    - All calculations are millisecond-based, never pixels
  *    - UI is derived from time, not vice versa
  *    - Formula: pxPerMs = zoom / 1000
- * 
+ *
  * 2. PRECISE item.id.toString()
 
  *    - clipLeftPx = clip.startMs * pxPerMs
  *    - clipWidthPx = clip.durationMs * pxPerMs
  *    - Zoom works perfectly with this formula
- * 
+ *
  * 3. PLAYBACK ENGINE
  *    - Uses requestAnimationFrame (not setInterval)
  *    - Time delta from performance.now()
  *    - No drift, accurate audio sync
- * 
+ *
  * 4. SNAPPING SYSTEM (80ms threshold)
  *    - Snaps to: clip start, clip end, playhead, grid
  *    - Magnetic feel during drag/resize/scrub
- * 
+ *
  * 5. COLLISION DETECTION
  *    - No overlaps in same track
  *    - Auto-pushes clips on collision
- * 
+ *
  * 6. SPLIT & RIPPLE
  *    - Split: leftClip.duration = splitTime - startMs
  *    - Ripple delete: shifts all clips after deleted one
- * 
+ *
  * 7. CONSISTENT EXPORT
  *    - Timeline model = preview = export
  *    - No UI dependencies in data model
@@ -39,6 +39,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Swal from 'sweetalert2';
 import {
+  Type, Image as ImageIcon, Film, Square, Circle, Triangle, Star, Heart, Music, Box,
   Play,
   Pause,
   StopCircle,
@@ -551,26 +552,21 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
     );
   };
 
-  // Get thumbnail for item
-  const getItemThumbnail = (item: TimelineItem): string => {
-    if (!item.elementType) {
-      // Fallback based on track type
-      return item.trackType === 'audio' ? '🎵' : '📦';
-    }
-
-    const iconMap: Record<string, string> = {
-      TEXT: '📝',
-      IMAGE: '🖼️',
-      VIDEO: '🎬',
-      RECT: '▭',
-      CIRCLE: '⚪',
-      TRIANGLE: '▲',
-      STAR: '⭐',
-      HEART: '❤️',
-      AUDIO: '🎵',
+  const getItemThumbnail = (item: TimelineItem): React.ReactNode => {
+    const iconMap: Record<string, React.ElementType> = {
+      TEXT: Type,
+      IMAGE: ImageIcon,
+      VIDEO: Film,
+      RECT: Square,
+      CIRCLE: Circle,
+      TRIANGLE: Triangle,
+      STAR: Star,
+      HEART: Heart,
+      AUDIO: Music,
     };
-
-    return iconMap[String(item.elementType)] ?? '📦';
+    const fallback = item.trackType === 'audio' ? Music : Box;
+    const Icon = (item.elementType && iconMap[String(item.elementType)]) || fallback;
+    return <Icon size={16} />;
   };
 
 
@@ -1004,7 +1000,7 @@ export const TimelineCapCut: React.FC<TimelineComponentProps> = ({
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-green-400">⚡ CapCut Engine | Partition Timeline</span>
+          <span className="text-green-400">Partition Timeline</span>
           <span>Zoom: {timeline.zoom.toFixed(0)}px/s</span>
         </div>
       </div>

@@ -79,10 +79,10 @@ const Info: React.FC = () => {
                   </ul>
                 </div>
                 <div className="flex-1">
-                  <img 
-                    src="https://picsum.photos/600/400?random=2" 
-                    alt="Editor" 
-                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow" 
+                  <img
+                    src="https://picsum.photos/600/400?random=2"
+                    alt="Editor"
+                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow"
                   />
                 </div>
               </div>
@@ -114,10 +114,10 @@ const Info: React.FC = () => {
                   </ul>
                 </div>
                 <div className="flex-1">
-                  <img 
-                    src="https://picsum.photos/600/400?random=3" 
-                    alt="Device Management" 
-                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow" 
+                  <img
+                    src="https://picsum.photos/600/400?random=3"
+                    alt="Device Management"
+                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow"
                   />
                 </div>
               </div>
@@ -149,10 +149,10 @@ const Info: React.FC = () => {
                   </ul>
                 </div>
                 <div className="flex-1">
-                  <img 
-                    src="https://picsum.photos/600/400?random=4" 
-                    alt="Analytics" 
-                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow" 
+                  <img
+                    src="https://picsum.photos/600/400?random=4"
+                    alt="Analytics"
+                    className="rounded-lg shadow-xl border-4 border-white hover:shadow-2xl transition-shadow"
                   />
                 </div>
               </div>
@@ -291,8 +291,8 @@ const Info: React.FC = () => {
                 <form className="space-y-5">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="John Doe"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                     />
@@ -300,8 +300,8 @@ const Info: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       placeholder="john@example.com"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                     />
@@ -309,8 +309,8 @@ const Info: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Company (Optional)</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Your Company"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                     />
@@ -318,14 +318,14 @@ const Info: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Message</label>
-                    <textarea 
+                    <textarea
                       rows={5}
                       placeholder="Tell us about your project or question..."
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all resize-none"
                     ></textarea>
                   </div>
 
-                  <button 
+                  <button
                     type="button"
                     className="w-full bg-primary text-white font-semibold py-3 px-4 rounded-lg hover:bg-primaryLight transition-colors"
                   >

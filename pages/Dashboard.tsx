@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
         }
 
       } catch (err) {
-        console.error('❌ [DASHBOARD] Error fetching data:', err);
+        console.error('[DASHBOARD] Error fetching data:', err);
         setError('Partial load failure. Some data may not be available.');
       } finally {
         setLoading(false);
@@ -194,7 +194,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-primary">Recent Designs</h2>
             {/* <Link to="/creative" className="text-primary hover:text-primaryLight font-medium transition-colors underline text-sm">
-              View All →
+              View All
             </Link> */}
           </div>
 

@@ -3,10 +3,10 @@
  * Manages timeline operations for shapes, media, and audio sequencing
  */
 
-import { 
-  Timeline, 
-  TimelineTrack, 
-  TimelineItem, 
+import {
+  Timeline,
+  TimelineTrack,
+  TimelineItem,
   TimelineAction,
   TimelineTrackType,
   TimelineConfig,
@@ -169,7 +169,7 @@ export function addItemToTimeline(
   item: TimelineItem,
   trackId?: string
 ): Timeline {
-  const targetTrack = trackId 
+  const targetTrack = trackId
     ? timeline.tracks.find(t => t.id === trackId)
     : timeline.tracks.find(t => t.type === item.trackType);
 
@@ -289,7 +289,7 @@ export function updateTimelineItem(
 ): Timeline {
   const updatedTracks = timeline.tracks.map(track => ({
     ...track,
-    items: track.items.map(item => 
+    items: track.items.map(item =>
       item.id === itemId ? { ...item, ...updates } : item
     ).sort((a, b) => a.startTime - b.startTime),
   }));
@@ -392,8 +392,8 @@ export function addTrack(
   type: TimelineTrackType
 ): Timeline {
   const tracksOfType = timeline.tracks.filter(t => t.type === type);
-  const maxAllowed = type === 'visual' 
-    ? DEFAULT_CONFIG.maxVisualTracks 
+  const maxAllowed = type === 'visual'
+    ? DEFAULT_CONFIG.maxVisualTracks
     : DEFAULT_CONFIG.maxAudioTracks;
 
   if (tracksOfType.length >= maxAllowed) {
@@ -457,7 +457,7 @@ export function toggleTrackVisibility(
   timeline: Timeline,
   trackId: string
 ): Timeline {
-  const updatedTracks = timeline.tracks.map(track => 
+  const updatedTracks = timeline.tracks.map(track =>
     track.id === trackId ? { ...track, visible: !track.visible } : track
   );
 
@@ -471,7 +471,7 @@ export function toggleTrackVisibility(
  * Toggle track lock
  */
 export function toggleTrackLock(timeline: Timeline, trackId: string): Timeline {
-  const updatedTracks = timeline.tracks.map(track => 
+  const updatedTracks = timeline.tracks.map(track =>
     track.id === trackId ? { ...track, locked: !track.locked } : track
   );
 
@@ -507,7 +507,7 @@ export function bringToFront(
   elementId: string
 ): CanvasElement[] {
   const maxZIndex = Math.max(...elements.map(el => el.zIndex), 0);
-  return elements.map(el => 
+  return elements.map(el =>
     el.id === elementId ? { ...el, zIndex: maxZIndex + 1 } : el
   );
 }
@@ -520,7 +520,7 @@ export function sendToBack(
   elementId: string
 ): CanvasElement[] {
   const minZIndex = Math.min(...elements.map(el => el.zIndex), 0);
-  return elements.map(el => 
+  return elements.map(el =>
     el.id === elementId ? { ...el, zIndex: minZIndex - 1 } : el
   );
 }
@@ -591,7 +591,7 @@ export function setLayerOrder(
   elementId: string,
   targetLayer: number
 ): CanvasElement[] {
-  return elements.map(el => 
+  return elements.map(el =>
     el.id === elementId ? { ...el, zIndex: targetLayer } : el
   );
 }

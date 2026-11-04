@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await authService.login({ email, password });
 
       if (response.success) {
-        // Step B: ✅ IMMEDIATE FETCH of Profile Data
+        // Step B: IMMEDIATE FETCH of Profile Data
         // We do this now so the UI updates with "Captain" instead of "User" instantly.
         const fullProfile = await authService.verifySession();
 
@@ -92,7 +92,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 2. Stop Loading
       setIsLoading(false);
 
-      // ❌ REMOVED: window.location.href = '/login'; 
       // We let the component calling logout handle the redirect
     }
   };

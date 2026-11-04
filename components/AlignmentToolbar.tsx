@@ -63,7 +63,7 @@ export const AlignmentToolbar: React.FC<AlignmentToolbarProps> = ({
   };
 
   const handleDistribute = (axis: 'x' | 'y') => {
-    const updates = axis === 'x' 
+    const updates = axis === 'x'
       ? distributeHorizontally(selectedElements)
       : distributeVertically(selectedElements);
 
@@ -136,7 +136,7 @@ export const AlignmentToolbar: React.FC<AlignmentToolbarProps> = ({
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
       <div className="text-sm font-semibold text-gray-700">
-        ✓ {selectedElements.length} Elements Selected
+        {selectedElements.length} Elements Selected
       </div>
 
       {/* Horizontal Alignment */}
@@ -267,7 +267,7 @@ export const AlignmentToolbar: React.FC<AlignmentToolbarProps> = ({
       </div>
 
       <div className="text-xs text-gray-500 px-1 pt-2 border-t">
-        💡 Tip: Select multiple elements with Shift+Click to use these tools
+        Tip: Select multiple elements with Shift+Click to use these tools
       </div>
     </div>
   );

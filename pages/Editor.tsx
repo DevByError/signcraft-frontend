@@ -17,7 +17,7 @@ import { fetchWeather } from '../services/weatherService';
 import Swal from 'sweetalert2';
 import { SaveDesignModal, SaveDesignModalData } from '../components/SaveDesignModal';
 import { downloadDesignAsJSON } from '../services/canvasExportService';
-// ✅ FIX: Use 'saveDesignAPI' to distinguish from local function
+// Use 'saveDesignAPI' to distinguish from local function
 import { postsaveDesign as saveDesignAPI, getDesignById, convertBackendToLocal } from '../services/designService';
 import authService from '../services/authService';
 import TimelineCapCut from '../components/TimelineCapCut';
@@ -48,7 +48,7 @@ const UNIT_TO_PX = {
 const WIDGET_CATEGORIES = [
   {
     id: 'essential',
-    label: '🔹 Essential',
+    label: 'Essential',
     icon: <Type size={18} />,
     items: [
       { type: ElementType.TEXT, label: 'Text', icon: <Type size={18} /> },
@@ -59,7 +59,7 @@ const WIDGET_CATEGORIES = [
   },
   {
     id: 'media',
-    label: '🔹 Media',
+    label: 'Media',
     icon: <Video size={18} />,
     items: [
       { type: ElementType.VIDEO, label: 'Video', icon: <Video size={18} /> },
@@ -70,7 +70,7 @@ const WIDGET_CATEGORIES = [
   },
   {
     id: 'general',
-    label: '🔹 General',
+    label: 'General',
     icon: <Settings size={18} />,
     items: [
       { type: ElementType.LABEL, label: 'Label', icon: <Type size={18} /> },
@@ -80,7 +80,7 @@ const WIDGET_CATEGORIES = [
   },
   {
     id: 'shapes',
-    label: '🔹 Shapes',
+    label: 'Shapes',
     icon: <Shapes size={18} />,
     items: [
       { type: ElementType.RECT, label: 'Rectangle', icon: <Square size={18} /> },
@@ -99,7 +99,7 @@ const WIDGET_CATEGORIES = [
   },
   {
     id: 'advanced',
-    label: '🔹 Advanced',
+    label: 'Advanced',
     icon: <Grid3x3 size={18} />,
     items: [
       { type: ElementType.CALENDAR, label: 'Calendar', icon: <Grid3x3 size={18} /> },
@@ -107,7 +107,7 @@ const WIDGET_CATEGORIES = [
   },
   {
     id: 'embed',
-    label: '🔹 Embed',
+    label: 'Embed',
     icon: <Layout size={18} />,
     items: [
       { type: ElementType.WEB_IMAGE, label: 'Web Image', icon: <ImageIcon size={18} /> },
@@ -271,14 +271,14 @@ const Editor: React.FC = () => {
   } | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const canvasContainerRef = useRef<HTMLDivElement>(null); // ✅ NEW: For scroll control
+  const canvasContainerRef = useRef<HTMLDivElement>(null); // For scroll control
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null); // ✅ NEW: For Videos
+  const videoInputRef = useRef<HTMLInputElement>(null); // For Videos
   const previewWindowRef = useRef<Window | null>(null);
-  const isCreatingDesignRef = useRef(false); // ✅ Prevent refetch overwrite on creation
+  const isCreatingDesignRef = useRef(false); // Prevent refetch overwrite on creation
 
-  // ✅ NEW: Live Preview State & Sync
+  // Live Preview State & Sync
   const [livePreviewOpen, setLivePreviewOpen] = useState(false);
   const [livePreviewKey, setLivePreviewKey] = useState<string | null>(null);
 
@@ -457,7 +457,6 @@ const Editor: React.FC = () => {
 
         // 3. Get Duration
         const actualDuration = await getVideoDuration(response.url);
-        console.log(`Video uploaded: ${response.url}`);
 
         // 4. CRITICAL FIX: Use 'setElements(prev => ...)'
         // This guarantees we update the LIVE state, not the "stale" state from 2 seconds ago
@@ -465,7 +464,6 @@ const Editor: React.FC = () => {
           return prevElements.map(el => {
             // Find the specific element we were editing
             if (el.id === targetId) {
-              console.log(`Updating Element ${el.id} with new URL`);
               return {
                 ...el,
                 content: response.url, // Force the new S3 URL
@@ -578,7 +576,7 @@ const Editor: React.FC = () => {
             .find(item => item.elementId === el.id);
 
           if (timelineItem) {
-            // ✅ USE SYNCED VIDEO
+            // USE SYNCED VIDEO
             return (
               <SyncedVideo
                 src={el.content}
@@ -600,7 +598,7 @@ const Editor: React.FC = () => {
               className="w-full h-full object-cover pointer-events-none"
               style={{ borderRadius: el.borderRadius }}
               muted
-            // Don't autoplay loop in editor unless specific preview mode, 
+            // Don't autoplay loop in editor unless specific preview mode,
             // otherwise it creates noise while designing
             />
           );
@@ -1283,7 +1281,7 @@ const Editor: React.FC = () => {
     setSelectedIds([newElement.id]);
     setNewElementIds(prev => new Set([...prev, newElement.id]));
 
-    // ✅ FORCE TIMELINE UPDATE: 
+    // FORCE TIMELINE UPDATE:
     // Instead of waiting for useEffect sync (which might default to 5s),
     // we manually add it to the timeline with the correct duration immediately.
     addElementToTimeline({
@@ -1310,29 +1308,29 @@ const Editor: React.FC = () => {
       // Essential
       case ElementType.TEXT: return 'Double click to edit';
       case ElementType.IMAGE: return 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400';
-      case ElementType.SLIDESHOW: return '🖼️ Slideshow';
-      case ElementType.TICKER: return '📰 Breaking News • Latest Updates • Top Stories';
+      case ElementType.SLIDESHOW: return 'Slideshow';
+      case ElementType.TICKER: return 'Breaking News • Latest Updates • Top Stories';
 
       // Media
-      case ElementType.VIDEO: return '🎬 Video Player';
+      case ElementType.VIDEO: return 'Video Player';
       case ElementType.GIF: return 'https://media.giphy.com/media/26BRuo6sLetdllPAQ/giphy.gif';
-      case ElementType.YOUTUBE: return '▶️ YouTube';
-      case ElementType.USTREAM: return '📹 Ustream';
+      case ElementType.YOUTUBE: return 'YouTube';
+      case ElementType.USTREAM: return 'Ustream';
 
       // General
       case ElementType.LABEL: return 'Label Text';
-      case ElementType.CLOCK: return '🕐 12:00 PM';
-      case ElementType.TIMER: return '⏱️ 00:00:00';
+      case ElementType.CLOCK: return '12:00 PM';
+      case ElementType.TIMER: return '00:00:00';
       case ElementType.SHAPE: return '';
 
       // Advanced
-      case ElementType.CALENDAR: return '📅 Calendar';
+      case ElementType.CALENDAR: return 'Calendar';
 
       // Embed
-      case ElementType.WEB_IMAGE: return '🌐 Web Image';
-      case ElementType.WEB_VIDEO: return '🌐 Web Video';
-      case ElementType.SUB_CREATIVE: return '🎨 Sub Creative';
-      case ElementType.EMBED: return '📦 Embed Content';
+      case ElementType.WEB_IMAGE: return 'Web Image';
+      case ElementType.WEB_VIDEO: return 'Web Video';
+      case ElementType.SUB_CREATIVE: return 'Sub Creative';
+      case ElementType.EMBED: return 'Embed Content';
 
       default: return '';
     }
@@ -1566,7 +1564,7 @@ const Editor: React.FC = () => {
     }
   };
 
-  // ✅ NEW: Wheel Zoom Handler with Scroll Support
+  // Wheel Zoom Handler with Scroll Support
   const handleCanvasWheel = (e: React.WheelEvent) => {
     // Ctrl/Cmd + Scroll = Zoom
     if (e.ctrlKey || e.metaKey) {
@@ -1660,7 +1658,7 @@ const Editor: React.FC = () => {
   };
 
   // =========================================================================
-  // ✅ FIX #1: Unified Update Function (Syncs Canvas + Timeline + History)
+  // Unified Update Function (Syncs Canvas + Timeline + History)
   // =========================================================================
   const updateElementUnified = (
     scope: 'root' | 'widgetSettings',
@@ -1856,12 +1854,12 @@ const Editor: React.FC = () => {
     }
   };
 
-  // ✅ RENAME LOCAL FUNCTION to avoid conflict with import
+  // RENAME LOCAL FUNCTION to avoid conflict with import
   const openSaveModal = () => {
     setShowSaveModal(true);
   };
 
-  // ✅ UPDATED: Use saveDesignAPI (imported), ignore 401/403, and remove duplicate manual UserID
+  // Use saveDesignAPI (imported), ignore 401/403, and remove duplicate manual UserID
   const handleSaveDesign = async (data: SaveDesignModalData) => {
     try {
       const elementsWithDefaults = elements.map(el => ({
@@ -1896,7 +1894,7 @@ const Editor: React.FC = () => {
       const payload = {
         id: designId || undefined,
         title: data.title,
-        // ✅ Wrap elements and metadata together
+        // Wrap elements and metadata together
         canvasData: {
           elements: elementsWithDefaults,
           metadata: {
@@ -1907,9 +1905,8 @@ const Editor: React.FC = () => {
         },
         timelineData: timelineVideoData,
       };
-      console.log(designId ? '🔄 Updating...' : '💾 Creating...');
 
-      // ✅ Use renamed API import
+      // Use renamed API import
       const response = await saveDesignAPI(payload);
 
       if (response.success) {
@@ -1930,9 +1927,9 @@ const Editor: React.FC = () => {
         Swal.fire('Error', 'Failed to save: ' + response.msg, 'error');
       }
     } catch (error: any) {
-      // ✅ IGNORE 401/403 Errors - The Global Modal will handle them
+      // IGNORE 401/403 Errors - The Global Modal will handle them
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-        console.warn('🔒 Auth error caught, waiting for global modal...');
+        console.warn('Auth error caught, waiting for global modal...');
         return;
       }
 
@@ -1941,7 +1938,7 @@ const Editor: React.FC = () => {
     }
   };
 
-  // ✅ UPDATED: Added all missing properties for TypeScript interface compliance
+  // Added all missing properties for TypeScript interface compliance
   const exportDesignAsJSON = () => {
     const elementsWithDefaults = elements.map(el => ({
       ...el,
@@ -2266,22 +2263,19 @@ const Editor: React.FC = () => {
   // Load design from backend
   useEffect(() => {
     if (designId) {
-      // ✅ PREVENT OVERWRITE: If we just created this design, don't refetch immediately
+      // PREVENT OVERWRITE: If we just created this design, don't refetch immediately
       // This prevents local state (like canvasSize) from being overwritten by potentially stale data
       if (isCreatingDesignRef.current) {
-        console.log('Skipping fetch for newly created design');
         isCreatingDesignRef.current = false;
         return;
       }
 
       const loadDesign = async () => {
         try {
-          console.log('Loading design:', designId);
 
           const backendResult = await getDesignById(designId);
 
           if (backendResult.success && backendResult.data) {
-            console.log('✅ Design loaded from backend');
 
             // This service handles the structural normalization
             const design = convertBackendToLocal(backendResult.data);
@@ -2534,7 +2528,7 @@ const Editor: React.FC = () => {
           case 'z': e.preventDefault(); undo(); break;
           case 'y': e.preventDefault(); redo(); break;
           case 'd': e.preventDefault(); duplicateSelected(); break;
-          case 's': e.preventDefault(); openSaveModal(); break; // ✅ Use openSaveModal here
+          case 's': e.preventDefault(); openSaveModal(); break; // Use openSaveModal here
           case 'a':
             e.preventDefault();
             setSelectedIds(elements.map(el => el.id));
@@ -2568,7 +2562,7 @@ const Editor: React.FC = () => {
     };
   }, [selectedIds, editingTextId, historyIndex, elements, spacePressed]);
 
-  // ✅ NEW: Live Preview Sync Effect
+  // Live Preview Sync Effect
   // This effect syncs the current design state to the live preview window in real-time
   useEffect(() => {
     if (!livePreviewOpen || !livePreviewKey) return;
@@ -2764,7 +2758,7 @@ const Editor: React.FC = () => {
 
           <button
             onClick={async () => {
-              // ✅ AUTO-SAVE: Save the design before opening preview
+              // AUTO-SAVE: Save the design before opening preview
               try {
                 // ... (Keep existing Swal loading logic) ...
                 Swal.fire({
@@ -2829,7 +2823,7 @@ const Editor: React.FC = () => {
                     showConfirmButton: false
                   });
 
-                  // ✅ OPEN LIVE PREVIEW
+                  // OPEN LIVE PREVIEW
                   const previewDesign = {
                     id: designId || response.data?.id || 'temp-preview-' + Date.now(),
                     metadata: {
@@ -2857,7 +2851,7 @@ const Editor: React.FC = () => {
                   };
 
                   // ---------------------------------------------------------
-                  // ✅ FIX STARTS HERE: Clean up old previews before saving new one
+                  // Clean up old previews before saving new one
                   // ---------------------------------------------------------
 
                   // 1. Clear ALL old preview keys to free up space
@@ -2896,7 +2890,6 @@ const Editor: React.FC = () => {
                     }
                   }
                   // ---------------------------------------------------------
-                  // ✅ FIX ENDS HERE
                   // ---------------------------------------------------------
 
                 } else {
@@ -2921,7 +2914,7 @@ const Editor: React.FC = () => {
             Export
           </button>
 
-          {/* ✅ Use openSaveModal instead of saveDesign */}
+          {/* Use openSaveModal instead of saveDesign */}
           <button
             onClick={openSaveModal}
             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-900/30 button-hover-scale"
@@ -2942,7 +2935,7 @@ const Editor: React.FC = () => {
                 onClick={() => setShowTemplateModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                ✕
+                &times;
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -3364,7 +3357,7 @@ const Editor: React.FC = () => {
                   className="p-1.5 hover:bg-white rounded-lg transition-all text-slate-500 hover:text-slate-900"
                   title="Hide Properties"
                 >
-                  ✕
+                  &times;
                 </button>
               </div>
 
@@ -4034,7 +4027,6 @@ const Editor: React.FC = () => {
 
                                 // Capture ID to avoid bugs if you click away fast
                                 const targetId = selectedElement.id;
-                                console.log(`🔗 Processing URL: ${url}`);
 
                                 try {
                                   let duration = 5000; // Default 5s
@@ -4043,7 +4035,6 @@ const Editor: React.FC = () => {
                                   if (selectedElement.type !== ElementType.YOUTUBE) {
                                     try {
                                       duration = await getVideoDuration(url);
-                                      console.log(`⏱️ Duration detected: ${duration}ms`);
                                     } catch (err) {
                                       console.warn("Could not fetch duration, using default.");
                                     }
@@ -5181,7 +5172,7 @@ const Editor: React.FC = () => {
                       {selectedElement.animation && (
                         <button
                           onClick={() => {
-                            // ✅ FIXED: Properly remove animation and sync to timeline
+                            // Properly remove animation and sync to timeline
                             setSelectedAnimation(null);
 
                             // Update canvas element

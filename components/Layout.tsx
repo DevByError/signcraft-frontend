@@ -17,11 +17,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isEditor = location.pathname === '/editor' || location.pathname.startsWith('/editor/');
   const isAuthPage = location.pathname === '/login' || location.pathname === '/auth';
 
-  // ✅ NEW: Check for Preview Pages (Single Design or Playlist)
+  // Check for Preview Pages (Single Design or Playlist)
   const isPreview = location.pathname.startsWith('/preview') ||
     location.pathname.startsWith('/playlist/preview');
 
-  // ✅ UPDATED LOGIC: Hide UI for Editor, Auth, Recording, AND Previews
+  // Hide UI for Editor, Auth, Recording, AND Previews
   const shouldHideUI = isEditor || isAuthPage || isRecording || isPreview;
 
   const navLinks = [
@@ -65,7 +65,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   //   if (result.isConfirmed) {
   //     // 1. Perform Logout
-  //     await logout(); 
+  //     await logout();
 
   //     // 2. Show Success
   //     await Swal.fire({
@@ -77,7 +77,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   //     });
 
   //     // 3. Redirect to Login Page
-  //     navigate('/login'); 
+  //     navigate('/login');
   //     setIsMenuOpen(false);
   //   }
   // };
@@ -109,7 +109,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-ivory">
-      {/* ✅ Hides Nav if shouldHideUI is true (now includes Previews) */}
+      {/* Hides Nav if shouldHideUI is true (now includes Previews) */}
       {!shouldHideUI && (
         <nav className="sticky top-0 z-50 bg-primary border-b border-gray-800 shadow-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -238,7 +238,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
 
-      {/* ✅ HIDE FULLSCREEN BUTTON ON RECORDING */}
+      {/* HIDE FULLSCREEN BUTTON ON RECORDING */}
       {!isRecording && (
         <button
           onClick={toggleFullscreen}
@@ -250,7 +250,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </button>
       )}
 
-      {/* ✅ HIDE FOOTER ON PREVIEW/EDITOR/AUTH */}
+      {/* HIDE FOOTER ON PREVIEW/EDITOR/AUTH */}
       {!shouldHideUI && (
         <footer className="bg-black text-white mt-auto">
           <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">

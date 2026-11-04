@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
+import {
   Type, ImageIcon, Square, Video, Clock, CloudSun,
   ChevronRight, ChevronDown, Search, ArrowLeft,
   Copy, Trash2, Undo, Redo, Save,
@@ -24,9 +24,9 @@ const TEMPLATES = [
 ];
 
 const WIDGET_CATEGORIES = [
-  { 
-    id: 'essential', 
-    label: '🔹 Essential', 
+  {
+    id: 'essential',
+    label: 'Essential',
     icon: <Sparkles size={18} />,
     items: [
       { type: ElementType.TEXT, label: 'Text', icon: <Type size={18} /> },
@@ -35,11 +35,11 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.TICKER, label: 'Ticker', icon: <Type size={18} /> },
       { type: ElementType.RSS, label: 'RSS', icon: <FileText size={18} /> },
       { type: ElementType.WEATHER, label: 'Weather', icon: <CloudSun size={18} /> },
-    ] 
+    ]
   },
-  { 
-    id: 'media', 
-    label: '🔹 Media', 
+  {
+    id: 'media',
+    label: 'Media',
     icon: <Video size={18} />,
     items: [
       { type: ElementType.VIDEO, label: 'Video', icon: <Video size={18} /> },
@@ -50,11 +50,11 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.FTP, label: 'FTP', icon: <FileText size={18} /> },
       { type: ElementType.INSTAGRAM, label: 'Instagram', icon: <Image size={18} /> },
       { type: ElementType.STREAMING, label: 'Streaming', icon: <Video size={18} /> },
-    ] 
+    ]
   },
-  { 
-    id: 'general', 
-    label: '🔹 General', 
+  {
+    id: 'general',
+    label: 'General',
     icon: <Settings size={18} />,
     items: [
       { type: ElementType.LABEL, label: 'Label', icon: <Type size={18} /> },
@@ -62,11 +62,11 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.TIMER, label: 'Timer', icon: <Clock size={18} /> },
       { type: ElementType.TOUCH, label: 'Touch', icon: <MousePointer2 size={18} /> },
       { type: ElementType.WEATHER_2, label: 'Weather 2.0', icon: <CloudSun size={18} /> },
-    ] 
+    ]
   },
-  { 
-    id: 'shapes', 
-    label: '🔹 Shapes', 
+  {
+    id: 'shapes',
+    label: 'Shapes',
     icon: <Shapes size={18} />,
     items: [
       { type: ElementType.RECT, label: 'Rectangle', icon: <Square size={18} /> },
@@ -81,11 +81,11 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.CRESCENT, label: 'Crescent', icon: <CloudSun size={18} /> },
       { type: ElementType.CROSS, label: 'Cross', icon: <Plus size={18} /> },
       { type: ElementType.LINE, label: 'Line', icon: <Minus size={18} /> },
-    ] 
+    ]
   },
-  { 
-    id: 'advanced', 
-    label: '🔹 Advanced', 
+  {
+    id: 'advanced',
+    label: 'Advanced',
     icon: <Grid3x3 size={18} />,
     items: [
       { type: ElementType.AD_SERVING, label: 'Ad Serving', icon: <ImageIcon size={18} /> },
@@ -93,11 +93,11 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.DASHBOARDS, label: 'Dashboards', icon: <Layout size={18} /> },
       { type: ElementType.TABLE, label: 'Table', icon: <Grid3x3 size={18} /> },
       { type: ElementType.SMART_SWITCH, label: 'Smart Switch', icon: <Settings size={18} /> },
-    ] 
+    ]
   },
-  { 
-    id: 'embed', 
-    label: '🔹 Embed', 
+  {
+    id: 'embed',
+    label: 'Embed',
     icon: <Layout size={18} />,
     items: [
       { type: ElementType.WEB_IMAGE, label: 'Web Image', icon: <ImageIcon size={18} /> },
@@ -105,7 +105,7 @@ const WIDGET_CATEGORIES = [
       { type: ElementType.SUB_CREATIVE, label: 'Sub Creative', icon: <Layout size={18} /> },
       { type: ElementType.EMBED, label: 'Embed', icon: <Layout size={18} /> },
       { type: ElementType.HTML, label: 'HTML', icon: <FileText size={18} /> },
-    ] 
+    ]
   },
 ];
 
@@ -169,21 +169,21 @@ const Editor: React.FC = () => {
     widgets_embed: false,
   });
 
-  const [dragInfo, setDragInfo] = useState<{ 
-    id: string; 
-    startX: number; 
-    startY: number; 
+  const [dragInfo, setDragInfo] = useState<{
+    id: string;
+    startX: number;
+    startY: number;
     initialPositions: Map<string, { x: number; y: number }>;
   } | null>(null);
   
   const [draggingFromSidebar, setDraggingFromSidebar] = useState(false);
   
-  const [resizing, setResizing] = useState<{ 
-    id: string; 
-    handle: string; 
-    startX: number; 
-    startY: number; 
-    initialWidth: number; 
+  const [resizing, setResizing] = useState<{
+    id: string;
+    handle: string;
+    startX: number;
+    startY: number;
+    initialWidth: number;
     initialHeight: number;
     initialX: number;
     initialY: number;
@@ -390,10 +390,10 @@ const Editor: React.FC = () => {
   };
 
   const renderShape = (shapeType: ElementTypeValue, fillColor: string, strokeColor?: string, strokeWidth?: number) => {
-    const svgStrokeProps = strokeWidth && strokeWidth > 0 ? { 
-      stroke: strokeColor || '#000000', 
+    const svgStrokeProps = strokeWidth && strokeWidth > 0 ? {
+      stroke: strokeColor || '#000000',
       strokeWidth,
-      fill: fillColor 
+      fill: fillColor
     } : { fill: fillColor };
 
     switch (shapeType) {
@@ -578,9 +578,9 @@ const Editor: React.FC = () => {
           const safeX = Math.max(0, Math.min(canvasSize.width - el.width, snappedX));
           const safeY = Math.max(0, Math.min(canvasSize.height - el.height, snappedY));
 
-          return { 
-            ...el, 
-            x: safeX, 
+          return {
+            ...el,
+            x: safeX,
             y: safeY
           };
         }
@@ -799,7 +799,6 @@ const Editor: React.FC = () => {
     try {
       setIsLoading(true);
 
-      console.log('🔄 [MODIFY_EDITOR] Saving design modifications:', designId);
 
       // Check if user has permission to modify
       if (designData && !hasModificationPermission(designData)) {
@@ -852,7 +851,6 @@ const Editor: React.FC = () => {
       });
 
       if (result.success) {
-        console.log('✅ [MODIFY_EDITOR] Design modified successfully:', designId);
         setDesignTitle(finalTitle);
         
         // Update local design data state
@@ -889,7 +887,7 @@ const Editor: React.FC = () => {
         throw new Error(result.msg || 'Failed to modify design');
       }
     } catch (error) {
-      console.error('❌ [MODIFY_EDITOR] Error saving design:', error);
+      console.error('[MODIFY_EDITOR] Error saving design:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       Swal.fire({
         icon: 'error',
@@ -983,7 +981,7 @@ const Editor: React.FC = () => {
       }
 
       // Load all images in parallel
-      const imageLoadPromises = Array.from(imageSrcs).map(src => 
+      const imageLoadPromises = Array.from(imageSrcs).map(src =>
         new Promise<[string, HTMLImageElement]>(resolve => {
           const img = document.createElement('img');
           img.crossOrigin = 'anonymous';
@@ -1200,7 +1198,7 @@ const Editor: React.FC = () => {
     
     // Use smaller scale to prevent elements from growing too large,
     // but scale relative positions by canvas dimensions to maintain layout.
-    const scale = Math.min(scaleX, scaleY); 
+    const scale = Math.min(scaleX, scaleY);
 
     const newElements = elements.map(el => {
       // Calculate relative center position (0 to 1)
@@ -1239,7 +1237,6 @@ const Editor: React.FC = () => {
         setDesignLoadError(null);
         
         if (designId) {
-          console.log('Loading design:', designId);
           const design = await getDesignLocalById(designId);
           
           if (!design) {
@@ -1250,12 +1247,11 @@ const Editor: React.FC = () => {
             return;
           }
           
-          console.log('Design loaded:', design);
           setDesignData(design);
           setDesignTitle(design.metadata?.title || 'Untitled Design');
-          setCanvasSize({ 
-            width: design.metadata?.canvasWidth || 1280, 
-            height: design.metadata?.canvasHeight || 720 
+          setCanvasSize({
+            width: design.metadata?.canvasWidth || 1280,
+            height: design.metadata?.canvasHeight || 720
           });
           setCanvasColor(design.metadata?.canvasColor || '#FDFBF7');
           
@@ -1297,10 +1293,10 @@ const Editor: React.FC = () => {
         const currentHistoryState = history[historyIndex];
         if (currentHistoryState && currentHistoryState !== elements) {
           // Quick check to see if elements actually changed
-          const elementsChanged = currentHistoryState.length !== elements.length || 
+          const elementsChanged = currentHistoryState.length !== elements.length ||
             currentHistoryState.some((el, idx) => {
               const newEl = elements[idx];
-              return !newEl || el.x !== newEl.x || el.y !== newEl.y || 
+              return !newEl || el.x !== newEl.x || el.y !== newEl.y ||
                 el.width !== newEl.width || el.height !== newEl.height;
             });
           if (elementsChanged) {
@@ -1336,7 +1332,7 @@ const Editor: React.FC = () => {
   }, [selectedId, editingTextId, historyIndex]);
 
   return (
-    <div 
+    <div
       className="flex flex-col h-screen overflow-hidden bg-gray-100"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -1355,7 +1351,7 @@ const Editor: React.FC = () => {
       {designLoadError && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Cannot Load Design</h2>
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Cannot Load Design</h2>
             <p className="text-gray-700 mb-6">{designLoadError}</p>
             <button
               onClick={() => navigate('/dashboard')}
@@ -1366,12 +1362,12 @@ const Editor: React.FC = () => {
           </div>
         </div>
       )}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleImageUpload} 
-        accept="image/*" 
-        className="hidden" 
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageUpload}
+        accept="image/*"
+        className="hidden"
       />
 
       {/* Top Toolbar */}
@@ -1394,7 +1390,7 @@ const Editor: React.FC = () => {
           
           <div className="h-8 w-px bg-gray-200"></div>
           
-          <button 
+          <button
             onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
             className={`p-2 rounded-lg transition-all ${leftSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
             title="Toggle sidebar"
@@ -1405,18 +1401,18 @@ const Editor: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <button 
-              onClick={undo} 
-              disabled={historyIndex === 0} 
-              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+            <button
+              onClick={undo}
+              disabled={historyIndex === 0}
+              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               title="Undo (Ctrl+Z)"
             >
               <Undo size={18} />
             </button>
-            <button 
-              onClick={redo} 
-              disabled={historyIndex >= history.length - 1} 
-              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+            <button
+              onClick={redo}
+              disabled={historyIndex >= history.length - 1}
+              className="p-2 rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               title="Redo (Ctrl+Y)"
             >
               <Redo size={18} />
@@ -1425,23 +1421,23 @@ const Editor: React.FC = () => {
 
           <div className="w-px h-6 bg-gray-200 mx-2"></div>
 
-          <button 
-            onClick={() => setShowGrid(!showGrid)} 
+          <button
+            onClick={() => setShowGrid(!showGrid)}
             className={`p-2 rounded-lg transition-all ${showGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
             title="Toggle Grid"
           >
             {showGrid ? <Eye size={18} /> : <EyeOff size={18} />}
           </button>
-          <button 
-            onClick={() => setShowSafeZone(!showSafeZone)} 
+          <button
+            onClick={() => setShowSafeZone(!showSafeZone)}
             className={`p-2 rounded-lg transition-all ${showSafeZone ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
             title="Toggle Safe Zone"
           >
             <Maximize2 size={18} />
           </button>
 
-          <button 
-            onClick={() => setSnapToGrid(!snapToGrid)} 
+          <button
+            onClick={() => setSnapToGrid(!snapToGrid)}
             className={`p-2 rounded-lg transition-all ${snapToGrid ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100'}`}
             title="Snap to Grid"
           >
@@ -1450,19 +1446,19 @@ const Editor: React.FC = () => {
 
           <div className="w-px h-6 bg-gray-200 mx-2"></div>
 
-          <button 
-            onClick={duplicateSelected} 
-            disabled={!selectedId} 
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+          <button
+            onClick={duplicateSelected}
+            disabled={!selectedId}
+            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             title="Duplicate (Ctrl+D)"
           >
             <Copy size={18} />
           </button>
 
-          <button 
-            onClick={deleteSelected} 
-            disabled={!selectedId} 
-            className="p-2 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all" 
+          <button
+            onClick={deleteSelected}
+            disabled={!selectedId}
+            className="p-2 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             title="Delete"
           >
             <Trash2 size={18} />
@@ -1470,7 +1466,7 @@ const Editor: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
             className={`p-2 rounded-lg transition-all ${rightSidebarOpen ? 'bg-slate-100 text-slate-900' : 'hover:bg-gray-100 text-gray-600'}`}
             title="Toggle Right Sidebar"
@@ -1478,7 +1474,7 @@ const Editor: React.FC = () => {
             <Sidebar size={20} className="transform rotate-180" />
           </button>
 
-          <button 
+          <button
             onClick={() => setShowTemplateModal(true)}
             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center gap-2"
           >
@@ -1486,7 +1482,7 @@ const Editor: React.FC = () => {
             Templates
           </button>
           
-          <button 
+          <button
             onClick={exportAsImage}
             className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-500/30"
           >
@@ -1494,7 +1490,7 @@ const Editor: React.FC = () => {
             Export
           </button>
 
-          <button 
+          <button
             onClick={() => {
               // Create a temporary design object with current canvas state
               const tempDesign = {
@@ -1515,7 +1511,7 @@ const Editor: React.FC = () => {
             Preview
           </button>
 
-          <button 
+          <button
             onClick={openSaveModal}
             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-all font-medium flex items-center gap-2 shadow-lg shadow-slate-900/30"
           >
@@ -1531,11 +1527,11 @@ const Editor: React.FC = () => {
           <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-2xl w-full mx-4">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">Choose a Template</h3>
-              <button 
+              <button
                 onClick={() => setShowTemplateModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                ✕
+                &times;
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1554,7 +1550,7 @@ const Editor: React.FC = () => {
                       <div className="text-sm text-gray-500">{template.width} × {template.height}px</div>
                     </div>
                   </div>
-                  <div 
+                  <div
                     className="w-full bg-gray-100 rounded-lg border border-gray-200"
                     style={{
                       aspectRatio: `${template.width}/${template.height}`,
@@ -1573,11 +1569,11 @@ const Editor: React.FC = () => {
           <div className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-lg z-20">
             {/* Tabs */}
             <div className="flex border-b border-gray-200 bg-gray-50">
-              <button 
+              <button
                 onClick={() => setActiveLeftTab('design')}
                 className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
-                  activeLeftTab === 'design' 
-                    ? 'text-slate-900 border-b-2 border-slate-900 bg-white' 
+                  activeLeftTab === 'design'
+                    ? 'text-slate-900 border-b-2 border-slate-900 bg-white'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1586,11 +1582,11 @@ const Editor: React.FC = () => {
                   Design
                 </div>
               </button>
-              <button 
+              <button
                 onClick={() => setActiveLeftTab('templates')}
                 className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
-                  activeLeftTab === 'templates' 
-                    ? 'text-slate-900 border-b-2 border-slate-900 bg-white' 
+                  activeLeftTab === 'templates'
+                    ? 'text-slate-900 border-b-2 border-slate-900 bg-white'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1606,9 +1602,9 @@ const Editor: React.FC = () => {
                 <div className="p-4 border-b border-gray-200">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Search elements..." 
+                    <input
+                      type="text"
+                      placeholder="Search elements..."
                       value={searchWidget}
                       onChange={(e) => setSearchWidget(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all"
@@ -1618,15 +1614,15 @@ const Editor: React.FC = () => {
 
                 <div className="flex-1 overflow-y-auto">
                   {WIDGET_CATEGORIES.map(category => {
-                    const filteredItems = searchWidget 
-                      ? category.items.filter(item => item.label.toLowerCase().includes(searchWidget.toLowerCase())) 
+                    const filteredItems = searchWidget
+                      ? category.items.filter(item => item.label.toLowerCase().includes(searchWidget.toLowerCase()))
                       : category.items;
                     
                     if (searchWidget && filteredItems.length === 0) return null;
                     
                     return (
                       <div key={category.id} className="border-b border-gray-100">
-                        <button 
+                        <button
                           onClick={() => toggleSection(`widgets_${category.id}`)}
                           className="w-full flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                         >
@@ -1642,7 +1638,7 @@ const Editor: React.FC = () => {
                         {openSections[`widgets_${category.id}`] && (
                           <div className="p-4 pt-0 grid grid-cols-2 gap-3">
                             {filteredItems.map((item, idx) => (
-                              <div 
+                              <div
                                 key={idx}
                                 draggable
                                 onDragStart={(e) => handleDragStartWidget(e, item.type, (item as any).fontSize)}
@@ -1697,7 +1693,7 @@ const Editor: React.FC = () => {
 
         {/* Canvas Area */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
-          <div 
+          <div
             className={`flex-1 overflow-auto p-12 flex items-center justify-center transition-all ${draggingFromSidebar ? 'bg-blue-50' : ''}`}
             onClick={() => setSelectedIds([])}
             onDragOver={(e) => {
@@ -1711,11 +1707,11 @@ const Editor: React.FC = () => {
             }}
             onDrop={handleDropOnCanvas}
           >
-            <div 
+            <div
               ref={canvasRef}
               className="shadow-2xl relative"
-              style={{ 
-                width: `${canvasSize.width}px`, 
+              style={{
+                width: `${canvasSize.width}px`,
                 height: `${canvasSize.height}px`,
                 backgroundColor: canvasColor,
                 transform: `scale(${zoom / 100})`,
@@ -1746,11 +1742,11 @@ const Editor: React.FC = () => {
 
               {showGrid && (
                 <>
-                  <div 
-                    className="absolute inset-0 pointer-events-none opacity-5" 
-                    style={{ 
-                      backgroundImage: 'radial-gradient(circle, #0F172A 1.5px, transparent 1.5px)', 
-                      backgroundSize: '20px 20px' 
+                  <div
+                    className="absolute inset-0 pointer-events-none opacity-5"
+                    style={{
+                      backgroundImage: 'radial-gradient(circle, #0F172A 1.5px, transparent 1.5px)',
+                      backgroundSize: '20px 20px'
                     }}
                   />
                   {/* Center Lines */}
@@ -1761,7 +1757,7 @@ const Editor: React.FC = () => {
 
               {/* Safe Zone - 5% margin from edges */}
               {showSafeZone && (
-                <div 
+                <div
                   className="absolute pointer-events-none border-2 border-green-500 border-dashed"
                   style={{
                     left: '5%',
@@ -1780,8 +1776,8 @@ const Editor: React.FC = () => {
                   <div
                     key={el.id}
                     className={`absolute group select-none transition-all ${
-                      selectedIds.includes(el.id) 
-                        ? 'ring-2 ring-slate-900 shadow-lg animate-glow' 
+                      selectedIds.includes(el.id)
+                        ? 'ring-2 ring-slate-900 shadow-lg animate-glow'
                         : 'hover:ring-2 hover:ring-slate-300 hover:shadow-md'
                     } ${el.locked ? 'cursor-not-allowed' : ''} ${
                       dragInfo?.initialPositions.has(el.id) ? 'opacity-75 ring-2 ring-blue-500 shadow-xl' : ''
@@ -1800,7 +1796,7 @@ const Editor: React.FC = () => {
                       overflow: 'hidden',
                     }}
                     onMouseDown={(e) => handleMouseDown(e, el.id)}
-                    onClick={(e) => e.stopPropagation()} 
+                    onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => handleDoubleClick(e, el.id)}
                   >
                     {editingTextId === el.id && el.type === ElementType.TEXT ? (
@@ -1829,7 +1825,7 @@ const Editor: React.FC = () => {
                         }}
                       />
                     ) : el.type === ElementType.TEXT ? (
-                      <div 
+                      <div
                         className="w-full h-full p-2 flex items-center justify-center overflow-hidden break-words whitespace-pre-wrap"
                         style={{
                           fontSize: el.fontSize,
@@ -1844,11 +1840,11 @@ const Editor: React.FC = () => {
                         {el.content}
                       </div>
                     ) : el.type === ElementType.IMAGE ? (
-                      <img 
-                        src={el.content} 
-                        alt="" 
-                        className="w-full h-full object-cover pointer-events-none" 
-                        style={{ borderRadius: el.borderRadius }} 
+                      <img
+                        src={el.content}
+                        alt=""
+                        className="w-full h-full object-cover pointer-events-none"
+                        style={{ borderRadius: el.borderRadius }}
                       />
                     ) : el.type === ElementType.HTML ? (
                       <iframe
@@ -1859,8 +1855,8 @@ const Editor: React.FC = () => {
                       />
                     ) : el.type === ElementType.VIDEO ? (
                       el.content && (el.content.startsWith('http') || el.content.startsWith('blob:')) ? (
-                        <video 
-                          src={el.content} 
+                        <video
+                          src={el.content}
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                           muted
@@ -1893,9 +1889,9 @@ const Editor: React.FC = () => {
                       </div>
                     ) : el.type === ElementType.GIF ? (
                       el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="GIF" 
+                        <img
+                          src={el.content}
+                          alt="GIF"
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                         />
@@ -1953,9 +1949,9 @@ const Editor: React.FC = () => {
                           style={{ pointerEvents: 'none' }}
                         />
                       ) : el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Instagram" 
+                        <img
+                          src={el.content}
+                          alt="Instagram"
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                         />
@@ -1980,7 +1976,7 @@ const Editor: React.FC = () => {
                         </div>
                       )
                     ) : el.type === ElementType.LABEL ? (
-                      <div 
+                      <div
                         className="w-full h-full flex items-center justify-center p-2"
                         style={{
                           backgroundColor: el.backgroundColor || '#fef3c7',
@@ -1994,7 +1990,7 @@ const Editor: React.FC = () => {
                         {el.content || 'Label'}
                       </div>
                     ) : el.type === ElementType.CLOCK ? (
-                      <div 
+                      <div
                         className="w-full h-full flex flex-col items-center justify-center gap-2"
                         style={{
                           backgroundColor: el.backgroundColor || '#1e293b',
@@ -2002,19 +1998,19 @@ const Editor: React.FC = () => {
                         }}
                       >
                         <Clock className="opacity-50" size={Math.min(el.fontSize || 24, 32)} />
-                        <div 
+                        <div
                           className="font-bold font-mono"
                           style={{ fontSize: el.fontSize || 24 }}
                         >
-                          {new Date().toLocaleTimeString([], { 
-                            hour: '2-digit', 
+                          {new Date().toLocaleTimeString([], {
+                            hour: '2-digit',
                             minute: '2-digit',
                             hour12: el.widgetSettings?.timeFormat !== '24'
                           })}
                         </div>
                       </div>
                     ) : el.type === ElementType.TIMER ? (
-                      <div 
+                      <div
                         className="w-full h-full flex flex-col items-center justify-center gap-2"
                         style={{
                           backgroundColor: el.backgroundColor || '#dc2626',
@@ -2022,7 +2018,7 @@ const Editor: React.FC = () => {
                         }}
                       >
                         <Clock className="opacity-75" size={Math.min(el.fontSize || 24, 32)} />
-                        <div 
+                        <div
                           className="font-bold font-mono"
                           style={{ fontSize: el.fontSize || 32 }}
                         >
@@ -2046,9 +2042,9 @@ const Editor: React.FC = () => {
                       </div>
                     ) : el.type === ElementType.AD_SERVING ? (
                       el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Advertisement" 
+                        <img
+                          src={el.content}
+                          alt="Advertisement"
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                         />
@@ -2071,11 +2067,11 @@ const Editor: React.FC = () => {
                             <div key={i} className="text-center font-semibold text-gray-600">{day}</div>
                           ))}
                           {Array.from({ length: 28 }, (_, i) => (
-                            <div 
-                              key={i} 
+                            <div
+                              key={i}
                               className={`text-center p-1 rounded ${
-                                i === new Date().getDate() - 1 
-                                  ? 'bg-green-500 text-white font-bold' 
+                                i === new Date().getDate() - 1
+                                  ? 'bg-green-500 text-white font-bold'
                                   : 'text-gray-700'
                               }`}
                             >
@@ -2124,8 +2120,8 @@ const Editor: React.FC = () => {
                                 <td className="p-2 border border-gray-200">{item}</td>
                                 <td className="p-2 border border-gray-200">
                                   <span className={`px-2 py-1 rounded text-xs ${
-                                    i === 0 ? 'bg-green-100 text-green-700' : 
-                                    i === 1 ? 'bg-yellow-100 text-yellow-700' : 
+                                    i === 0 ? 'bg-green-100 text-green-700' :
+                                    i === 1 ? 'bg-yellow-100 text-yellow-700' :
                                     'bg-red-100 text-red-700'
                                   }`}>
                                     {i === 0 ? 'Active' : i === 1 ? 'Pending' : 'Inactive'}
@@ -2151,9 +2147,9 @@ const Editor: React.FC = () => {
                       </div>
                     ) : el.type === ElementType.WEB_IMAGE ? (
                       el.content && el.content.startsWith('http') ? (
-                        <img 
-                          src={el.content} 
-                          alt="Web Image" 
+                        <img
+                          src={el.content}
+                          alt="Web Image"
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                         />
@@ -2165,8 +2161,8 @@ const Editor: React.FC = () => {
                       )
                     ) : el.type === ElementType.WEB_VIDEO ? (
                       el.content && el.content.startsWith('http') ? (
-                        <video 
-                          src={el.content} 
+                        <video
+                          src={el.content}
                           className="w-full h-full object-cover"
                           style={{ pointerEvents: 'none' }}
                           muted
@@ -2233,8 +2229,8 @@ const Editor: React.FC = () => {
               Canvas: {canvasSize.width} × {canvasSize.height}px
             </div>
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setZoom(Math.max(25, zoom - 25))} 
+              <button
+                onClick={() => setZoom(Math.max(25, zoom - 25))}
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
               >
                 <Minus size={16} />
@@ -2242,8 +2238,8 @@ const Editor: React.FC = () => {
               <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm min-w-[100px] justify-center">
                 <span className="text-sm font-semibold">{zoom}%</span>
               </div>
-              <button 
-                onClick={() => setZoom(Math.min(200, zoom + 25))} 
+              <button
+                onClick={() => setZoom(Math.min(200, zoom + 25))}
                 className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"
               >
                 <Plus size={16} />
@@ -2263,21 +2259,21 @@ const Editor: React.FC = () => {
                 <h3 className="font-semibold text-gray-800">
                   {selectedElement ? 'Properties' : 'Canvas Settings'}
                 </h3>
-                <button 
-                  onClick={() => setRightSidebarOpen(false)} 
+                <button
+                  onClick={() => setRightSidebarOpen(false)}
                   className="p-1.5 hover:bg-white rounded-lg transition-all text-slate-500 hover:text-slate-900"
                   title="Hide Properties"
                 >
-                  ✕
+                  &times;
                 </button>
               </div>
               
               <div className="flex gap-1 bg-white p-1 rounded-lg shadow-sm">
-                <button 
-                  onClick={() => setActiveRightTab('properties')} 
+                <button
+                  onClick={() => setActiveRightTab('properties')}
                   className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
-                    activeRightTab === 'properties' 
-                      ? 'bg-slate-900 text-white shadow-md' 
+                    activeRightTab === 'properties'
+                      ? 'bg-slate-900 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
@@ -2286,11 +2282,11 @@ const Editor: React.FC = () => {
                     <span className="hidden sm:inline">{selectedElement ? 'Design' : 'Canvas'}</span>
                   </div>
                 </button>
-                <button 
-                  onClick={() => setActiveRightTab('animation')} 
+                <button
+                  onClick={() => setActiveRightTab('animation')}
                   className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
-                    activeRightTab === 'animation' 
-                      ? 'bg-slate-900 text-white shadow-md' 
+                    activeRightTab === 'animation'
+                      ? 'bg-slate-900 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
@@ -2299,11 +2295,11 @@ const Editor: React.FC = () => {
                     <span className="hidden sm:inline">Animate</span>
                   </div>
                 </button>
-                <button 
-                  onClick={() => setActiveRightTab('layers')} 
+                <button
+                  onClick={() => setActiveRightTab('layers')}
                   className={`flex-1 px-2 py-2 text-sm font-medium rounded-lg transition-all ${
-                    activeRightTab === 'layers' 
-                      ? 'bg-slate-900 text-white shadow-md' 
+                    activeRightTab === 'layers'
+                      ? 'bg-slate-900 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
@@ -2329,18 +2325,18 @@ const Editor: React.FC = () => {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">Width (px)</label>
-                            <input 
-                              type="number" 
-                              value={canvasSize.width} 
+                            <input
+                              type="number"
+                              value={canvasSize.width}
                               onChange={(e) => setCanvasSize(prev => ({ ...prev, width: Number(e.target.value) }))}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
                           </div>
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">Height (px)</label>
-                            <input 
-                              type="number" 
-                              value={canvasSize.height} 
+                            <input
+                              type="number"
+                              value={canvasSize.height}
                               onChange={(e) => setCanvasSize(prev => ({ ...prev, height: Number(e.target.value) }))}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                             />
@@ -2356,13 +2352,13 @@ const Editor: React.FC = () => {
                         <div>
                           <label className="text-xs text-gray-600 mb-2 block font-medium">Canvas Color</label>
                           <div className="flex gap-2 items-center mb-3">
-                            <input 
-                              type="color" 
-                              value={canvasColor} 
+                            <input
+                              type="color"
+                              value={canvasColor}
                               onChange={(e) => setCanvasColor(e.target.value)}
                               className="h-10 w-10 rounded-lg cursor-pointer border-2 border-gray-300 shadow-sm"
                             />
-                            <input 
+                            <input
                               type="text"
                               value={canvasColor}
                               onChange={(e) => setCanvasColor(e.target.value)}
@@ -2383,9 +2379,9 @@ const Editor: React.FC = () => {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">X Position</label>
-                            <input 
-                              type="number" 
-                              value={Math.round(selectedElement.x)} 
+                            <input
+                              type="number"
+                              value={Math.round(selectedElement.x)}
                               onChange={(e) => updateSelectedElement('x', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all"
@@ -2393,9 +2389,9 @@ const Editor: React.FC = () => {
                           </div>
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">Y Position</label>
-                            <input 
-                              type="number" 
-                              value={Math.round(selectedElement.y)} 
+                            <input
+                              type="number"
+                              value={Math.round(selectedElement.y)}
                               onChange={(e) => updateSelectedElement('y', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all"
@@ -2403,9 +2399,9 @@ const Editor: React.FC = () => {
                           </div>
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">Width</label>
-                            <input 
-                              type="number" 
-                              value={Math.round(selectedElement.width)} 
+                            <input
+                              type="number"
+                              value={Math.round(selectedElement.width)}
                               onChange={(e) => updateSelectedElement('width', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all"
@@ -2413,9 +2409,9 @@ const Editor: React.FC = () => {
                           </div>
                           <div>
                             <label className="text-xs text-gray-600 mb-1.5 block font-medium">Height</label>
-                            <input 
-                              type="number" 
-                              value={Math.round(selectedElement.height)} 
+                            <input
+                              type="number"
+                              value={Math.round(selectedElement.height)}
                               onChange={(e) => updateSelectedElement('height', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all"
@@ -2452,12 +2448,12 @@ const Editor: React.FC = () => {
                             <label className="text-xs text-gray-600 font-medium">Opacity</label>
                             <span className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded">{Math.round((selectedElement.opacity || 1) * 100)}%</span>
                           </div>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="1" 
-                            step="0.01" 
-                            value={selectedElement.opacity || 1} 
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={selectedElement.opacity || 1}
                             onChange={(e) => updateSelectedElement('opacity', Number(e.target.value))}
                             onMouseUp={() => updateHistory(elements)}
                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
@@ -2469,12 +2465,12 @@ const Editor: React.FC = () => {
                             <label className="text-xs text-gray-600 font-medium">Rotation</label>
                             <span className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded">{Math.round(selectedElement.rotation || 0)}°</span>
                           </div>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="360" 
-                            step="1" 
-                            value={selectedElement.rotation || 0} 
+                          <input
+                            type="range"
+                            min="0"
+                            max="360"
+                            step="1"
+                            value={selectedElement.rotation || 0}
                             onChange={(e) => updateSelectedElement('rotation', Number(e.target.value))}
                             onMouseUp={() => updateHistory(elements)}
                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
@@ -2484,9 +2480,9 @@ const Editor: React.FC = () => {
                         {([ElementType.RECT, ElementType.CIRCLE, ElementType.TRIANGLE, ElementType.STAR, ElementType.HEART, ElementType.LINE].includes(selectedElement.type as ElementType) || selectedElement.type === ElementType.IMAGE) && (
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Border Radius</label>
-                            <input 
-                              type="number" 
-                              value={selectedElement.borderRadius || 0} 
+                            <input
+                              type="number"
+                              value={selectedElement.borderRadius || 0}
                               onChange={(e) => updateSelectedElement('borderRadius', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
@@ -2507,16 +2503,16 @@ const Editor: React.FC = () => {
                             <div>
                               <label className="text-xs text-gray-600 mb-2 block font-medium">Text Color</label>
                               <div className="flex gap-2 items-center mb-3">
-                                <input 
-                                  type="color" 
-                                  value={selectedElement.color || '#000000'} 
+                                <input
+                                  type="color"
+                                  value={selectedElement.color || '#000000'}
                                   onChange={(e) => {
                                     updateSelectedElement('color', e.target.value);
                                     updateHistory(elements);
                                   }}
                                   className="h-10 w-10 rounded-lg cursor-pointer border-2 border-gray-300 shadow-sm"
                                 />
-                                <input 
+                                <input
                                   type="text"
                                   value={selectedElement.color || '#000000'}
                                   onChange={(e) => updateSelectedElement('color', e.target.value)}
@@ -2531,16 +2527,16 @@ const Editor: React.FC = () => {
                             <div>
                               <label className="text-xs text-gray-600 mb-2 block font-medium">Fill Color</label>
                               <div className="flex gap-2 items-center mb-3">
-                                <input 
-                                  type="color" 
-                                  value={selectedElement.fillColor || '#4ECDC4'} 
+                                <input
+                                  type="color"
+                                  value={selectedElement.fillColor || '#4ECDC4'}
                                   onChange={(e) => {
                                     updateSelectedElement('fillColor', e.target.value);
                                     updateHistory(elements);
                                   }}
                                   className="h-10 w-10 rounded-lg cursor-pointer border-2 border-gray-300 shadow-sm"
                                 />
-                                <input 
+                                <input
                                   type="text"
                                   value={selectedElement.fillColor || '#4ECDC4'}
                                   onChange={(e) => updateSelectedElement('fillColor', e.target.value)}
@@ -2555,7 +2551,7 @@ const Editor: React.FC = () => {
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <label className="text-xs text-gray-600 font-medium">Palette</label>
-                              <select 
+                              <select
                                 value={selectedPalette}
                                 onChange={(e) => setSelectedPalette(e.target.value as keyof typeof COLOR_PALETTES)}
                                 className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-500"
@@ -2567,8 +2563,8 @@ const Editor: React.FC = () => {
                             </div>
                             <div className="flex gap-2 flex-wrap">
                               {COLOR_PALETTES[selectedPalette].map(color => (
-                                <button 
-                                  key={color} 
+                                <button
+                                  key={color}
                                   onClick={() => {
                                     if (selectedElement.type === ElementType.TEXT) {
                                       updateSelectedElement('color', color);
@@ -2577,9 +2573,9 @@ const Editor: React.FC = () => {
                                     }
                                     updateHistory(elements);
                                   }}
-                                  className="w-8 h-8 rounded-lg border-2 hover:scale-110 transition-transform shadow-sm" 
+                                  className="w-8 h-8 rounded-lg border-2 hover:scale-110 transition-transform shadow-sm"
                                   style={{
-                                    backgroundColor: color, 
+                                    backgroundColor: color,
                                     borderColor: (selectedElement.type === ElementType.TEXT ? selectedElement.color : selectedElement.fillColor) === color ? '#0F172A' : '#E5E7EB'
                                   }}
                                 />
@@ -2622,9 +2618,9 @@ const Editor: React.FC = () => {
                           
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Font Size</label>
-                            <input 
-                              type="number" 
-                              value={selectedElement.fontSize || 24} 
+                            <input
+                              type="number"
+                              value={selectedElement.fontSize || 24}
                               onChange={(e) => updateSelectedElement('fontSize', Number(e.target.value))}
                               onBlur={() => updateHistory(elements)}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
@@ -2634,40 +2630,40 @@ const Editor: React.FC = () => {
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Text Style</label>
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, bold: !selectedElement.textStyle?.bold});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg font-bold border-2 transition-all ${
-                                  selectedElement.textStyle?.bold 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.bold
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
                                 B
                               </button>
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, italic: !selectedElement.textStyle?.italic});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg italic border-2 transition-all ${
-                                  selectedElement.textStyle?.italic 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.italic
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
                                 I
                               </button>
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, underline: !selectedElement.textStyle?.underline});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg underline border-2 transition-all ${
-                                  selectedElement.textStyle?.underline 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.underline
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
@@ -2679,40 +2675,40 @@ const Editor: React.FC = () => {
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Text Align</label>
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, textAlign: 'left'});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg border-2 transition-all ${
-                                  selectedElement.textStyle?.textAlign === 'left' 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.textAlign === 'left'
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
                                 <AlignLeft size={16} className="mx-auto" />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, textAlign: 'center'});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg border-2 transition-all ${
-                                  selectedElement.textStyle?.textAlign === 'center' 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.textAlign === 'center'
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
                                 <AlignCenter size={16} className="mx-auto" />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => {
                                   updateSelectedElement('textStyle', {...selectedElement.textStyle, textAlign: 'right'});
                                   updateHistory(elements);
                                 }}
                                 className={`flex-1 px-3 py-2 rounded-lg border-2 transition-all ${
-                                  selectedElement.textStyle?.textAlign === 'right' 
-                                    ? 'bg-slate-900 text-white border-slate-900' 
+                                  selectedElement.textStyle?.textAlign === 'right'
+                                    ? 'bg-slate-900 text-white border-slate-900'
                                     : 'border-gray-200 text-gray-600 hover:border-slate-300'
                                 }`}
                               >
@@ -2755,11 +2751,11 @@ const Editor: React.FC = () => {
 
                           <div>
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Fit Mode</label>
-                            <select 
+                            <select
                               value={selectedElement.widgetSettings?.fitMode || 'cover'}
-                              onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                ...selectedElement.widgetSettings, 
-                                fitMode: e.target.value 
+                              onChange={(e) => updateSelectedElement('widgetSettings', {
+                                ...selectedElement.widgetSettings,
+                                fitMode: e.target.value
                               })}
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                             >
@@ -2772,14 +2768,14 @@ const Editor: React.FC = () => {
 
                           {selectedElement.type === ElementType.GIF && (
                             <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                              <input 
-                                type="checkbox" 
-                                id="modify-gif-autoplay" 
+                              <input
+                                type="checkbox"
+                                id="modify-gif-autoplay"
                                 className="rounded"
                                 checked={selectedElement.widgetSettings?.autoplay ?? true}
-                                onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                  ...selectedElement.widgetSettings, 
-                                  autoplay: e.target.checked 
+                                onChange={(e) => updateSelectedElement('widgetSettings', {
+                                  ...selectedElement.widgetSettings,
+                                  autoplay: e.target.checked
                                 })}
                               />
                               <label htmlFor="modify-gif-autoplay" className="text-xs text-gray-600">Auto-play GIF</label>
@@ -2814,53 +2810,53 @@ const Editor: React.FC = () => {
                             <>
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="modify-autoplay" 
+                                  <input
+                                    type="checkbox"
+                                    id="modify-autoplay"
                                     className="rounded"
                                     checked={selectedElement.widgetSettings?.autoplay || false}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      autoplay: e.target.checked 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      autoplay: e.target.checked
                                     })}
                                   />
                                   <label htmlFor="modify-autoplay" className="text-xs text-gray-600">Autoplay</label>
                                 </div>
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="modify-loop" 
+                                  <input
+                                    type="checkbox"
+                                    id="modify-loop"
                                     className="rounded"
                                     checked={selectedElement.widgetSettings?.loop ?? true}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      loop: e.target.checked 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      loop: e.target.checked
                                     })}
                                   />
                                   <label htmlFor="modify-loop" className="text-xs text-gray-600">Loop</label>
                                 </div>
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="modify-mute" 
+                                  <input
+                                    type="checkbox"
+                                    id="modify-mute"
                                     className="rounded"
                                     checked={selectedElement.widgetSettings?.mute ?? false}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      mute: e.target.checked 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      mute: e.target.checked
                                     })}
                                   />
                                   <label htmlFor="modify-mute" className="text-xs text-gray-600">Mute</label>
                                 </div>
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="modify-controls" 
+                                  <input
+                                    type="checkbox"
+                                    id="modify-controls"
                                     className="rounded"
                                     checked={selectedElement.widgetSettings?.controls ?? true}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      controls: e.target.checked 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      controls: e.target.checked
                                     })}
                                   />
                                   <label htmlFor="modify-controls" className="text-xs text-gray-600">Controls</label>
@@ -2869,11 +2865,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Playback Speed</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.playbackSpeed || '1'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    playbackSpeed: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    playbackSpeed: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -2893,9 +2889,9 @@ const Editor: React.FC = () => {
                                   min="0"
                                   max="100"
                                   value={selectedElement.widgetSettings?.volume || 100}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    volume: Number(e.target.value) 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    volume: Number(e.target.value)
                                   })}
                                   className="w-full"
                                 />
@@ -2908,11 +2904,11 @@ const Editor: React.FC = () => {
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Fit Mode</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.fitMode || 'cover'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    fitMode: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    fitMode: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -2925,14 +2921,14 @@ const Editor: React.FC = () => {
 
                               {selectedElement.type === ElementType.GIF && (
                                 <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                  <input 
-                                    type="checkbox" 
-                                    id="modify-gif-autoplay" 
+                                  <input
+                                    type="checkbox"
+                                    id="modify-gif-autoplay"
                                     className="rounded"
                                     checked={selectedElement.widgetSettings?.autoplay ?? true}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      autoplay: e.target.checked 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      autoplay: e.target.checked
                                     })}
                                   />
                                   <label htmlFor="modify-gif-autoplay" className="text-xs text-gray-600">Auto-play GIF</label>
@@ -2968,11 +2964,11 @@ const Editor: React.FC = () => {
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Scroll Speed</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.scrollSpeed || 'medium'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    scrollSpeed: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    scrollSpeed: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -2985,11 +2981,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Direction</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.direction || 'left'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    direction: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    direction: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -2999,14 +2995,14 @@ const Editor: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                <input 
-                                  type="checkbox" 
-                                  id="modify-ticker-loop" 
+                                <input
+                                  type="checkbox"
+                                  id="modify-ticker-loop"
                                   className="rounded"
                                   checked={selectedElement.widgetSettings?.loop ?? true}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    loop: e.target.checked 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    loop: e.target.checked
                                   })}
                                 />
                                 <label htmlFor="modify-ticker-loop" className="text-xs text-gray-600">Continuous loop</label>
@@ -3021,9 +3017,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="number"
                                   value={selectedElement.widgetSettings?.updateInterval || 15}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    updateInterval: Number(e.target.value) 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    updateInterval: Number(e.target.value)
                                   })}
                                   min={1}
                                   max={1440}
@@ -3036,9 +3032,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="number"
                                   value={selectedElement.widgetSettings?.maxItems || 5}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    maxItems: Number(e.target.value) 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    maxItems: Number(e.target.value)
                                   })}
                                   min={1}
                                   max={50}
@@ -3048,11 +3044,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Display Mode</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.displayMode || 'scroll'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    displayMode: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    displayMode: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3072,9 +3068,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="number"
                                   value={selectedElement.widgetSettings?.transitionDuration || 5}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    transitionDuration: Number(e.target.value) 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    transitionDuration: Number(e.target.value)
                                   })}
                                   min={1}
                                   max={60}
@@ -3084,11 +3080,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Transition Effect</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.transitionEffect || 'fade'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    transitionEffect: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    transitionEffect: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3102,14 +3098,14 @@ const Editor: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                <input 
-                                  type="checkbox" 
-                                  id="modify-slideshow-autoplay" 
+                                <input
+                                  type="checkbox"
+                                  id="modify-slideshow-autoplay"
                                   className="rounded"
                                   checked={selectedElement.widgetSettings?.autoplay ?? true}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    autoplay: e.target.checked 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    autoplay: e.target.checked
                                   })}
                                 />
                                 <label htmlFor="modify-slideshow-autoplay" className="text-xs text-gray-600">Auto-play slideshow</label>
@@ -3163,9 +3159,9 @@ const Editor: React.FC = () => {
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Or Embed Code (Optional)</label>
                             <textarea
                               value={selectedElement.widgetSettings?.embedCode || ''}
-                              onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                ...selectedElement.widgetSettings, 
-                                embedCode: e.target.value 
+                              onChange={(e) => updateSelectedElement('widgetSettings', {
+                                ...selectedElement.widgetSettings,
+                                embedCode: e.target.value
                               })}
                               onBlur={() => updateHistory(elements)}
                               placeholder="<iframe src='...'></iframe>"
@@ -3208,9 +3204,9 @@ const Editor: React.FC = () => {
                             <label className="text-xs text-gray-600 mb-2 block font-medium">Embed HTML/Code</label>
                             <textarea
                               value={selectedElement.widgetSettings?.embedCode || ''}
-                              onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                ...selectedElement.widgetSettings, 
-                                embedCode: e.target.value 
+                              onChange={(e) => updateSelectedElement('widgetSettings', {
+                                ...selectedElement.widgetSettings,
+                                embedCode: e.target.value
                               })}
                               onBlur={() => updateHistory(elements)}
                               placeholder="<iframe src='...'></iframe>"
@@ -3234,19 +3230,19 @@ const Editor: React.FC = () => {
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Time Format</label>
                                 <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      timeFormat: '12' 
+                                  <button
+                                    onClick={() => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      timeFormat: '12'
                                     })}
                                     className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.timeFormat === '12' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
                                   >
                                     12 Hour
                                   </button>
-                                  <button 
-                                    onClick={() => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      timeFormat: '24' 
+                                  <button
+                                    onClick={() => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      timeFormat: '24'
                                     })}
                                     className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.timeFormat === '24' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
                                   >
@@ -3257,11 +3253,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Display Style</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.displayStyle || 'digital'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    displayStyle: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    displayStyle: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3272,14 +3268,14 @@ const Editor: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                <input 
-                                  type="checkbox" 
-                                  id="modify-clock-showSeconds" 
+                                <input
+                                  type="checkbox"
+                                  id="modify-clock-showSeconds"
                                   className="rounded"
                                   checked={selectedElement.widgetSettings?.showSeconds ?? true}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    showSeconds: e.target.checked 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    showSeconds: e.target.checked
                                   })}
                                 />
                                 <label htmlFor="modify-clock-showSeconds" className="text-xs text-gray-600">Show seconds</label>
@@ -3291,11 +3287,11 @@ const Editor: React.FC = () => {
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Timer Type</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.timerType || 'countdown'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    timerType: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    timerType: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3310,9 +3306,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="datetime-local"
                                   value={selectedElement.widgetSettings?.countdownTo || ''}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    countdownTo: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    countdownTo: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
                                 />
@@ -3320,11 +3316,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Display Format</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.displayFormat || 'HH:MM:SS'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    displayFormat: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    displayFormat: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3344,9 +3340,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="text"
                                   value={selectedElement.widgetSettings?.location || 'New York, NY'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    location: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    location: e.target.value
                                   })}
                                   placeholder="New York, NY"
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
@@ -3356,19 +3352,19 @@ const Editor: React.FC = () => {
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Temperature Unit</label>
                                 <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      temperatureUnit: 'F' 
+                                  <button
+                                    onClick={() => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      temperatureUnit: 'F'
                                     })}
                                     className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'F' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
                                   >
                                     °F
                                   </button>
-                                  <button 
-                                    onClick={() => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      temperatureUnit: 'C' 
+                                  <button
+                                    onClick={() => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      temperatureUnit: 'C'
                                     })}
                                     className={`flex-1 px-3 py-2 rounded-lg border-2 ${selectedElement.widgetSettings?.temperatureUnit === 'C' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-600 hover:border-slate-300'}`}
                                   >
@@ -3379,11 +3375,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Display Style</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.displayStyle || 'current'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    displayStyle: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    displayStyle: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3425,9 +3421,9 @@ const Editor: React.FC = () => {
                                   <input
                                     type="number"
                                     value={selectedElement.widgetSettings?.rows || 5}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      rows: Number(e.target.value) 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      rows: Number(e.target.value)
                                     })}
                                     min={1}
                                     max={100}
@@ -3439,9 +3435,9 @@ const Editor: React.FC = () => {
                                   <input
                                     type="number"
                                     value={selectedElement.widgetSettings?.columns || 3}
-                                    onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                      ...selectedElement.widgetSettings, 
-                                      columns: Number(e.target.value) 
+                                    onChange={(e) => updateSelectedElement('widgetSettings', {
+                                      ...selectedElement.widgetSettings,
+                                      columns: Number(e.target.value)
                                     })}
                                     min={1}
                                     max={20}
@@ -3452,11 +3448,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Data Source</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.dataSource || 'manual'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    dataSource: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    dataSource: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3470,11 +3466,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Table Style</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.tableStyle || 'default'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    tableStyle: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    tableStyle: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3486,14 +3482,14 @@ const Editor: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                <input 
-                                  type="checkbox" 
-                                  id="modify-table-showHeader" 
+                                <input
+                                  type="checkbox"
+                                  id="modify-table-showHeader"
                                   className="rounded"
                                   checked={selectedElement.widgetSettings?.showHeader ?? true}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    showHeader: e.target.checked 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    showHeader: e.target.checked
                                   })}
                                 />
                                 <label htmlFor="modify-table-showHeader" className="text-xs text-gray-600">Show header row</label>
@@ -3505,11 +3501,11 @@ const Editor: React.FC = () => {
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Calendar Source</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.calendarSource || 'google'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    calendarSource: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    calendarSource: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3522,11 +3518,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">View Mode</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.viewMode || 'monthly'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    viewMode: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    viewMode: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3539,11 +3535,11 @@ const Editor: React.FC = () => {
 
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Color Scheme</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.colorScheme || 'default'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    colorScheme: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    colorScheme: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3561,11 +3557,11 @@ const Editor: React.FC = () => {
                             <>
                               <div>
                                 <label className="text-xs text-gray-600 mb-2 block font-medium">Dashboard Type</label>
-                                <select 
+                                <select
                                   value={selectedElement.widgetSettings?.dashboardType || 'metrics'}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    dashboardType: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    dashboardType: e.target.value
                                   })}
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                                 >
@@ -3581,9 +3577,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="text"
                                   value={selectedElement.widgetSettings?.dataUrl || ''}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    dataUrl: e.target.value 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    dataUrl: e.target.value
                                   })}
                                   placeholder="API Endpoint URL"
                                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
@@ -3595,9 +3591,9 @@ const Editor: React.FC = () => {
                                 <input
                                   type="number"
                                   value={selectedElement.widgetSettings?.refreshRate || 30}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    refreshRate: Number(e.target.value) 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    refreshRate: Number(e.target.value)
                                   })}
                                   min={5}
                                   max={3600}
@@ -3606,14 +3602,14 @@ const Editor: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                <input 
-                                  type="checkbox" 
-                                  id="modify-dashboard-autoRefresh" 
+                                <input
+                                  type="checkbox"
+                                  id="modify-dashboard-autoRefresh"
                                   className="rounded"
                                   checked={selectedElement.widgetSettings?.autoRefresh ?? true}
-                                  onChange={(e) => updateSelectedElement('widgetSettings', { 
-                                    ...selectedElement.widgetSettings, 
-                                    autoRefresh: e.target.checked 
+                                  onChange={(e) => updateSelectedElement('widgetSettings', {
+                                    ...selectedElement.widgetSettings,
+                                    autoRefresh: e.target.checked
                                   })}
                                 />
                                 <label htmlFor="modify-dashboard-autoRefresh" className="text-xs text-gray-600">Auto-refresh data</label>
@@ -3647,7 +3643,7 @@ const Editor: React.FC = () => {
 
                       {/* Layer Actions */}
                       <div className="space-y-2 pt-4 border-t border-gray-200">
-                        <button 
+                        <button
                           onClick={() => {
                             updateSelectedElement('locked', !selectedElement.locked);
                             updateHistory(elements);
@@ -3662,14 +3658,14 @@ const Editor: React.FC = () => {
                           {selectedElement.locked ? 'Unlock' : 'Lock'} Layer
                         </button>
                         
-                        <button 
+                        <button
                           onClick={bringToFront}
                           className="w-full px-4 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-medium shadow-lg shadow-slate-900/30"
                         >
                           Bring to Front
                         </button>
                         
-                        <button 
+                        <button
                           onClick={sendToBack}
                           className="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-medium"
                         >
@@ -3822,8 +3818,8 @@ const Editor: React.FC = () => {
                     All Layers ({elements.length})
                   </h4>
                   {[...elements].reverse().map((el, i) => (
-                    <div 
-                      key={el.id} 
+                    <div
+                      key={el.id}
                       onClick={(e) => {
                         // Multi-selection with Ctrl/Cmd key
                         if (e.ctrlKey || e.metaKey) {
@@ -3839,7 +3835,7 @@ const Editor: React.FC = () => {
                       }}
                       className={`p-3 rounded-xl flex items-center gap-3 cursor-pointer transition-all ${
                         selectedIds.includes(el.id)
-                          ? 'bg-slate-900 text-white shadow-lg' 
+                          ? 'bg-slate-900 text-white shadow-lg'
                           : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                       }`}
                     >

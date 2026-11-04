@@ -109,11 +109,10 @@ const ScreenPage: React.FC = () => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log("💻 Dashboard Connected: ", socket.id);
       socket.emit('join_dashboard');
     });
 
-    // 🎥 Recording Progress Listener
+    // Recording Progress Listener
     socket.on('deployment_progress', (data: { progress: number, stage: string }) => {
       setPodcastProgress(prev => ({
         ...prev,
@@ -191,7 +190,7 @@ const ScreenPage: React.FC = () => {
     }
   };
 
-  // 🚀 FIXED DEPLOY LOGIC
+  // FIXED DEPLOY LOGIC
   const handleDeploy = async () => {
     if (!deployConfig.playlistId) return showAlert('error', 'Select a playlist.');
     if (selectedScreens.length === 0) return showAlert('error', 'Select a screen.');

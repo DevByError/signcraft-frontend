@@ -34,7 +34,7 @@ export interface TimelineItem {
   /** CapCut-style animations (clip-local time, keyframe-based) */
   animations?: Animation[];
   /** Visual properties snapshot */
-  // new one 
+  // new one
 
   properties?: {
     x?: number;

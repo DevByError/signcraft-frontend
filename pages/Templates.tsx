@@ -78,15 +78,15 @@ const Templates: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {filteredTemplates.length > 0 ? (
             filteredTemplates.map((template) => (
-              <div 
-                key={template.id} 
+              <div
+                key={template.id}
                 className="group bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-primary"
               >
                 <div className="h-48 w-full overflow-hidden bg-gray-200 relative">
-                  <img 
-                    src={template.img} 
-                    alt={template.name} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" 
+                  <img
+                    src={template.img}
+                    alt={template.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
                     <button

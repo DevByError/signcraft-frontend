@@ -268,7 +268,7 @@ const PlaylistEditor: React.FC = () => {
                   </div>
 
                   {/* Action Buttons */}
-                  {/* ✅ OLD STYLE ACTION BUTTONS */}
+                  {/* OLD STYLE ACTION BUTTONS */}
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => handleModify(item.designId)}

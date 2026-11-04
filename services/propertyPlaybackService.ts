@@ -1,7 +1,7 @@
 /**
  * Property Playback Engine - CapCut Style
  * Stateless rendering using clip-local time and keyframe animations
- * 
+ *
  * CRITICAL PRINCIPLES:
  * 1. Stateless - pure functions only
  * 2. Clip-local time for animations
@@ -28,7 +28,7 @@ function isItemActive(item: TimelineItem, timelineTimeMs: number): boolean {
 /**
  * Apply timeline item properties and animations to canvas element
  * This is a STATELESS function - same inputs always produce same outputs
- * 
+ *
  * @param element - The canvas element to update
  * @param item - The timeline item with properties and animations
  * @param timelineTimeMs - Current timeline time in milliseconds
@@ -79,9 +79,9 @@ export function applyItemPropertiesToElement(
   if (item.animations && item.animations.length > 0) {
     const baseValues = {
       opacity: item.properties?.opacity ?? element.opacity ?? 1,
-      position: { 
-        x: item.properties?.x ?? element.x, 
-        y: item.properties?.y ?? element.y 
+      position: {
+        x: item.properties?.x ?? element.x,
+        y: item.properties?.y ?? element.y
       },
       scale: { x: 1, y: 1 },
       rotation: item.properties?.rotation ?? element.rotation ?? 0,
@@ -122,7 +122,7 @@ export function applyItemPropertiesToElement(
 /**
  * Apply timeline state to all elements
  * STATELESS RENDERER - pure function, no side effects
- * 
+ *
  * CANVA + CAPCUT HYBRID:
  * - When editing (not playing): All elements visible for editing
  * - When playing: Only active timeline clips visible
